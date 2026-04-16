@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Signalwatch — Brand Intelligence</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e8e8e8; min-height: 100vh; }
+    .header { padding: 40px 24px 24px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: flex-end; }
+    .header-left h1 { font-size: 28px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    .header-left h1 span { color: #4f8ef7; }
+    .header-left p { font-size: 14px; color: #666; margin-top: 6px; }
+    .remaining-badge { font-size: 12px; color: #444; text-align: right; }
+    .remaining-badge span { color: #4f8ef7; font-weight: 600; }
+    .search-section { padding: 32px 24px; max-width: 800px; }
+    .search-row { display: flex; gap: 12px; }
+    .search-input { flex: 1; padding: 14px 18px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #e8e8e8; font-size: 16px; outline: none; transition: border-color 0.2s; }
+    .search-input:focus { border-color: #4f8ef7; }
+    .search-input::placeholder { color: #444; }
+    .search-btn { padding: 14px 28px; background: #4f8ef7; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+    .search-btn:hover { background: #3a7ae0; }
+    .search-btn:disabled { background: #333; color: #555; cursor: not-allowed; }
+    .hint { margin-top: 10px; font-size: 12px; color: #444; }
+    .results-section { padding: 0 24px 60px; max-width: 800px; }
+    .loading { display: none; padding: 40px 0; color: #555; font-size: 15px; }
+    .insight-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-left: 3px solid #4f8ef7; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; }
+    .insight-label { font-size: 11px; font-weight: 700; color: #4f8ef7; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+    .insight-text { font-size: 15px; line-height: 1.7; color: #d0d0d0; }
+    .signal-chart-card { background: #141414; border: 1px solid #222; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+    .chart-title { font-size: 11px; font-weight: 700; color: #555; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px; }
+    .sources-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .source-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .badge-reddit { background: #2a1a0a; color: #ff6b35; border: 1px solid #3a2010; }
+    .badge-hackernews { background: #2a1a0a; color: #ff9500; border: 1px solid #3a2510; }
+    .badge-newsapi { background: #0a1a2a; color: #4f8ef7; border: 1px solid #102030; }
+    .badge-newsdata { background: #0a1a2a; color: #6fa8f7; border: 1px solid #102030; }
+    .badge-youtube { background: #1a0a0a; color: #ff4444; border: 1px solid #2a1010; }
+    .badge-rss { background: #1a1a0a; color: #f7c94f; border: 1px solid #2a2510; }
+    .badge-wikipedia { background: #0a1a1a; color: #4fd0d0; border: 1px solid #102525; }
+    .total-count { font-size: 13px; color: #555; margin-bottom: 16px; }
+    .result-item { padding: 14px 16px; background: #141414; border: 1px solid #222; border-radius: 6px; margin-bottom: 8px; display: flex; align-items: flex-start; gap: 12px; transition: border-color 0.15s; }
+    .result-item:hover { border-color: #333; }
+    .result-score { min-width: 28px; height: 28px; background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #4f8ef7; flex-shrink: 0; }
+    .result-content { flex: 1; }
+    .result-title a { font-size: 14px; color: #d0d0d0; line-height: 1.5; text-decoration: none; transition: color 0.15s; }
+    .result-title a:hover { color: #4f8ef7; }
+    .result-title span { font-size: 14px; color: #d0d0d0; line-height: 1.5; }
+    .result-source { font-size: 11px; color: #444; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .error-msg { color: #ff4444; font-size: 14px; padding: 20px 0; }
+    .limit-msg { background: #1a0a0a; border: 1px solid #3a1010; border-radius: 8px; padding: 20px 24px; color: #ff6b35; font-size: 14px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <h1>Signal<span>watch</span></h1>
+      <p>Real-time brand intelligence across Reddit, News, YouTube and more</p>
+    </div>
+    <div class="remaining-badge" id="remainingBadge"></div>
+  </div>
+  <div class="search-section">
+    <div class="search-row">
+      <input class="search-input" id="queryInput" type="text" placeholder='Try: nike complaints NOT fake  or  "battery drain" iphone'/>
+      <button class="search-btn" id="searchBtn" onclick="runSearch()">Search</button>
+    </div>
+    <div class="hint">Use NOT to exclude &nbsp;|&nbsp; Use "quotes" for phrases &nbsp;|&nbsp; Use OR for alternatives</div>
+  </div>
+  <div class="results-section">
+    <div class="loading" id="loading">Scanning sources...</div>
+    <div id="resultsContainer"></div>
+  </div>
+  <script>
+    const API_BASE = "RAILWAY_URL_HERE";
+    let signalChart = null;
+
+    document.getElementById("queryInput").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") runSearch();
+    });
+
+    async function runSearch() {
+      const query = document.getElementById("queryInput").value.trim();
+      if (!query) return;
+      const btn = document.getElementById("searchBtn");
+      const loading = document.getElementById("loading");
+      const container = document.getElementById("resultsContainer");
+      btn.disabled = true;
+      btn.textContent = "Searching...";
+      loading.style.display = "block";
+      container.innerHTML = "";
+      if (signalChart) { signalChart.destroy(); signalChart = null; }
+      try {
+        const res = await fetch(`${API_BASE}/search?query=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        renderResults(data, query);
+      } catch (err) {
+        container.innerHTML = `<div class="error-msg">Could not reach backend. Please try again in a moment.</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Search";
+        loading.style.display = "none";
+      }
+    }
+
+    function renderResults(data, query) {
+      const container = document.getElementById("resultsContainer");
+      const badge = document.getElementById("remainingBadge");
+      if (data.limit_reached) {
+        container.innerHTML = `<div class="limit-msg">Daily search limit reached. Come back tomorrow.</div>`;
+        return;
+      }
+      if (data.searches_remaining !== undefined) {
+        badge.innerHTML = `<span>${data.searches_remaining}</span> searches remaining today`;
+      }
+      if (data.error) { container.innerHTML = `<div class="error-msg">${data.error}</div>`; return; }
+      if (!data.results || data.results.length === 0) { container.innerHTML = `<div class="error-msg">No signals found. Try broader keywords.</div>`; return; }
+      let html = "";
+      if (data.insight) {
+        html += `<div class="insight-card"><div class="insight-label">Signal Intelligence Briefing</div><div class="insight-text">${data.insight}</div></div>`;
+      }
+      html += `<div class="signal-chart-card"><div class="chart-title">Signal strength by source — "${query}"</div><canvas id="signalChart"></canvas></div>`;
+      if (data.sources) {
+        html += `<div class="sources-row">`;
+        for (const [source, count] of Object.entries(data.sources)) {
+          if (count > 0) html += `<span class="source-badge badge-${source}">${source} ${count}</span>`;
+        }
+        html += `</div>`;
+      }
+      html += `<div class="total-count">${data.total} signals found</div>`;
+      data.results.forEach(result => {
+        const titleHtml = result.url ? `<a href="${result.url}" target="_blank" rel="noopener">${result.title}</a>` : `<span>${result.title}</span>`;
+        html += `<div class="result-item"><div class="result-score">${result.score}</div><div class="result-content"><div class="result-title">${titleHtml}</div><div class="result-source">${result.source}</div></div></div>`;
+      });
+      container.innerHTML = html;
+      if (data.sources && data.results) buildSignalChart(data.sources, data.results);
+    }
+
+    function buildSignalChart(sources, results) {
+      const colors = { reddit:"#ff6b35", hackernews:"#ff9500", newsapi:"#4f8ef7", newsdata:"#6fa8f7", youtube:"#ff4444", rss:"#f7c94f", wikipedia:"#4fd0d0" };
+      const scoresBySource = {};
+      results.forEach(r => { if (!scoresBySource[r.source]) scoresBySource[r.source] = []; scoresBySource[r.source].push(r.score); });
+      const labels = [], avgScores = [], counts = [], bgColors = [];
+      for (const [source, count] of Object.entries(sources)) {
+        if (count > 0 && scoresBySource[source]) {
+          labels.push(source);
+          const avg = scoresBySource[source].reduce((a,b)=>a+b,0) / scoresBySource[source].length;
+          avgScores.push(Math.round(avg*10)/10);
+          counts.push(count);
+          bgColors.push(colors[source] || "#555");
+        }
+      }
+      const ctx = document.getElementById("signalChart").getContext("2d");
+      signalChart = new Chart(ctx, {
+        type: "bar",
+        data: { labels, datasets: [{ label: "Avg signal score", data: avgScores, backgroundColor: bgColors, borderRadius: 4, borderSkipped: false, yAxisID: "y" }, { label: "Total results", data: counts, backgroundColor: bgColors.map(c=>c+"33"), borderColor: bgColors, borderWidth: 1, borderRadius: 4, yAxisID: "y1" }] },
+        options: { plugins: { legend: { labels: { color: "#555", font: { size: 11 }, boxWidth: 12 } } }, scales: { x: { ticks: { color: "#555", font: { size: 11 } }, grid: { color: "#1a1a1a" } }, y: { position: "left", title: { display: true, text: "Avg score", color: "#444", font: { size: 10 } }, ticks: { color: "#555" }, grid: { color: "#1a1a1a" } }, y1: { position: "right", title: { display: true, text: "Count", color: "#444", font: { size: 10 } }, ticks: { color: "#555" }, grid: { drawOnChartArea: false } } } }
+      });
+    }
+  </script>
+</body>
+</html>
