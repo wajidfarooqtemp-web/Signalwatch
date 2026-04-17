@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
@@ -232,18 +232,20 @@ def generate_insight(results, query):
     titles_text = "\n".join(f"- {t}" for t in titles)
     sources_used = list(set(r["source"] for r in results))
 
-    prompt = f"""You are a senior brand intelligence analyst. A user searched for: "{query}"
+    prompt = f"""You are a senior brand intelligence analyst delivering a decision briefing to a brand manager. They searched for: "{query}"
 
-These are the top signals found across {', '.join(sources_used)}:
+Live signals collected from {', '.join(sources_used)}:
 {titles_text}
 
-In 4-5 sentences write a professional intelligence briefing:
-1. What is the dominant theme or pattern?
-2. What does this signal mean for a brand or business watching this topic?
-3. Is this signal growing, isolated, or part of a wider trend?
-4. What should they do or watch next?
+Write a 5-sentence briefing in this exact structure:
 
-Be direct. No bullet points. Write like a senior analyst briefing a CEO, not a chatbot."""
+Sentence 1 — SITUATION: What is actually happening right now based on these signals. Be specific, not vague.
+Sentence 2 — SIGNIFICANCE: Why this matters to a brand or business. What is the real-world impact if ignored.
+Sentence 3 — MOMENTUM: Is this signal accelerating, stable, or fading. Give a directional judgment.
+Sentence 4 — DECISION: One specific action the brand should take in the next 24-48 hours. Not "monitor" — an actual decision or response.
+Sentence 5 — RISK IF IGNORED: What happens if nothing is done. Make the cost of inaction concrete.
+
+Rules: No bullet points. No hedging. No "it appears" or "it seems". Write like you are billing $500/hour and the client needs to act today. Be direct."""
 
     try:
         res = requests.post(
