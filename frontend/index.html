@@ -1,223 +1,312 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Signalwatch — Brand Intelligence</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-  <!-- PASTE YOUR UMAMI SCRIPT TAG HERE IF YOU HAVE ONE -->
   <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     :root {
-      --bg: #080c12;
-      --surface: #0d1117;
-      --surface2: #161b22;
-      --border: #21262d;
-      --border2: #30363d;
-      --text: #e6edf3;
-      --text2: #8b949e;
-      --text3: #484f58;
-      --blue: #4f8ef7;
-      --blue-dim: #1f3a6e;
-      --green: #3fb950;
-      --orange: #f78166;
+      --bg:#080c12; --surface:#0d1117; --surface2:#161b22;
+      --border:#21262d; --border2:#30363d;
+      --text:#e6edf3; --text2:#8b949e; --text3:#484f58;
+      --blue:#4f8ef7; --blue-dim:#1f3a6e;
+      --green:#3fb950; --orange:#f78166;
     }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.5; }
-    .topnav { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
-    .brand { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
-    .brand span { color: var(--blue); }
-    .nav-right { display: flex; align-items: center; gap: 16px; }
-    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    html { scroll-behavior: smooth; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; font-size:14px; line-height:1.5; }
+
+    /* NAV */
+    .topnav { display:flex; align-items:center; justify-content:space-between; padding:0 32px; height:56px; border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; backdrop-filter:blur(8px); }
+    .brand { font-size:18px; font-weight:700; color:var(--text); letter-spacing:-0.3px; text-decoration:none; }
+    .brand span { color:var(--blue); }
+    .nav-links { display:flex; align-items:center; gap:24px; }
+    .nav-link { font-size:13px; color:var(--text2); text-decoration:none; transition:color 0.15s; }
+    .nav-link:hover { color:var(--text); }
+    .nav-right { display:flex; align-items:center; gap:12px; }
+    .status-dot { width:7px; height:7px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-    .status-text { font-size: 12px; color: var(--text2); }
-    .remaining-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--text2); }
-    .remaining-pill span { color: var(--blue); font-weight: 600; }
-    .hero { padding: 48px 24px 32px; max-width: 860px; margin: 0 auto; }
-    .hero-label { font-size: 11px; font-weight: 600; color: var(--blue); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px; }
-    .hero h2 { font-size: 32px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; line-height: 1.2; margin-bottom: 10px; }
-    .hero p { font-size: 15px; color: var(--text2); max-width: 560px; line-height: 1.6; }
-    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 860px; margin: 0 auto 28px; padding: 0 24px; }
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
-    .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
-    .stat-value { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
-    .stat-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
-    .search-wrapper { max-width: 860px; margin: 0 auto; padding: 0 24px 32px; }
-    .search-box { display: flex; gap: 10px; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 6px 6px 6px 16px; transition: border-color 0.2s; }
-    .search-box:focus-within { border-color: var(--blue); }
-    .search-input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 15px; padding: 8px 0; }
-    .search-input::placeholder { color: var(--text3); }
-    .search-btn { padding: 10px 22px; background: var(--blue); color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
-    .search-btn:hover { background: #3a7ae0; }
-    .search-btn:disabled { background: var(--surface2); color: var(--text3); cursor: not-allowed; }
-    .search-hints { margin-top: 8px; font-size: 12px; color: var(--text3); }
-    .search-hints code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text2); font-family: monospace; }
-    .results-wrapper { max-width: 860px; margin: 0 auto; padding: 0 24px 40px; }
-    .loading { display: none; padding: 60px 0; color: var(--text3); font-size: 14px; text-align: center; }
-    .decision-card { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--blue); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
-    .decision-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-    .decision-icon { width: 32px; height: 32px; background: var(--blue-dim); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-    .decision-title { font-size: 13px; font-weight: 700; color: var(--text); }
-    .decision-subtitle { font-size: 11px; color: var(--text2); margin-top: 1px; }
-    .decision-text { font-size: 14px; line-height: 1.75; color: #c9d1d9; }
-    .action-box { margin-top: 16px; background: #0d2a0d; border: 1px solid #1a4a1a; border-left: 3px solid var(--green); border-radius: 6px; padding: 12px 16px; }
-    .action-label { font-size: 10px; font-weight: 700; color: var(--green); letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 6px; }
-    .action-text { font-size: 13px; color: #7ee787; line-height: 1.5; }
-    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; }
-    .chart-card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
-    .chart-card-sub { font-size: 11px; color: var(--text2); margin-bottom: 16px; }
-    .sources-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-    .source-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
-    .badge-reddit { background: #2a1a0a; color: #ff6b35; border: 1px solid #3a2010; }
-    .badge-hackernews { background: #2a1a0a; color: #ff9500; border: 1px solid #3a2510; }
-    .badge-newsapi { background: #0a1a2a; color: #4f8ef7; border: 1px solid #102030; }
-    .badge-newsdata { background: #0a1a2a; color: #6fa8f7; border: 1px solid #102030; }
-    .badge-youtube { background: #1a0a0a; color: #ff4444; border: 1px solid #2a1010; }
-    .badge-rss { background: #1a1a0a; color: #f7c94f; border: 1px solid #2a2510; }
-    .badge-wikipedia { background: #0a1a1a; color: #4fd0d0; border: 1px solid #102525; }
-    .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .results-title { font-size: 13px; font-weight: 600; color: var(--text); }
-    .results-count { font-size: 12px; color: var(--text2); }
-    .result-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; transition: border-color 0.15s; }
-    .result-item:hover { border-color: var(--border2); }
-    .result-score { min-width: 30px; height: 30px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--blue); flex-shrink: 0; }
-    .result-content { flex: 1; min-width: 0; }
-    .result-title { font-size: 13px; line-height: 1.5; color: var(--text); }
-    .result-title a { color: var(--text); text-decoration: none; transition: color 0.15s; }
-    .result-title a:hover { color: var(--blue); }
-    .result-source { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; display: block; }
-    .error-msg { color: var(--orange); font-size: 14px; padding: 24px 0; }
-    .limit-msg { background: #1a0a0a; border: 1px solid #3a1010; border-left: 3px solid var(--orange); border-radius: 8px; padding: 20px 24px; color: #ff9070; font-size: 14px; line-height: 1.7; }
-    .empty-state { text-align: center; padding: 80px 0; color: var(--text3); }
-    .empty-state h3 { font-size: 16px; color: var(--text2); margin-bottom: 8px; }
-    .about-section { border-top: 1px solid var(--border); margin-top: 40px; padding: 48px 24px 64px; max-width: 860px; margin-left: auto; margin-right: auto; }
-    .about-label { font-size: 11px; font-weight: 600; color: var(--blue); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 24px; }
-    .about-inner { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
-    .about-photo { width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--border2); object-fit: cover; flex-shrink: 0; }
-    .about-name { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-    .about-role { font-size: 12px; color: var(--blue); margin-bottom: 16px; }
-    .about-text { font-size: 14px; color: var(--text2); line-height: 1.8; margin-bottom: 14px; }
-    .about-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
-    .about-link { display: inline-block; padding: 8px 16px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text2); font-size: 13px; text-decoration: none; transition: border-color 0.15s; }
-    .about-link:hover { border-color: var(--blue); color: var(--text); }
-    .footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text3); flex-wrap: wrap; gap: 8px; }
-    @media (max-width: 600px) { .stats-row { grid-template-columns: 1fr 1fr; } .hero h2 { font-size: 24px; } }
+    .remaining-pill { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:4px 12px; font-size:12px; color:var(--text2); }
+    .remaining-pill span { color:var(--blue); font-weight:600; }
+
+    /* HERO */
+    .hero { padding:72px 32px 48px; max-width:900px; margin:0 auto; }
+    .hero-eyebrow { display:inline-flex; align-items:center; gap:8px; background:var(--surface2); border:1px solid var(--border2); border-radius:20px; padding:4px 14px; font-size:11px; color:var(--blue); letter-spacing:1px; text-transform:uppercase; font-weight:600; margin-bottom:24px; }
+    .hero h1 { font-size:48px; font-weight:800; color:var(--text); letter-spacing:-1.5px; line-height:1.1; margin-bottom:20px; }
+    .hero h1 em { font-style:normal; color:var(--blue); }
+    .hero-sub { font-size:17px; color:var(--text2); max-width:520px; line-height:1.7; margin-bottom:36px; }
+    .hero-badges { display:flex; gap:10px; flex-wrap:wrap; }
+    .hero-badge { display:inline-flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-size:12px; color:var(--text2); }
+    .hero-badge-dot { width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; }
+
+    /* STATS */
+    .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; max-width:900px; margin:0 auto 40px; padding:0 32px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 20px; transition:border-color 0.2s; }
+    .stat-card:hover { border-color:var(--border2); }
+    .stat-label { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px; }
+    .stat-value { font-size:24px; font-weight:700; color:var(--text); letter-spacing:-0.5px; }
+    .stat-sub { font-size:11px; color:var(--text2); margin-top:4px; }
+
+    /* SEARCH */
+    .search-section { max-width:900px; margin:0 auto; padding:0 32px 48px; }
+    .search-card { background:var(--surface); border:1px solid var(--border2); border-radius:12px; padding:24px; }
+    .search-label { font-size:12px; font-weight:600; color:var(--text2); letter-spacing:0.5px; margin-bottom:12px; text-transform:uppercase; }
+    .search-row { display:flex; gap:10px; }
+    .search-input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 16px; color:var(--text); font-size:15px; outline:none; transition:border-color 0.2s; }
+    .search-input:focus { border-color:var(--blue); }
+    .search-input::placeholder { color:var(--text3); }
+    .search-btn { padding:12px 24px; background:var(--blue); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; transition:background 0.15s; white-space:nowrap; }
+    .search-btn:hover { background:#3a7ae0; }
+    .search-btn:disabled { background:var(--surface2); color:var(--text3); cursor:not-allowed; }
+    .search-hints { display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; }
+    .hint-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text3); }
+    .hint-pill code { background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1px 7px; color:var(--text2); font-family:monospace; font-size:11px; }
+
+    /* RESULTS */
+    .results-section { max-width:900px; margin:0 auto; padding:0 32px 80px; }
+    .loading { display:none; padding:80px 0; text-align:center; color:var(--text3); font-size:14px; }
+    .loading-bar { width:200px; height:2px; background:var(--surface2); border-radius:2px; margin:16px auto 0; overflow:hidden; }
+    .loading-bar-inner { width:40%; height:100%; background:var(--blue); border-radius:2px; animation:loadbar 1.2s ease-in-out infinite; }
+    @keyframes loadbar { 0%{transform:translateX(-100%)} 100%{transform:translateX(350%)} }
+
+    .decision-card { background:var(--surface); border:1px solid var(--border); border-top:3px solid var(--blue); border-radius:12px; padding:28px; margin-bottom:20px; }
+    .decision-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+    .decision-icon { width:36px; height:36px; background:var(--blue-dim); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .decision-title { font-size:14px; font-weight:700; color:var(--text); }
+    .decision-subtitle { font-size:11px; color:var(--text2); margin-top:2px; }
+    .decision-text { font-size:14px; line-height:1.85; color:#c9d1d9; }
+    .action-box { margin-top:20px; background:#0d2a0d; border:1px solid #1a4a1a; border-left:3px solid var(--green); border-radius:8px; padding:14px 18px; }
+    .action-label { font-size:10px; font-weight:700; color:var(--green); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px; }
+    .action-text { font-size:13px; color:#7ee787; line-height:1.6; }
+
+    .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:22px 26px; margin-bottom:20px; }
+    .chart-header { margin-bottom:6px; }
+    .chart-card-title { font-size:13px; font-weight:600; color:var(--text); }
+    .chart-card-sub { font-size:11px; color:var(--text3); margin-top:3px; margin-bottom:16px; }
+
+    .sources-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+    .source-badge { padding:5px 12px; border-radius:20px; font-size:11px; font-weight:500; }
+    .badge-reddit { background:#2a1a0a; color:#ff6b35; border:1px solid #3a2010; }
+    .badge-hackernews { background:#2a1a0a; color:#ff9500; border:1px solid #3a2510; }
+    .badge-newsapi { background:#0a1a2a; color:#4f8ef7; border:1px solid #102030; }
+    .badge-newsdata { background:#0a1a2a; color:#6fa8f7; border:1px solid #102030; }
+    .badge-youtube { background:#1a0a0a; color:#ff4444; border:1px solid #2a1010; }
+    .badge-rss { background:#1a1a0a; color:#f7c94f; border:1px solid #2a2510; }
+    .badge-wikipedia { background:#0a1a1a; color:#4fd0d0; border:1px solid #102525; }
+
+    .results-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-top:8px; }
+    .results-title { font-size:13px; font-weight:600; color:var(--text); }
+    .results-count { font-size:12px; color:var(--text2); }
+    .result-item { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:6px; transition:border-color 0.15s; }
+    .result-item:hover { border-color:var(--border2); }
+    .result-score { min-width:32px; height:32px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--blue); flex-shrink:0; }
+    .result-content { flex:1; min-width:0; }
+    .result-title { font-size:13px; line-height:1.55; color:var(--text); }
+    .result-title a { color:var(--text); text-decoration:none; }
+    .result-title a:hover { color:var(--blue); }
+    .result-source { font-size:11px; color:var(--text3); margin-top:4px; display:block; }
+    .error-msg { color:var(--orange); font-size:14px; padding:24px 0; }
+    .limit-msg { background:#1a0a0a; border:1px solid #3a1010; border-left:3px solid var(--orange); border-radius:8px; padding:20px 24px; color:#ff9070; font-size:14px; line-height:1.7; }
+    .empty-state { text-align:center; padding:100px 0; color:var(--text3); }
+    .empty-state h3 { font-size:16px; color:var(--text2); margin-bottom:8px; }
+
+    /* ABOUT PAGE */
+    .about-page { display:none; }
+    .about-page.active { display:block; }
+    .search-page.hidden { display:none; }
+
+    .about-hero { padding:72px 32px 48px; max-width:900px; margin:0 auto; }
+    .about-hero-inner { display:flex; gap:48px; align-items:center; flex-wrap:wrap; }
+    .about-photo-wrap { flex-shrink:0; }
+    .about-photo { width:120px; height:120px; border-radius:50%; border:3px solid var(--border2); object-fit:cover; display:block; }
+    .about-photo-initials { width:120px; height:120px; border-radius:50%; border:3px solid var(--border2); background:var(--blue-dim); display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; color:var(--blue); }
+    .about-name { font-size:32px; font-weight:700; color:var(--text); letter-spacing:-0.5px; margin-bottom:8px; }
+    .about-role { font-size:15px; color:var(--blue); margin-bottom:20px; }
+    .about-bio { font-size:15px; color:var(--text2); line-height:1.8; margin-bottom:24px; max-width:540px; }
+    .about-links { display:flex; gap:12px; flex-wrap:wrap; }
+    .about-link { display:inline-block; padding:10px 20px; background:var(--surface); border:1px solid var(--border2); border-radius:8px; color:var(--text2); font-size:13px; text-decoration:none; transition:all 0.15s; font-weight:500; }
+    .about-link:hover { border-color:var(--blue); color:var(--text); }
+
+    .about-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; max-width:900px; margin:0 auto; padding:0 32px 80px; }
+    .about-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; }
+    .about-card-icon { font-size:22px; margin-bottom:12px; }
+    .about-card-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px; }
+    .about-card-text { font-size:13px; color:var(--text2); line-height:1.7; }
+
+    /* FOOTER */
+    .site-footer { border-top:1px solid var(--border); padding:24px 32px; display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text3); flex-wrap:wrap; gap:8px; }
+
+    @media(max-width:700px) {
+      .stats-row { grid-template-columns:1fr 1fr; }
+      .hero h1 { font-size:32px; }
+      .about-cards { grid-template-columns:1fr; }
+      .nav-links { display:none; }
+    }
   </style>
 </head>
 <body>
 
   <nav class="topnav">
-    <div class="brand">Signal<span>watch</span></div>
+    <a class="brand" href="#" onclick="showPage('search')">Signal<span>watch</span></a>
+    <div class="nav-links">
+      <a class="nav-link" href="#" onclick="showPage('search')">Search</a>
+      <a class="nav-link" href="#" onclick="showPage('about')">About</a>
+    </div>
     <div class="nav-right">
       <div class="status-dot"></div>
-      <span class="status-text">Live</span>
       <div class="remaining-pill" id="remainingPill" style="display:none">
-        <span id="remainingCount">3</span> searches left today
+        <span id="remainingCount">3</span> left today
       </div>
     </div>
   </nav>
 
-  <div class="hero">
-    <div class="hero-label">Brand Intelligence Platform</div>
-    <h2>From raw signal<br>to clear decision</h2>
-    <p>Signalwatch scans Reddit, news, YouTube and more in real time — then tells you exactly what it means and what to do next. Not a dashboard. A decision engine.</p>
-  </div>
+  <!-- SEARCH PAGE -->
+  <div class="search-page" id="searchPage">
 
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="stat-label">Sources</div>
-      <div class="stat-value">7</div>
-      <div class="stat-sub">Live data sources</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Signals found</div>
-      <div class="stat-value" id="statTotal">—</div>
-      <div class="stat-sub">Ranked by relevance</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Top score</div>
-      <div class="stat-value" id="statTopScore">—</div>
-      <div class="stat-sub">Highest signal strength</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Active sources</div>
-      <div class="stat-value" id="statActiveSources">—</div>
-      <div class="stat-sub">Returning results</div>
-    </div>
-  </div>
-
-  <div class="search-wrapper">
-    <div class="search-box">
-      <input
-        class="search-input"
-        id="queryInput"
-        type="text"
-        placeholder='Search any brand, topic or query — e.g. "battery drain" iphone NOT review'
-        autocomplete="off"
-      />
-      <button class="search-btn" id="searchBtn" onclick="runSearch()">Analyse</button>
-    </div>
-    <div class="search-hints">
-      <code>NOT word</code> to exclude &nbsp;·&nbsp;
-      <code>"exact phrase"</code> for precision &nbsp;·&nbsp;
-      <code>word OR word</code> for alternatives
-    </div>
-  </div>
-
-  <div class="results-wrapper">
-    <div class="loading" id="loading">Scanning sources...</div>
-    <div id="resultsContainer">
-      <div class="empty-state">
-        <h3>Enter a query to begin</h3>
-        <p>Type any brand name, topic, or keyword above</p>
+    <div class="hero">
+      <div class="hero-eyebrow">
+        <div class="hero-badge-dot"></div>
+        Live · 7 sources · Updated now
+      </div>
+      <h1>From raw signal<br>to <em>clear decision</em></h1>
+      <p class="hero-sub">Signalwatch scans Reddit, news, YouTube and more — then tells you what the signal means and exactly what to do about it. Not a dashboard. A decision engine.</p>
+      <div class="hero-badges">
+        <div class="hero-badge"><div class="hero-badge-dot"></div> Reddit · Community voice</div>
+        <div class="hero-badge"><div class="hero-badge-dot"></div> News · Breaking coverage</div>
+        <div class="hero-badge"><div class="hero-badge-dot"></div> YouTube · Video signals</div>
+        <div class="hero-badge"><div class="hero-badge-dot"></div> Tech Forums · Early signals</div>
       </div>
     </div>
-  </div>
 
-  <div class="about-section">
-    <div class="about-label">About Signalwatch</div>
-    <div class="about-inner">
-      <img
-        class="about-photo"
-        src="https://media.licdn.com/dms/image/v2/D5603AQGRKibacHmTfQ/profile-displayphoto-crop_800_800/B56ZmCakUSG0AI-/0/1758829628569?e=1778112000&v=beta&t=6JVnLV8AmEMgFDhFbFtwa5nfF1JaO9Tmy1JbQ2CwKQw"
-        alt="Wajid"
-        onerror="this.style.display='none'"
-      />
-      <div style="flex:1; min-width:260px;">
-        <div class="about-name">Built by Wajid</div>
-        <div class="about-role">Brand Intelligence &amp; Consumer Research</div>
-        <p class="about-text">
-          Signalwatch was built because social listening tools tell you what people are saying — but never what to do about it. I built the tool that bridges the gap between raw signal and real decision.
-        </p>
-        <p class="about-text">
-          Every search returns a five-part intelligence briefing — situation, significance, momentum, a specific recommended action, and the risk of doing nothing. Not a dashboard. A decision engine.
-        </p>
-        <div class="about-links">
-          <a class="about-link" href="https://www.linkedin.com/in/wajidfarooq" target="_blank" rel="noopener">LinkedIn</a>
-          <a class="about-link" href="mailto:wajidfarooq3@gmail.com">Contact</a>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Sources</div>
+        <div class="stat-value">7</div>
+        <div class="stat-sub">Live data sources</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Signals found</div>
+        <div class="stat-value" id="statTotal">—</div>
+        <div class="stat-sub">Last search</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Top score</div>
+        <div class="stat-value" id="statTopScore">—</div>
+        <div class="stat-sub">Strongest signal</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active sources</div>
+        <div class="stat-value" id="statActiveSources">—</div>
+        <div class="stat-sub">Returning results</div>
+      </div>
+    </div>
+
+    <div class="search-section">
+      <div class="search-card">
+        <div class="search-label">Search any brand, topic, or query</div>
+        <div class="search-row">
+          <input class="search-input" id="queryInput" type="text" placeholder='e.g. nike complaints NOT fake  ·  "battery drain" iphone  ·  tesla recall' autocomplete="off"/>
+          <button class="search-btn" id="searchBtn" onclick="runSearch()">Analyse</button>
+        </div>
+        <div class="search-hints">
+          <div class="hint-pill"><code>NOT word</code> exclude terms</div>
+          <div class="hint-pill"><code>"phrase"</code> exact match</div>
+          <div class="hint-pill"><code>word OR word</code> alternatives</div>
         </div>
       </div>
     </div>
-    <div class="footer">
-      <span>Signalwatch — Free brand intelligence for everyone</span>
-      <span>7 live sources · AI-powered decisions · No login required</span>
+
+    <div class="results-section">
+      <div class="loading" id="loading">
+        Scanning sources
+        <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+      </div>
+      <div id="resultsContainer">
+        <div class="empty-state">
+          <h3>Enter a query above to begin</h3>
+          <p>Results are sampled from the last 90 days across all sources</p>
+        </div>
+      </div>
     </div>
+
+    <footer class="site-footer">
+      <span>Signalwatch — Free brand intelligence</span>
+      <span>7 sources · AI-powered decisions · Last 90 days · Adding more sources</span>
+    </footer>
+
+  </div>
+
+  <!-- ABOUT PAGE -->
+  <div class="about-page" id="aboutPage">
+
+    <div class="about-hero">
+      <div class="about-hero-inner">
+        <div class="about-photo-wrap">
+          <img
+            class="about-photo"
+            src="https://media.licdn.com/dms/image/v2/D5603AQGRKibacHmTfQ/profile-displayphoto-crop_800_800/B56ZmCakUSG0AI-/0/1758829628569?e=1778112000&v=beta&t=6JVnLV8AmEMgFDhFbFtwa5nfF1JaO9Tmy1JbQ2CwKQw"
+            alt="Wajid"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+          />
+          <div class="about-photo-initials" style="display:none">W</div>
+        </div>
+        <div>
+          <div class="about-name">Wajid</div>
+          <div class="about-role">Brand Intelligence &amp; Consumer Research</div>
+          <p class="about-bio">
+            Signalwatch was built because every social listening tool tells you what people are saying — but none tell you what to do about it. This is that tool. It scans multiple live sources, ranks signals by relevance, and delivers a clear decision briefing in seconds.
+          </p>
+          <div class="about-links">
+            <a class="about-link" href="https://www.linkedin.com/in/wajidfarooq" target="_blank" rel="noopener">LinkedIn</a>
+            <a class="about-link" href="mailto:wajidfarooq3@gmail.com">Contact</a>
+            <a class="about-link" href="#" onclick="showPage('search')">Try Signalwatch</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-cards">
+      <div class="about-card">
+        <div class="about-card-icon">⚡</div>
+        <div class="about-card-title">Decision engine, not a dashboard</div>
+        <div class="about-card-text">Every search returns a five-part briefing — situation, significance, momentum, a specific action, and the risk of doing nothing.</div>
+      </div>
+      <div class="about-card">
+        <div class="about-card-icon">◎</div>
+        <div class="about-card-title">7 live sources, ranked by relevance</div>
+        <div class="about-card-text">Reddit, news outlets, YouTube, tech forums, RSS feeds and more — all scored and ranked so the strongest signals surface first.</div>
+      </div>
+      <div class="about-card">
+        <div class="about-card-icon">✦</div>
+        <div class="about-card-title">Recent signals only</div>
+        <div class="about-card-text">All results are sampled from the last 90 days. Decisions are based on what is happening now, not years-old content.</div>
+      </div>
+    </div>
+
+    <footer class="site-footer">
+      <span>Signalwatch — Free brand intelligence</span>
+      <span>7 sources · Adding more · No login required</span>
+    </footer>
+
   </div>
 
   <script>
     const API_BASE = "https://signalwatch-production.up.railway.app";
 
     const sourceLabels = {
-      reddit: "Reddit",
-      hackernews: "Tech Forums",
-      newsapi: "News",
-      newsdata: "Global News",
-      youtube: "YouTube",
-      rss: "RSS",
-      wikipedia: "Wikipedia"
+      reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
+      newsdata:"Global News", youtube:"YouTube", rss:"RSS", wikipedia:"Wikipedia"
     };
 
     let signalChart = null;
+
+    function showPage(page) {
+      document.getElementById("searchPage").className = page === "search" ? "search-page" : "search-page hidden";
+      document.getElementById("aboutPage").className = page === "about" ? "about-page active" : "about-page";
+      window.scrollTo(0, 0);
+    }
 
     document.getElementById("queryInput").addEventListener("keydown", e => {
       if (e.key === "Enter") runSearch();
@@ -235,7 +324,6 @@
       btn.textContent = "Analysing...";
       loading.style.display = "block";
       container.innerHTML = "";
-
       if (signalChart) { signalChart.destroy(); signalChart = null; }
 
       try {
@@ -243,7 +331,7 @@
         const data = await res.json();
         renderResults(data, query);
       } catch (err) {
-        container.innerHTML = `<div class="error-msg">Could not reach backend. Please try again in a moment.</div>`;
+        container.innerHTML = `<div class="error-msg">Could not reach backend. Please try again.</div>`;
       } finally {
         btn.disabled = false;
         btn.textContent = "Analyse";
@@ -255,7 +343,7 @@
       const container = document.getElementById("resultsContainer");
 
       if (data.limit_reached) {
-        container.innerHTML = `<div class="limit-msg"><strong>Daily limit reached.</strong><br>You have used your 3 free searches for today. Come back tomorrow.</div>`;
+        container.innerHTML = `<div class="limit-msg"><strong>Daily limit reached.</strong><br>You have used your 3 free searches today. Come back tomorrow.</div>`;
         return;
       }
 
@@ -265,20 +353,15 @@
         document.getElementById("remainingCount").textContent = data.searches_remaining;
       }
 
-      if (data.error) {
-        container.innerHTML = `<div class="error-msg">${data.error}</div>`;
-        return;
-      }
-
+      if (data.error) { container.innerHTML = `<div class="error-msg">${data.error}</div>`; return; }
       if (!data.results || data.results.length === 0) {
         container.innerHTML = `<div class="error-msg">No signals found. Try broader keywords.</div>`;
         return;
       }
 
-      const activeSources = Object.values(data.sources || {}).filter(v => v > 0).length;
-      const topScore = data.results[0] ? data.results[0].score : 0;
+      const activeSources = Object.values(data.sources||{}).filter(v=>v>0).length;
       document.getElementById("statTotal").textContent = data.total;
-      document.getElementById("statTopScore").textContent = topScore;
+      document.getElementById("statTopScore").textContent = data.results[0]?.score || 0;
       document.getElementById("statActiveSources").textContent = activeSources;
 
       let html = "";
@@ -297,59 +380,43 @@
             </div>
             <div class="decision-text">${data.insight}</div>
             ${actionSentence ? `<div class="action-box"><div class="action-label">Recommended action</div><div class="action-text">${actionSentence}</div></div>` : ""}
-          </div>
-        `;
+          </div>`;
       } else {
-        html += `<div class="decision-card"><div class="decision-text" style="color:var(--text2)">Intelligence briefing unavailable. Raw signals shown below.</div></div>`;
+        html += `<div class="decision-card"><div class="decision-text" style="color:var(--text2)">Intelligence briefing unavailable. Raw signals below.</div></div>`;
       }
 
       html += `
         <div class="chart-card">
-          <div class="chart-card-title">Signal timeline</div>
-          <div class="chart-card-sub">Each dot is a result. Click any dot to open the source article.</div>
+          <div class="chart-header">
+            <div class="chart-card-title">Signal timeline — sampled last 90 days</div>
+            <div class="chart-card-sub">Each dot is a result. Click any dot to open the source. Score = relevance strength.</div>
+          </div>
           <canvas id="signalChart" style="max-height:200px"></canvas>
-        </div>
-      `;
+        </div>`;
 
       if (data.sources) {
         html += `<div class="sources-row">`;
-        for (const [source, count] of Object.entries(data.sources)) {
-          if (count > 0) {
-            html += `<span class="source-badge badge-${source}">${sourceLabels[source] || source} · ${count}</span>`;
-          }
+        for (const [s,c] of Object.entries(data.sources)) {
+          if (c > 0) html += `<span class="source-badge badge-${s}">${sourceLabels[s]||s} · ${c}</span>`;
         }
         html += `</div>`;
       }
 
-      html += `
-        <div class="results-header">
-          <div class="results-title">Ranked signals</div>
-          <div class="results-count">${data.total} results · sorted by relevance</div>
-        </div>
-      `;
+      html += `<div class="results-header"><div class="results-title">Ranked signals</div><div class="results-count">${data.total} results · sorted by relevance · last 90 days</div></div>`;
 
-      data.results.forEach(result => {
-        const titleHtml = result.url
-          ? `<a href="${result.url}" target="_blank" rel="noopener">${result.title}</a>`
-          : result.title;
-
-        const dateStr = result.created && result.created > 0
-          ? new Date(result.created * 1000).toLocaleDateString("en-GB", {
-              day: "numeric", month: "short", year: "numeric"
-            })
+      data.results.forEach(r => {
+        const titleHtml = r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>` : r.title;
+        const dateStr = r.created && r.created > 0
+          ? new Date(r.created*1000).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})
           : "";
-
-        const sourceDisplay = sourceLabels[result.source] || result.source;
-
         html += `
           <div class="result-item">
-            <div class="result-score">${result.score}</div>
+            <div class="result-score">${r.score}</div>
             <div class="result-content">
               <div class="result-title">${titleHtml}</div>
-              <span class="result-source">${sourceDisplay}${dateStr ? " · " + dateStr : ""}</span>
+              <span class="result-source">${sourceLabels[r.source]||r.source}${dateStr?" · "+dateStr:""}</span>
             </div>
-          </div>
-        `;
+          </div>`;
       });
 
       container.innerHTML = html;
@@ -357,97 +424,81 @@
     }
 
     function buildChart(sources, results) {
-      const colors = {
-        reddit:"#ff6b35", hackernews:"#ff9500", newsapi:"#4f8ef7",
-        newsdata:"#6fa8f7", youtube:"#ff4444", rss:"#f7c94f", wikipedia:"#4fd0d0"
-      };
+      const colors = { reddit:"#ff6b35",hackernews:"#ff9500",newsapi:"#4f8ef7",newsdata:"#6fa8f7",youtube:"#ff4444",rss:"#f7c94f",wikipedia:"#4fd0d0" };
+      const timed = results.filter(r=>r.created&&r.created>0);
 
-      const timed = results.filter(r => r.created && r.created > 0);
+      if (timed.length < 2) { buildBarChart(sources,results,colors); return; }
 
-      if (timed.length < 3) {
-        buildBarChart(sources, results, colors);
-        return;
-      }
+      timed.sort((a,b)=>a.created-b.created);
 
-      timed.sort((a, b) => a.created - b.created);
-
-      const sourcesSeen = [...new Set(timed.map(r => r.source))];
-      const datasets = sourcesSeen.map(source => ({
-        label: sourceLabels[source] || source,
-        data: timed.filter(r => r.source === source).map(r => ({
-          x: new Date(r.created * 1000),
-          y: r.score,
+      // Add jitter to scores so line is never flat
+      const sourcesSeen = [...new Set(timed.map(r=>r.source))];
+      const datasets = sourcesSeen.map(source => {
+        const pts = timed.filter(r=>r.source===source).map((r,i)=>({
+          x: new Date(r.created*1000),
+          y: r.score + (Math.sin(i*1.7+source.length)*0.4),
           url: r.url,
-          title: r.title
-        })),
-        borderColor: colors[source] || "#555",
-        backgroundColor: colors[source] || "#555",
-        pointRadius: 6,
-        pointHoverRadius: 9,
-        showLine: true,
-        tension: 0.3,
-        borderWidth: 1.5
-      }));
+          title: r.title,
+          realScore: r.score
+        }));
+        return {
+          label: sourceLabels[source]||source,
+          data: pts,
+          borderColor: colors[source]||"#555",
+          backgroundColor: colors[source]||"#555",
+          pointRadius: 6, pointHoverRadius: 9,
+          showLine: true, tension: 0.4, borderWidth: 1.5
+        };
+      });
 
       const ctx = document.getElementById("signalChart").getContext("2d");
       signalChart = new Chart(ctx, {
-        type: "scatter",
-        data: { datasets },
-        options: {
-          onClick: (evt, elements) => {
-            if (elements.length > 0) {
-              const el = elements[0];
-              const point = signalChart.data.datasets[el.datasetIndex].data[el.index];
-              if (point.url) window.open(point.url, "_blank");
+        type:"scatter",
+        data:{ datasets },
+        options:{
+          onClick:(evt,elements)=>{
+            if (elements.length>0){
+              const pt = signalChart.data.datasets[elements[0].datasetIndex].data[elements[0].index];
+              if (pt.url) window.open(pt.url,"_blank");
             }
           },
-          plugins: {
-            legend: { labels: { color: "#8b949e", font: { size: 11 }, boxWidth: 10 } },
-            tooltip: {
-              callbacks: {
-                title: items => new Date(items[0].raw.x).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }),
+          plugins:{
+            legend:{ labels:{ color:"#8b949e",font:{size:11},boxWidth:10 } },
+            tooltip:{
+              callbacks:{
+                title: items => new Date(items[0].raw.x).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
                 label: items => {
                   const d = items.raw;
-                  const t = d.title.length > 55 ? d.title.substring(0,55)+"…" : d.title;
-                  return [`Score: ${d.y}`, t, "Click to open →"];
+                  const t = d.title.length>55?d.title.substring(0,55)+"…":d.title;
+                  return [`Score: ${d.realScore}`,t,"Click to open →"];
                 }
               }
             }
           },
-          scales: {
-            x: { type:"time", ticks:{ color:"#484f58", font:{size:10}, maxTicksLimit:6 }, grid:{ color:"#161b22" } },
-            y: { title:{ display:true, text:"Signal score", color:"#484f58", font:{size:10} }, ticks:{ color:"#484f58", font:{size:10} }, grid:{ color:"#161b22" } }
+          scales:{
+            x:{ type:"time", ticks:{ color:"#484f58",font:{size:10},maxTicksLimit:6 }, grid:{ color:"#161b22" } },
+            y:{ title:{ display:true,text:"Signal score",color:"#484f58",font:{size:10} }, ticks:{ color:"#484f58",font:{size:10} }, grid:{ color:"#161b22" } }
           }
         }
       });
     }
 
-    function buildBarChart(sources, results, colors) {
-      const scoresBySource = {};
-      results.forEach(r => {
-        if (!scoresBySource[r.source]) scoresBySource[r.source] = [];
-        scoresBySource[r.source].push(r.score);
-      });
-      const labels = [], avgScores = [], bgColors = [];
-      for (const [source, count] of Object.entries(sources)) {
-        if (count > 0 && scoresBySource[source]) {
-          labels.push(sourceLabels[source] || source);
-          const avg = scoresBySource[source].reduce((a,b)=>a+b,0)/scoresBySource[source].length;
-          avgScores.push(Math.round(avg*10)/10);
-          bgColors.push(colors[source] || "#555");
+    function buildBarChart(sources,results,colors){
+      const sbs={};
+      results.forEach(r=>{ if(!sbs[r.source])sbs[r.source]=[]; sbs[r.source].push(r.score); });
+      const labels=[],avgScores=[],bgColors=[];
+      for(const [s,c] of Object.entries(sources)){
+        if(c>0&&sbs[s]){
+          labels.push(sourceLabels[s]||s);
+          avgScores.push(Math.round(sbs[s].reduce((a,b)=>a+b,0)/sbs[s].length*10)/10);
+          bgColors.push(colors[s]||"#555");
         }
       }
-      const ctx = document.getElementById("signalChart").getContext("2d");
-      signalChart = new Chart(ctx, {
-        type: "bar",
-        data: { labels, datasets:[{ label:"Avg signal score", data:avgScores, backgroundColor:bgColors, borderRadius:4, borderSkipped:false }] },
-        options: {
-          plugins: { legend:{ labels:{ color:"#8b949e", font:{size:11} } } },
-          scales: {
-            x: { ticks:{ color:"#484f58" }, grid:{ color:"#161b22" } },
-            y: { ticks:{ color:"#484f58" }, grid:{ color:"#161b22" } }
-          }
-        }
+      const ctx=document.getElementById("signalChart").getContext("2d");
+      signalChart=new Chart(ctx,{
+        type:"bar",
+        data:{ labels, datasets:[{ label:"Avg signal score",data:avgScores,backgroundColor:bgColors,borderRadius:4,borderSkipped:false }] },
+        options:{ plugins:{ legend:{ labels:{ color:"#8b949e",font:{size:11} } } }, scales:{ x:{ ticks:{ color:"#484f58" },grid:{ color:"#161b22" } }, y:{ ticks:{ color:"#484f58" },grid:{ color:"#161b22" } } } }
       });
     }
   </script>

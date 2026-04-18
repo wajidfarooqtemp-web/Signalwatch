@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timedelta
 import requests
 import re
 import xml.etree.ElementTree as ET
 import os
+import json
 
 app = FastAPI()
 
@@ -16,12 +17,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
 
-import json
 DAILY_LIMIT = 3
 COUNTS_FILE = "/tmp/search_counts.json"
 
@@ -39,49 +39,57 @@ def save_counts(counts):
     except:
         pass
 
-
 def fetch_reddit(query):
     url = f"https://www.reddit.com/search.json?q={requests.utils.quote(query)}&limit=25&sort=new"
     headers = {"User-Agent": "signalwatch/1.0"}
     try:
         res = requests.get(url, headers=headers, timeout=10)
         data = res.json()
-        return [
-            {
-                "title": item["data"]["title"],
+        cutoff = datetime.now() - timedelta(days=90)
+        results = []
+        for item in data["data"]["children"]:
+            d = item["data"]
+            created = d.get("created_utc", 0)
+            if created and datetime.fromtimestamp(created) < cutoff:
+                continue
+            results.append({
+                "title": d["title"],
                 "source": "reddit",
-                "url": f"https://reddit.com{item['data']['permalink']}",
-                "created": item["data"].get("created_utc", 0)
-            }
-            for item in data["data"]["children"]
-        ]
+                "url": f"https://reddit.com{d['permalink']}",
+                "created": created
+            })
+        return results
     except Exception as e:
         print("Reddit error:", e)
         return []
-
 
 def fetch_hackernews(query):
     url = f"https://hn.algolia.com/api/v1/search?query={requests.utils.quote(query)}&tags=story&hitsPerPage=25"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
-        return [
-            {
+        cutoff = datetime.now() - timedelta(days=90)
+        results = []
+        for hit in data.get("hits", []):
+            if not hit.get("title"):
+                continue
+            created = hit.get("created_at_i", 0)
+            if created and datetime.fromtimestamp(created) < cutoff:
+                continue
+            results.append({
                 "title": hit["title"],
                 "source": "hackernews",
                 "url": hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID','')}",
-                "created": hit.get("created_at_i", 0)
-            }
-            for hit in data.get("hits", [])
-            if hit.get("title")
-        ]
+                "created": created
+            })
+        return results
     except Exception as e:
         print("HackerNews error:", e)
         return []
 
-
 def fetch_newsapi(query):
-    url = f"https://newsapi.org/v2/everything?q={requests.utils.quote(query)}&pageSize=25&language=en&sortBy=publishedAt&apiKey={NEWS_API_KEY}"
+    from_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    url = f"https://newsapi.org/v2/everything?q={requests.utils.quote(query)}&pageSize=25&language=en&sortBy=publishedAt&from={from_date}&apiKey={NEWS_API_KEY}"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
@@ -93,7 +101,6 @@ def fetch_newsapi(query):
             ts = 0
             if published:
                 try:
-                    from datetime import datetime
                     dt = datetime.strptime(published, "%Y-%m-%dT%H:%M:%SZ")
                     ts = int(dt.timestamp())
                 except:
@@ -109,25 +116,25 @@ def fetch_newsapi(query):
         print("NewsAPI error:", e)
         return []
 
-
 def fetch_newsdata(query):
     url = f"https://newsdata.io/api/1/news?apikey={NEWSDATA_API_KEY}&q={requests.utils.quote(query)}&language=en"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
-        return [
-            {
+        results = []
+        for a in data.get("results", []):
+            if not a.get("title"):
+                continue
+            results.append({
                 "title": a["title"],
                 "source": "newsdata",
-                "url": a.get("link", "")
-            }
-            for a in data.get("results", [])
-            if a.get("title")
-        ]
+                "url": a.get("link", ""),
+                "created": 0
+            })
+        return results
     except Exception as e:
         print("NewsData error:", e)
         return []
-
 
 def fetch_rss(query):
     feeds = [
@@ -147,30 +154,40 @@ def fetch_rss(query):
                 if title_el is not None and title_el.text:
                     title = title_el.text.strip()
                     if any(k in title.lower() for k in keywords):
-                        results.append({"title": title, "source": "rss", "url": ""})
+                        results.append({"title": title, "source": "rss", "url": "", "created": 0})
         except Exception as e:
             print(f"RSS error {feed_url}:", e)
     return results
 
-
 def fetch_youtube(query):
-    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={requests.utils.quote(query)}&type=video&maxResults=25&key={YOUTUBE_API_KEY}"
+    published_after = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={requests.utils.quote(query)}&type=video&maxResults=25&order=date&publishedAfter={published_after}&key={YOUTUBE_API_KEY}"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
-        return [
-            {
-                "title": item["snippet"]["title"],
+        results = []
+        for item in data.get("items", []):
+            snippet = item.get("snippet", {})
+            if not snippet.get("title"):
+                continue
+            published = snippet.get("publishedAt", "")
+            ts = 0
+            if published:
+                try:
+                    dt = datetime.strptime(published, "%Y-%m-%dT%H:%M:%SZ")
+                    ts = int(dt.timestamp())
+                except:
+                    pass
+            results.append({
+                "title": snippet["title"],
                 "source": "youtube",
-                "url": f"https://youtube.com/watch?v={item['id']['videoId']}"
-            }
-            for item in data.get("items", [])
-            if item.get("snippet", {}).get("title")
-        ]
+                "url": f"https://youtube.com/watch?v={item['id']['videoId']}",
+                "created": ts
+            })
+        return results
     except Exception as e:
         print("YouTube error:", e)
         return []
-
 
 def fetch_wikipedia(query):
     results = []
@@ -182,19 +199,17 @@ def fetch_wikipedia(query):
     try:
         res = requests.get(url, timeout=8)
         data = res.json()
-        titles = data[1]
-        descriptions = data[2]
-        for title, desc in zip(titles, descriptions):
+        for title, desc in zip(data[1], data[2]):
             if desc:
                 results.append({
                     "title": f"Wikipedia: {title} — {desc[:100]}",
                     "source": "wikipedia",
-                    "url": f"https://en.wikipedia.org/wiki/{requests.utils.quote(title)}"
+                    "url": f"https://en.wikipedia.org/wiki/{requests.utils.quote(title)}",
+                    "created": 0
                 })
     except Exception as e:
-        print(f"Wikipedia error:", e)
+        print("Wikipedia error:", e)
     return results
-
 
 def score_post(text, keywords):
     t = text.lower()
@@ -207,14 +222,12 @@ def score_post(text, keywords):
             score += 3
     return score
 
-
 def extract_keywords(query):
     stop = {"not", "or", "and", "the", "a", "is", "in", "of", "to"}
     phrases = re.findall(r'"(.*?)"', query)
     clean = re.sub(r'".*?"', '', query).lower()
     words = [w for w in clean.split() if w not in stop]
     return words, phrases
-
 
 def filter_and_rank(posts, query):
     raw_words = query.split()
@@ -242,39 +255,58 @@ def filter_and_rank(posts, query):
         if s == 0:
             continue
         results.append({
-    "title": post["title"],
-    "score": s,
-    "source": post["source"],
-    "url": post.get("url", ""),
-    "created": post.get("created", 0)
-})
+            "title": post["title"],
+            "score": s,
+            "source": post["source"],
+            "url": post.get("url", ""),
+            "created": post.get("created", 0)
+        })
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
-
 
 def generate_insight(results, query):
     if not results:
         return "No signal found for this query."
 
+    today = datetime.now().strftime("%d %B %Y")
     titles = [r["title"] for r in results[:15]]
     titles_text = "\n".join(f"- {t}" for t in titles)
     sources_used = list(set(r["source"] for r in results))
 
-    prompt = f"""You are a senior brand intelligence analyst delivering a decision briefing to a brand manager. They searched for: "{query}"
+    timed = [r for r in results if r.get("created", 0) > 0]
+    if timed:
+        newest = max(timed, key=lambda x: x["created"])
+        oldest = min(timed, key=lambda x: x["created"])
+        newest_date = datetime.fromtimestamp(newest["created"]).strftime("%d %b %Y")
+        oldest_date = datetime.fromtimestamp(oldest["created"]).strftime("%d %b %Y")
+        time_context = f"Signals span from {oldest_date} to {newest_date}. Today is {today}."
+    else:
+        time_context = f"Today is {today}. Signals are from recent news and forum sources."
 
-Live signals collected from {', '.join(sources_used)}:
+    prompt = f"""You are a senior brand intelligence analyst. Today is {today}.
+
+A user searched for: "{query}"
+
+{time_context}
+
+Recent signals from {', '.join(sources_used)}:
 {titles_text}
 
-Write a 5-sentence briefing in this exact structure:
+CRITICAL RULES:
+- Base your analysis ONLY on signals dated within the last 90 days
+- If signals appear old or irrelevant to current events, say so clearly
+- Never recommend action based on content older than 90 days
+- If you cannot confirm recency, state the limitation honestly
 
-Sentence 1 — SITUATION: What is actually happening right now based on these signals. Be specific, not vague.
-Sentence 2 — SIGNIFICANCE: Why this matters to a brand or business. What is the real-world impact if ignored.
-Sentence 3 — MOMENTUM: Is this signal accelerating, stable, or fading. Give a directional judgment.
-Sentence 4 — DECISION: One specific action the brand should take in the next 24-48 hours. Not "monitor" — an actual decision or response.
-Sentence 5 — RISK IF IGNORED: What happens if nothing is done. Make the cost of inaction concrete.
+Write a 5-sentence briefing:
+Sentence 1 — SITUATION: What is happening right now based on these recent signals.
+Sentence 2 — SIGNIFICANCE: Why this matters to a brand or business today.
+Sentence 3 — MOMENTUM: Is this accelerating, stable, or fading right now.
+Sentence 4 — DECISION: One specific action to take in the next 24-48 hours.
+Sentence 5 — RISK IF IGNORED: Concrete cost of inaction.
 
-Rules: No bullet points. No hedging. No "it appears" or "it seems". Write like you are billing $500/hour and the client needs to act today. Be direct."""
+Rules: No hedging. No "it appears". Write like a $500/hour analyst. If data is insufficient for confident recommendations, say so directly rather than inventing relevance."""
 
     try:
         res = requests.post(
@@ -298,11 +330,9 @@ Rules: No bullet points. No hedging. No "it appears" or "it seems". Write like y
         print("OpenRouter error:", e)
         return "Insight unavailable at this time."
 
-
 @app.get("/")
 def home():
     return {"status": "Signalwatch running"}
-
 
 @app.get("/search")
 def search(query: str, request: Request):
@@ -310,7 +340,6 @@ def search(query: str, request: Request):
     today = str(date.today())
 
     counts = load_counts()
-
     if ip not in counts or counts[ip]["date"] != today:
         counts[ip] = {"count": 0, "date": today}
 
