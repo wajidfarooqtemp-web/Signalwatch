@@ -21,12 +21,27 @@ NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
 
-search_counts = defaultdict(lambda: {"count": 0, "date": str(date.today())})
-DAILY_LIMIT = 10
+import json
+DAILY_LIMIT = 3
+COUNTS_FILE = "/tmp/search_counts.json"
+
+def load_counts():
+    try:
+        with open(COUNTS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_counts(counts):
+    try:
+        with open(COUNTS_FILE, "w") as f:
+            json.dump(counts, f)
+    except:
+        pass
 
 
 def fetch_reddit(query):
-    url = f"https://www.reddit.com/search.json?q={requests.utils.quote(query)}&limit=25"
+    url = f"https://www.reddit.com/search.json?q={requests.utils.quote(query)}&limit=25&sort=new"
     headers = {"User-Agent": "signalwatch/1.0"}
     try:
         res = requests.get(url, headers=headers, timeout=10)
@@ -35,7 +50,8 @@ def fetch_reddit(query):
             {
                 "title": item["data"]["title"],
                 "source": "reddit",
-                "url": f"https://reddit.com{item['data']['permalink']}"
+                "url": f"https://reddit.com{item['data']['permalink']}",
+                "created": item["data"].get("created_utc", 0)
             }
             for item in data["data"]["children"]
         ]
@@ -53,7 +69,8 @@ def fetch_hackernews(query):
             {
                 "title": hit["title"],
                 "source": "hackernews",
-                "url": hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID','')}"
+                "url": hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID','')}",
+                "created": hit.get("created_at_i", 0)
             }
             for hit in data.get("hits", [])
             if hit.get("title")
@@ -64,19 +81,30 @@ def fetch_hackernews(query):
 
 
 def fetch_newsapi(query):
-    url = f"https://newsapi.org/v2/everything?q={requests.utils.quote(query)}&pageSize=25&language=en&sortBy=relevancy&apiKey={NEWS_API_KEY}"
+    url = f"https://newsapi.org/v2/everything?q={requests.utils.quote(query)}&pageSize=25&language=en&sortBy=publishedAt&apiKey={NEWS_API_KEY}"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
-        return [
-            {
+        results = []
+        for a in data.get("articles", []):
+            if not a.get("title") or a["title"] == "[Removed]":
+                continue
+            published = a.get("publishedAt", "")
+            ts = 0
+            if published:
+                try:
+                    from datetime import datetime
+                    dt = datetime.strptime(published, "%Y-%m-%dT%H:%M:%SZ")
+                    ts = int(dt.timestamp())
+                except:
+                    pass
+            results.append({
                 "title": a["title"],
                 "source": "newsapi",
-                "url": a.get("url", "")
-            }
-            for a in data.get("articles", [])
-            if a.get("title") and a["title"] != "[Removed]"
-        ]
+                "url": a.get("url", ""),
+                "created": ts
+            })
+        return results
     except Exception as e:
         print("NewsAPI error:", e)
         return []
@@ -214,11 +242,12 @@ def filter_and_rank(posts, query):
         if s == 0:
             continue
         results.append({
-            "title": post["title"],
-            "score": s,
-            "source": post["source"],
-            "url": post.get("url", "")
-        })
+    "title": post["title"],
+    "score": s,
+    "source": post["source"],
+    "url": post.get("url", ""),
+    "created": post.get("created", 0)
+})
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
@@ -280,18 +309,22 @@ def search(query: str, request: Request):
     ip = request.client.host
     today = str(date.today())
 
-    if search_counts[ip]["date"] != today:
-        search_counts[ip] = {"count": 0, "date": today}
+    counts = load_counts()
 
-    if search_counts[ip]["count"] >= DAILY_LIMIT:
+    if ip not in counts or counts[ip]["date"] != today:
+        counts[ip] = {"count": 0, "date": today}
+
+    if counts[ip]["count"] >= DAILY_LIMIT:
+        save_counts(counts)
         return {
             "error": f"Daily limit of {DAILY_LIMIT} searches reached. Come back tomorrow.",
             "limit_reached": True
         }
 
-    search_counts[ip]["count"] += 1
-    remaining = DAILY_LIMIT - search_counts[ip]["count"]
-    print(f"IP {ip} — search {search_counts[ip]['count']}/{DAILY_LIMIT}")
+    counts[ip]["count"] += 1
+    remaining = DAILY_LIMIT - counts[ip]["count"]
+    save_counts(counts)
+    print(f"IP {ip} — search {counts[ip]['count']}/{DAILY_LIMIT}")
 
     reddit = fetch_reddit(query)
     hn = fetch_hackernews(query)
