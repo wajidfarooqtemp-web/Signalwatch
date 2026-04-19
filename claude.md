@@ -72,3 +72,80 @@ Timeline scatter plot with jitter so line is never flat. Each dot = one result. 
 
 ## How to continue
 Share this file and say: "Continue building Signalwatch. Read claude.md for context. Current status: [describe what you just did]"
+
+Edit 1: 
+# Signalwatch — Project Memory
+
+## What it is
+Real-time brand intelligence decision engine. USP: tells you what to DO with signal data in the next 24-48 hours, not just what people are saying. Built after being fired from Brandwatch.
+
+Tagline: From raw signal to clear decision
+
+## Tech stack
+Backend: Python + FastAPI + Uvicorn → Railway (free tier)
+Frontend: HTML + CSS + JS + Chart.js → Vercel (free)
+AI: OpenRouter API (openrouter/auto)
+Payment: Gumroad ($4.99/month, 100 searches)
+
+## Data sources — last 90 days only
+Reddit: sort=new, 90-day timestamp cutoff
+HackerNews: Algolia API, 90-day cutoff
+NewsAPI: from= param last 30 days, sortBy=publishedAt
+NewsData.io: latest endpoint
+YouTube: publishedAfter= last 90 days, order=date
+RSS: BBC, Guardian, Sky News, Al Jazeera
+Wikipedia: context only, no cutoff
+
+## AI pipeline — two calls per search
+Call 1 — filter_relevant(): sends raw titles to AI, asks it to return only result numbers genuinely about the query in real business context. Removes gaming slang, coincidental mentions, spam.
+Call 2 — generate_insight(): sends filtered results, returns 5-sentence briefing. No markdown, no asterisks. Prompt explicitly bans formatting symbols.
+
+## AI prompt structure
+5 plain text sentences:
+SITUATION — what is concretely happening now
+SIGNIFICANCE — why it matters to a brand today
+MOMENTUM — accelerating, stable, or declining
+DECISION — one specific action in 24-48 hours (extracted to green action box)
+RISK — cost of doing nothing
+
+Rules in prompt: no markdown, no asterisks, no invented events, state limitations honestly if data is insufficient.
+
+## Rate limiting
+3 per IP per day stored in /tmp/search_counts.json (survives Railway restarts). When limit reached: payment upgrade card shown.
+
+## Payment
+Gumroad link shown when limit reached. $4.99/month = 100 searches. Accepts USD and INR.
+
+## File structure
+Signalwatch/
+├── app.py
+├── requirements.txt
+├── Procfile
+├── claude.md
+└── frontend/
+    └── index.html
+
+## Deployment
+Railway: app.py and Procfile at repo ROOT. No root directory setting.
+Vercel: root directory = frontend
+Both redeploy on git push.
+
+## Environment variables on Railway
+OPENROUTER_API_KEY, NEWS_API_KEY, NEWSDATA_API_KEY, YOUTUBE_API_KEY
+
+## Design
+White background (#ffffff). Blue accent (#2563eb). Professional light theme. Mobile-responsive with hamburger menu. Two pages: Search and About. About page has photo with W initial fallback.
+
+## Known issues
+RSS: Reuters and AP URLs broken, using Sky News and Al Jazeera
+Rate limiting shared across carrier NAT on mobile (partial mitigation only)
+OpenRouter free tier rotates models, quality varies
+
+## Next planned
+Signal memory (compare today vs last week)
+Multi-brand comparison endpoint
+Email alerts on signal change
+User accounts with persistent search history
+
+## Resume in new chat
+Share this file and say: Continue building Signalwatch. Read claude.md for context. Current status: [what you just did]

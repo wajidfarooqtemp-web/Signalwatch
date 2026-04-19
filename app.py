@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from collections import defaultdict
 from datetime import date, datetime, timedelta
 import requests
 import re
@@ -17,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
@@ -211,6 +210,63 @@ def fetch_wikipedia(query):
         print("Wikipedia error:", e)
     return results
 
+def ai_call(prompt):
+    try:
+        res = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://signalwatch.vercel.app",
+                "X-Title": "Signalwatch"
+            },
+            json={
+                "model": "openrouter/auto",
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30
+        )
+        data = res.json()
+        text = data["choices"][0]["message"]["content"]
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+        text = re.sub(r'\*([^*]+)\*', r'\1', text)
+        return text.strip()
+    except Exception as e:
+        print("AI error:", e)
+        return None
+
+def filter_relevant(posts, query):
+    if not posts:
+        return []
+    titles = [p["title"] for p in posts[:30]]
+    titles_text = "\n".join(f"{i+1}. {t}" for i, t in enumerate(titles))
+    prompt = f"""You are a signal relevance filter. The user is researching: "{query}"
+
+Below are {len(titles)} raw results. Return ONLY the numbers of results that are genuinely about "{query}" as a brand, company, product, or topic in a real business or consumer context.
+
+Exclude:
+- Gaming slang, memes, or unrelated community events
+- Results where the keyword appears coincidentally
+- Spam, deals aggregators with no brand context
+- Results clearly not about the query topic
+
+Return only a comma-separated list of numbers. Nothing else. Example: 1,3,5,7
+
+Results:
+{titles_text}"""
+
+    response = ai_call(prompt)
+    if not response:
+        return posts
+
+    try:
+        numbers = [int(x.strip()) for x in response.split(",") if x.strip().isdigit()]
+        filtered = [posts[n-1] for n in numbers if 1 <= n <= len(posts)]
+        print(f"Relevance filter: {len(posts)} → {len(filtered)} results")
+        return filtered if filtered else posts[:10]
+    except:
+        return posts
+
 def score_post(text, keywords):
     t = text.lower()
     score = 0
@@ -270,7 +326,7 @@ def generate_insight(results, query):
         return "No signal found for this query."
 
     today = datetime.now().strftime("%d %B %Y")
-    titles = [r["title"] for r in results[:15]]
+    titles = [r["title"] for r in results[:12]]
     titles_text = "\n".join(f"- {t}" for t in titles)
     sources_used = list(set(r["source"] for r in results))
 
@@ -280,55 +336,31 @@ def generate_insight(results, query):
         oldest = min(timed, key=lambda x: x["created"])
         newest_date = datetime.fromtimestamp(newest["created"]).strftime("%d %b %Y")
         oldest_date = datetime.fromtimestamp(oldest["created"]).strftime("%d %b %Y")
-        time_context = f"Signals span from {oldest_date} to {newest_date}. Today is {today}."
+        time_context = f"These signals span {oldest_date} to {newest_date}."
     else:
-        time_context = f"Today is {today}. Signals are from recent news and forum sources."
+        time_context = f"Signals are from recent sources."
 
     prompt = f"""You are a senior brand intelligence analyst. Today is {today}.
 
-A user searched for: "{query}"
-
+The user searched for: "{query}"
 {time_context}
+Sources: {', '.join(sources_used)}
 
-Recent signals from {', '.join(sources_used)}:
+Verified recent signals:
 {titles_text}
 
-CRITICAL RULES:
-- Base your analysis ONLY on signals dated within the last 90 days
-- If signals appear old or irrelevant to current events, say so clearly
-- Never recommend action based on content older than 90 days
-- If you cannot confirm recency, state the limitation honestly
+Write exactly 5 sentences. No bullet points. No markdown formatting. No asterisks. Plain text only.
 
-Write a 5-sentence briefing:
-Sentence 1 — SITUATION: What is happening right now based on these recent signals.
-Sentence 2 — SIGNIFICANCE: Why this matters to a brand or business today.
-Sentence 3 — MOMENTUM: Is this accelerating, stable, or fading right now.
-Sentence 4 — DECISION: One specific action to take in the next 24-48 hours.
-Sentence 5 — RISK IF IGNORED: Concrete cost of inaction.
+Sentence 1 - SITUATION: What is concretely happening right now based only on these signals.
+Sentence 2 - SIGNIFICANCE: Why this matters to a brand or business today.
+Sentence 3 - MOMENTUM: Whether this is accelerating, stable, or declining.
+Sentence 4 - DECISION: One specific action to take in the next 24 to 48 hours.
+Sentence 5 - RISK: The concrete cost of doing nothing.
 
-Rules: No hedging. No "it appears". Write like a $500/hour analyst. If data is insufficient for confident recommendations, say so directly rather than inventing relevance."""
+If signals are insufficient for confident analysis, say so clearly in sentence 1 and adjust accordingly. Never invent events. Never reference anything not in the signals above."""
 
-    try:
-        res = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://signalwatch.vercel.app",
-                "X-Title": "Signalwatch"
-            },
-            json={
-                "model": "openrouter/auto",
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30
-        )
-        data = res.json()
-        print("OpenRouter Status:", res.status_code)
-        return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        print("OpenRouter error:", e)
-        return "Insight unavailable at this time."
+    result = ai_call(prompt)
+    return result if result else "Insight unavailable at this time."
 
 @app.get("/")
 def home():
@@ -346,7 +378,7 @@ def search(query: str, request: Request):
     if counts[ip]["count"] >= DAILY_LIMIT:
         save_counts(counts)
         return {
-            "error": f"Daily limit of {DAILY_LIMIT} searches reached. Come back tomorrow.",
+            "error": "limit",
             "limit_reached": True
         }
 
@@ -366,7 +398,8 @@ def search(query: str, request: Request):
     all_posts = reddit + hn + newsapi + newsdata + rss + youtube + wikipedia
     print(f"Sources — Reddit:{len(reddit)} HN:{len(hn)} NewsAPI:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} YouTube:{len(youtube)} Wikipedia:{len(wikipedia)}")
 
-    ranked = filter_and_rank(all_posts, query)
+    relevant_posts = filter_relevant(all_posts, query)
+    ranked = filter_and_rank(relevant_posts, query)
     insight = generate_insight(ranked, query)
 
     return {
