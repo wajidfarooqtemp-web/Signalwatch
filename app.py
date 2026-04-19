@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
@@ -210,7 +210,26 @@ def fetch_wikipedia(query):
         print("Wikipedia error:", e)
     return results
 
-def ai_call(prompt):
+def strip_markdown(text):
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    text = re.sub(r'\*([^*]+)\*', r'\1', text)
+    text = re.sub(r'#{1,6}\s', '', text)
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    return text.strip()
+
+def ai_call(prompt, use_web_search=False):
+    tools = []
+    if use_web_search:
+        tools = [{"type": "web_search_20250305", "name": "web_search"}]
+
+    payload = {
+        "model": "openrouter/auto",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 600
+    }
+    if tools:
+        payload["tools"] = tools
+
     try:
         res = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -220,40 +239,49 @@ def ai_call(prompt):
                 "HTTP-Referer": "https://signalwatch.vercel.app",
                 "X-Title": "Signalwatch"
             },
-            json={
-                "model": "openrouter/auto",
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30
+            json=payload,
+            timeout=45
         )
         data = res.json()
-        text = data["choices"][0]["message"]["content"]
-        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-        text = re.sub(r'\*([^*]+)\*', r'\1', text)
-        return text.strip()
+        content = data["choices"][0]["message"]["content"]
+        if isinstance(content, list):
+            text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
+        else:
+            text = content or ""
+        return strip_markdown(text.strip())
     except Exception as e:
         print("AI error:", e)
         return None
+
+def research_brand(query):
+    today = datetime.now().strftime("%d %B %Y")
+    prompt = f"""Today is {today}. Search the web and find out what is currently happening with "{query}".
+
+Find:
+1. Any major news, announcements, controversies, or developments in the last 30 days
+2. Current public sentiment and what consumers are saying right now
+3. Any significant business developments, product launches, or brand issues
+
+Return a concise 2-3 sentence factual summary of what is actually happening with {query} right now. Only include verified, recent information. If nothing significant is happening, say so directly."""
+
+    result = ai_call(prompt, use_web_search=True)
+    if result:
+        print(f"Brand research: {result[:100]}...")
+    return result or ""
 
 def filter_relevant(posts, query):
     if not posts:
         return []
     titles = [p["title"] for p in posts[:30]]
     titles_text = "\n".join(f"{i+1}. {t}" for i, t in enumerate(titles))
-    prompt = f"""You are a signal relevance filter. The user is researching: "{query}"
+    prompt = f"""Filter these results for genuine relevance to "{query}" as a real brand or topic.
 
-Below are {len(titles)} raw results. Return ONLY the numbers of results that are genuinely about "{query}" as a brand, company, product, or topic in a real business or consumer context.
-
-Exclude:
-- Gaming slang, memes, or unrelated community events
-- Results where the keyword appears coincidentally
-- Spam, deals aggregators with no brand context
-- Results clearly not about the query topic
-
-Return only a comma-separated list of numbers. Nothing else. Example: 1,3,5,7
+Return ONLY comma-separated numbers of results that are genuinely about {query} in a real consumer or business context. Exclude gaming slang, memes, coincidental mentions, and spam.
 
 Results:
-{titles_text}"""
+{titles_text}
+
+Return only numbers, example: 1,3,5,7"""
 
     response = ai_call(prompt)
     if not response:
@@ -262,7 +290,7 @@ Results:
     try:
         numbers = [int(x.strip()) for x in response.split(",") if x.strip().isdigit()]
         filtered = [posts[n-1] for n in numbers if 1 <= n <= len(posts)]
-        print(f"Relevance filter: {len(posts)} → {len(filtered)} results")
+        print(f"Relevance filter: {len(posts)} → {len(filtered)}")
         return filtered if filtered else posts[:10]
     except:
         return posts
@@ -321,43 +349,48 @@ def filter_and_rank(posts, query):
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
 
-def generate_insight(results, query):
+def generate_insight(results, query, brand_reality):
     if not results:
         return "No signal found for this query."
 
     today = datetime.now().strftime("%d %B %Y")
-    titles = [r["title"] for r in results[:12]]
+    titles = [r["title"] for r in results[:15]]
     titles_text = "\n".join(f"- {t}" for t in titles)
     sources_used = list(set(r["source"] for r in results))
 
     timed = [r for r in results if r.get("created", 0) > 0]
+    time_context = ""
     if timed:
         newest = max(timed, key=lambda x: x["created"])
         oldest = min(timed, key=lambda x: x["created"])
         newest_date = datetime.fromtimestamp(newest["created"]).strftime("%d %b %Y")
         oldest_date = datetime.fromtimestamp(oldest["created"]).strftime("%d %b %Y")
-        time_context = f"These signals span {oldest_date} to {newest_date}."
-    else:
-        time_context = f"Signals are from recent sources."
+        time_context = f"Consumer mentions span {oldest_date} to {newest_date}."
+
+    brand_section = ""
+    if brand_reality and len(brand_reality) > 20:
+        brand_section = f"""
+Verified current brand reality (from live web research):
+{brand_reality}
+"""
 
     prompt = f"""You are a senior brand intelligence analyst. Today is {today}.
 
 The user searched for: "{query}"
-{time_context}
-Sources: {', '.join(sources_used)}
-
-Verified recent signals:
+{brand_section}
+Consumer signals from {', '.join(sources_used)} — {time_context}
 {titles_text}
 
-Write exactly 5 sentences. No bullet points. No markdown formatting. No asterisks. Plain text only.
+Write a confident 5-sentence intelligence briefing. Plain text only. No bullet points. No asterisks. No markdown. No labels like SITUATION or DECISION.
 
-Sentence 1 - SITUATION: What is concretely happening right now based only on these signals.
-Sentence 2 - SIGNIFICANCE: Why this matters to a brand or business today.
-Sentence 3 - MOMENTUM: Whether this is accelerating, stable, or declining.
-Sentence 4 - DECISION: One specific action to take in the next 24 to 48 hours.
-Sentence 5 - RISK: The concrete cost of doing nothing.
+Your briefing must:
+- Open with what is concretely happening with this brand right now, grounded in the verified brand reality above
+- Explain what the consumer signals reveal when interpreted against that reality
+- Assess whether momentum is building, stable, or declining
+- Give one specific action to take in the next 24 to 48 hours
+- State the risk of inaction clearly
 
-If signals are insufficient for confident analysis, say so clearly in sentence 1 and adjust accordingly. Never invent events. Never reference anything not in the signals above."""
+If the consumer mentions contain noise or irrelevant content, acknowledge it but still deliver a confident briefing based on the verified brand reality. A confident analyst uses all available intelligence, not just clean data."""
 
     result = ai_call(prompt)
     return result if result else "Insight unavailable at this time."
@@ -377,15 +410,14 @@ def search(query: str, request: Request):
 
     if counts[ip]["count"] >= DAILY_LIMIT:
         save_counts(counts)
-        return {
-            "error": "limit",
-            "limit_reached": True
-        }
+        return {"error": "limit", "limit_reached": True}
 
     counts[ip]["count"] += 1
     remaining = DAILY_LIMIT - counts[ip]["count"]
     save_counts(counts)
     print(f"IP {ip} — search {counts[ip]['count']}/{DAILY_LIMIT}")
+
+    brand_reality = research_brand(query)
 
     reddit = fetch_reddit(query)
     hn = fetch_hackernews(query)
@@ -400,12 +432,13 @@ def search(query: str, request: Request):
 
     relevant_posts = filter_relevant(all_posts, query)
     ranked = filter_and_rank(relevant_posts, query)
-    insight = generate_insight(ranked, query)
+    insight = generate_insight(ranked, query, brand_reality)
 
     return {
         "query": query,
         "total": len(ranked),
         "searches_remaining": remaining,
+        "brand_reality": brand_reality,
         "sources": {
             "reddit": len(reddit),
             "hackernews": len(hn),
