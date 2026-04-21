@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENROUTER_API_KEY = os.getenv("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")
+OPENROUTER_API_KEY = os.getenv("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")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
