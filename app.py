@@ -16,27 +16,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENROUTER_API_KEY = os.getenv("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")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
 
 DAILY_LIMIT = 3
-COUNTS_FILE = "/tmp/search_counts.json"
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-def load_counts():
+def get_db():
     try:
-        with open(COUNTS_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    except Exception as e:
+        print("DB connection error:", e)
+        return None
 
-def save_counts(counts):
+def setup_db():
+    conn = get_db()
+    if not conn:
+        return
     try:
-        with open(COUNTS_FILE, "w") as f:
-            json.dump(counts, f)
-    except:
-        pass
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS searches (
+                token TEXT NOT NULL,
+                search_date DATE NOT NULL,
+                count INTEGER DEFAULT 0,
+                PRIMARY KEY (token, search_date)
+            )
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Database ready")
+    except Exception as e:
+        print("DB setup error:", e)
+
+def get_count(token):
+    conn = get_db()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT count FROM searches WHERE token = %s AND search_date = CURRENT_DATE",
+            (token,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row[0] if row else 0
+    except Exception as e:
+        print("DB get error:", e)
+        return 0
+
+def increment_count(token):
+    conn = get_db()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO searches (token, search_date, count)
+            VALUES (%s, CURRENT_DATE, 1)
+            ON CONFLICT (token, search_date)
+            DO UPDATE SET count = searches.count + 1
+            RETURNING count
+        """, (token,))
+        count = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return count
+    except Exception as e:
+        print("DB increment error:", e)
+        return 0
+
+setup_db()
 
 def fetch_reddit(query):
     results = []
@@ -438,24 +496,17 @@ def home():
 
 @app.get("/search")
 def search(query: str, request: Request, token: str = ""):
-    today = str(date.today())
-
     if not token or not token.startswith("sw_"):
         return {"error": "invalid", "limit_reached": True}
 
-    counts = load_counts()
+    current_count = get_count(token)
 
-    if token not in counts or counts[token]["date"] != today:
-        counts[token] = {"count": 0, "date": today}
-
-    if counts[token]["count"] >= DAILY_LIMIT:
-        save_counts(counts)
+    if current_count >= DAILY_LIMIT:
         return {"error": "limit", "limit_reached": True}
 
-    counts[token]["count"] += 1
-    remaining = DAILY_LIMIT - counts[token]["count"]
-    save_counts(counts)
-    print(f"Token used: {counts[token]['count']}/{DAILY_LIMIT}")
+    new_count = increment_count(token)
+    remaining = max(0, DAILY_LIMIT - new_count)
+    print(f"Token search {new_count}/{DAILY_LIMIT}")
 
     reddit = fetch_reddit(query)
     hn = fetch_hackernews(query)
