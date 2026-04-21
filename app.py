@@ -270,13 +270,16 @@ def strip_markdown(text):
     return text.strip()
 
 def ai_call(prompt):
-    models_to_try = [
+    models = [
         "google/gemini-2.0-flash-exp:free",
         "meta-llama/llama-3.3-70b-instruct:free",
-        "openrouter/auto"
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "deepseek/deepseek-r1-distill-llama-70b:free"
     ]
-    for model in models_to_try:
+
+    for model in models:
         try:
+            print(f"Trying model: {model}")
             res = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -288,26 +291,47 @@ def ai_call(prompt):
                 json={
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 500
+                    "max_tokens": 400
                 },
                 timeout=40
             )
-            data = res.json()
-            if "choices" not in data:
-                print(f"Model {model} failed, trying next")
+
+            print(f"Status from {model}: {res.status_code}")
+
+            if res.status_code == 429:
+                print(f"Rate limited on {model}, trying next")
                 continue
+
+            if res.status_code == 401:
+                print("Invalid API key")
+                return None
+
+            data = res.json()
+
+            if "choices" not in data:
+                print(f"No choices from {model}: {str(data)[:100]}")
+                continue
+
             content = data["choices"][0]["message"]["content"]
             if isinstance(content, list):
-                text = " ".join(c.get("text","") for c in content if c.get("type")=="text")
+                text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
             else:
                 text = content or ""
+
             text = strip_markdown(text.strip())
+
             if len(text) > 50:
-                print(f"Used model: {model}")
+                print(f"Success with {model}")
                 return text
+            else:
+                print(f"Response too short from {model}: {text[:50]}")
+                continue
+
         except Exception as e:
-            print(f"AI error with {model}:", e)
+            print(f"Exception with {model}: {e}")
             continue
+
+    print("All models failed")
     return None
 
 def score_post(text, keywords):
