@@ -413,22 +413,25 @@ def home():
     return {"status": "Signalwatch running — beta"}
 
 @app.get("/search")
-def search(query: str, request: Request):
-    ip = request.client.host
+def search(query: str, request: Request, token: str = ""):
     today = str(date.today())
 
-    counts = load_counts()
-    if ip not in counts or counts[ip]["date"] != today:
-        counts[ip] = {"count": 0, "date": today}
+    if not token or not token.startswith("sw_"):
+        return {"error": "invalid", "limit_reached": True}
 
-    if counts[ip]["count"] >= DAILY_LIMIT:
+    counts = load_counts()
+
+    if token not in counts or counts[token]["date"] != today:
+        counts[token] = {"count": 0, "date": today}
+
+    if counts[token]["count"] >= DAILY_LIMIT:
         save_counts(counts)
         return {"error": "limit", "limit_reached": True}
 
-    counts[ip]["count"] += 1
-    remaining = DAILY_LIMIT - counts[ip]["count"]
+    counts[token]["count"] += 1
+    remaining = DAILY_LIMIT - counts[token]["count"]
     save_counts(counts)
-    print(f"IP {ip} — search {counts[ip]['count']}/{DAILY_LIMIT} — query: {query}")
+    print(f"Token used: {counts[token]['count']}/{DAILY_LIMIT}")
 
     reddit = fetch_reddit(query)
     hn = fetch_hackernews(query)

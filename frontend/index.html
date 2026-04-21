@@ -429,6 +429,16 @@
   <script>
     const API_BASE = "https://signalwatch-production.up.railway.app";
 
+function getToken() {
+  let t = localStorage.getItem("sw_token");
+  if (!t) {
+    t = "sw_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem("sw_token", t);
+  }
+  return t;
+}
+const SW_TOKEN = getToken();
+
     function showLimitMessage(container) {
   container.innerHTML = `
     <div style="text-align:center;padding:60px 24px;max-width:440px;margin:0 auto;">
@@ -447,6 +457,38 @@ function checkLocalLimit() {
   const savedCount = parseInt(localStorage.getItem("sw_searches") || "0");
   const today = new Date().toDateString();
   if (savedDate === today && savedCount >= 3) {
+    const btn = document.getElementById("searchBtn");
+    btn.disabled = true;
+    btn.textContent = "Come back tomorrow";
+    document.getElementById("remainingPill").style.display = "block";
+    document.getElementById("remainingCount").textContent = "0";
+    showLimitMessage(document.getElementById("resultsContainer"));
+  }
+}
+
+function showLimitMessage(container) {
+  container.innerHTML = `
+    <div style="text-align:center;padding:60px 24px;max-width:440px;margin:0 auto;">
+      <div style="font-size:32px;margin-bottom:16px;">◎</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:12px;letter-spacing:-0.3px;">
+        That is your three for today
+      </div>
+      <div style="font-size:14px;color:var(--text2);line-height:1.7;">
+        Signalwatch runs on live APIs with daily limits. Your searches reset at midnight. See you tomorrow.
+      </div>
+    </div>`;
+}
+
+function checkLocalLimit() {
+  const today = new Date().toDateString();
+  const savedDate = localStorage.getItem("sw_date");
+  const savedCount = parseInt(localStorage.getItem("sw_count") || "0");
+  if (savedDate !== today) {
+    localStorage.setItem("sw_date", today);
+    localStorage.setItem("sw_count", "0");
+    return;
+  }
+  if (savedCount >= 3) {
     const btn = document.getElementById("searchBtn");
     btn.disabled = true;
     btn.textContent = "Come back tomorrow";
@@ -494,7 +536,7 @@ mastodon:"Mastodon"
       loading.style.display="block"; container.innerHTML="";
       if(signalChart){signalChart.destroy();signalChart=null;}
       try {
-        const res = await fetch(`${API_BASE}/search?query=${encodeURIComponent(query)}`);
+        const res = await fetch(`${API_BASE}/search?query=${encodeURIComponent(query)}&token=${encodeURIComponent(SW_TOKEN)}`);
         const data = await res.json();
         renderResults(data, query);
       } catch(err) {
@@ -508,17 +550,24 @@ mastodon:"Mastodon"
       const container = document.getElementById("resultsContainer");
 
       if (data.limit_reached) {
-  localStorage.setItem("sw_limit_date", new Date().toDateString());
-  localStorage.setItem("sw_searches", "3");
-  showLimitMessage(container);
+  localStorage.setItem("sw_count", "3");
+  localStorage.setItem("sw_date", new Date().toDateString());
   document.getElementById("searchBtn").disabled = true;
   document.getElementById("searchBtn").textContent = "Come back tomorrow";
+  showLimitMessage(container);
   return;
 }
 
       if (data.searches_remaining !== undefined) {
+  const used = 3 - data.searches_remaining;
+  localStorage.setItem("sw_count", used.toString());
+  localStorage.setItem("sw_date", new Date().toDateString());
   document.getElementById("remainingPill").style.display = "block";
   document.getElementById("remainingCount").textContent = data.searches_remaining;
+  if (data.searches_remaining <= 0) {
+    document.getElementById("searchBtn").disabled = true;
+    document.getElementById("searchBtn").textContent = "Come back tomorrow";
+  }
   localStorage.setItem("sw_searches", 3 - data.searches_remaining);
   localStorage.setItem("sw_limit_date", new Date().toDateString());
   if (data.searches_remaining === 0) {
