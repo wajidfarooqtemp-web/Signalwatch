@@ -17,17 +17,22 @@ app.add_middleware(
 )
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3ec90513ea2f485fbcc255116b5016aa")
-NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "pub_b1d9ab0b879247059f926aad8f4b0d48")
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "AIzaSyBbcFJq-jkQYAjujpBpbcL0vng5l-ZWv7Q")
-
-DAILY_LIMIT = 3
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
+NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+DAILY_LIMIT = 3
+
+
+# ─── DATABASE ────────────────────────────────────────────────────────────────
+# We use PostgreSQL on Railway to store how many searches each browser token
+# has done today. This persists across server restarts — unlike the old file
+# system approach which reset every time Railway restarted the server.
 
 def get_db():
     try:
         import psycopg2
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
         return conn
     except Exception as e:
         print("DB connection error:", e)
@@ -36,6 +41,7 @@ def get_db():
 def setup_db():
     conn = get_db()
     if not conn:
+        print("No DB — rate limiting will not work")
         return
     try:
         cur = conn.cursor()
@@ -75,7 +81,7 @@ def get_count(token):
 def increment_count(token):
     conn = get_db()
     if not conn:
-        return 0
+        return 1
     try:
         cur = conn.cursor()
         cur.execute("""
@@ -92,9 +98,12 @@ def increment_count(token):
         return count
     except Exception as e:
         print("DB increment error:", e)
-        return 0
+        return 1
 
 setup_db()
+
+
+# ─── DATA SOURCES ─────────────────────────────────────────────────────────────
 
 def fetch_reddit(query):
     results = []
@@ -143,7 +152,7 @@ def fetch_hackernews(query):
             results.append({
                 "title": hit["title"],
                 "source": "hackernews",
-                "url": hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID','')}",
+                "url": hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}",
                 "created": created
             })
         return results
@@ -207,7 +216,6 @@ def fetch_rss(query):
         "https://feeds.skynews.com/feeds/rss/world.xml",
         "https://www.aljazeera.com/xml/rss/all.xml",
         "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
-        "https://feeds.ft.com/rss/home/uk",
     ]
     results = []
     keywords = query.lower().split()
@@ -319,6 +327,37 @@ def fetch_wikipedia(query):
         print("Wikipedia error:", e)
     return results
 
+
+# ─── AI ───────────────────────────────────────────────────────────────────────
+# We fetch the live list of free models from OpenRouter instead of hardcoding
+# names. Free model names change constantly. Hardcoding breaks. This way we
+# always have the latest working ones.
+
+def get_free_models():
+    try:
+        res = requests.get(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+            timeout=10
+        )
+        data = res.json()
+        free_models = []
+        for model in data.get("data", []):
+            model_id = model.get("id", "")
+            pricing = model.get("pricing", {})
+            prompt_cost = float(pricing.get("prompt", "1") or "1")
+            if ":free" in model_id or prompt_cost == 0:
+                free_models.append(model_id)
+        print(f"Found {len(free_models)} free models")
+        return free_models[:6]
+    except Exception as e:
+        print("Could not fetch model list:", e)
+        return [
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "qwen/qwen-2-7b-instruct:free",
+            "google/gemma-2-9b-it:free"
+        ]
+
 def strip_markdown(text):
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     text = re.sub(r'\*([^*]+)\*', r'\1', text)
@@ -328,22 +367,18 @@ def strip_markdown(text):
     return text.strip()
 
 def ai_call(prompt):
-    models = [
-        "google/gemini-2.0-flash-exp:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "deepseek/deepseek-r1-distill-llama-70b:free"
-    ]
+    models = get_free_models()
+    print(f"Trying {len(models)} models")
 
     for model in models:
         try:
-            print(f"Trying model: {model}")
+            print(f"Trying: {model}")
             res = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://signalwatch.vercel.app",
+                    "HTTP-Referer": "https://signalwatch.netlify.app",
                     "X-Title": "Signalwatch"
                 },
                 json={
@@ -354,20 +389,18 @@ def ai_call(prompt):
                 timeout=40
             )
 
-            print(f"Status from {model}: {res.status_code}")
+            print(f"Status {res.status_code} from {model}")
 
-            if res.status_code == 429:
-                print(f"Rate limited on {model}, trying next")
+            if res.status_code in [429, 502, 503]:
                 continue
 
             if res.status_code == 401:
-                print("Invalid API key")
+                print("Bad API key — stopping")
                 return None
 
             data = res.json()
 
             if "choices" not in data:
-                print(f"No choices from {model}: {str(data)[:100]}")
                 continue
 
             content = data["choices"][0]["message"]["content"]
@@ -379,18 +412,18 @@ def ai_call(prompt):
             text = strip_markdown(text.strip())
 
             if len(text) > 50:
-                print(f"Success with {model}")
+                print(f"Got response from {model}")
                 return text
-            else:
-                print(f"Response too short from {model}: {text[:50]}")
-                continue
 
         except Exception as e:
-            print(f"Exception with {model}: {e}")
+            print(f"Error with {model}: {e}")
             continue
 
     print("All models failed")
     return None
+
+
+# ─── SCORING AND RANKING ──────────────────────────────────────────────────────
 
 def score_post(text, keywords):
     t = text.lower()
@@ -451,9 +484,12 @@ def filter_and_rank(posts, query):
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
 
+
+# ─── INSIGHT ──────────────────────────────────────────────────────────────────
+
 def generate_insight(results, query):
     if not results:
-        return "Nothing meaningful came up for this one — try a broader search or a different angle on the query."
+        return "Nothing meaningful came up — try a broader search or a slightly different angle."
 
     today = datetime.now().strftime("%d %B %Y")
     titles = [r["title"] for r in results[:20]]
@@ -467,28 +503,29 @@ def generate_insight(results, query):
         oldest = min(timed, key=lambda x: x["created"])
         newest_date = datetime.fromtimestamp(newest["created"]).strftime("%d %b %Y")
         oldest_date = datetime.fromtimestamp(oldest["created"]).strftime("%d %b %Y")
-        time_context = f"Mentions run from {oldest_date} to {newest_date}."
+        time_context = f"Mentions span {oldest_date} to {newest_date}."
 
-    prompt = f"""You are a sharp brand analyst at a London agency. Today is {today}. A client just asked about "{query}".
+    prompt = f"""You are a brand analyst at a London agency. Today is {today}. A client asked about "{query}".
 
-Here are the latest mentions from across the web ({', '.join(sources_used)}):
+Latest mentions from {', '.join(sources_used)}:
 {titles_text}
 
 {time_context}
 
-Write a 4-sentence briefing in plain British English. Conversational, direct, no jargon. Like you are talking to a colleague over coffee, not writing a report.
+Write exactly 4 sentences in plain British English. Conversational. Like telling a colleague what you found, not writing a report. No bullet points, no headers, no asterisks, no labels like SITUATION or DECISION. Just four plain sentences under 120 words.
 
-Sentence 1: What is actually going on with {query} right now, based on these mentions.
-Sentence 2: Why this matters — what is the real implication for the brand or anyone watching this space.
-Sentence 3: Where this is heading — is it picking up, fading, or just ticking along.
-Sentence 4: The one thing they should do about it in the next day or two.
-
-Rules: No bullet points. No headers. No asterisks. No labels. No markdown. Just four plain sentences. Sound like a human who has read the data, not like a chatbot summarising it. If the mentions are a mixed bag or noisy, say so honestly in plain terms. Keep it under 120 words total."""
+Sentence 1: What is actually going on with {query} right now based on these mentions.
+Sentence 2: Why it matters to a brand or anyone watching this space.
+Sentence 3: Whether it is picking up, fading, or just ticking along.
+Sentence 4: The one thing worth doing about it in the next day or two."""
 
     result = ai_call(prompt)
     if not result:
-        return f"Picked up {len(results)} mentions for {query} across {len(sources_used)} sources — but the briefing engine hit a snag. Raw signals are all below, sorted by relevance."
+        return f"Found {len(results)} mentions across {len(sources_used)} sources. The briefing engine is under heavy load right now — the raw signals below tell the story."
     return result
+
+
+# ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 
 @app.get("/")
 def home():
@@ -518,7 +555,7 @@ def search(query: str, request: Request, token: str = ""):
     wikipedia = fetch_wikipedia(query)
 
     all_posts = reddit + hn + newsapi + newsdata + rss + youtube + mastodon + wikipedia
-    print(f"Total raw: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} NewsAPI:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} YouTube:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)}")
+    print(f"Total: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)}")
 
     ranked = filter_and_rank(all_posts, query)
     insight = generate_insight(ranked, query)
