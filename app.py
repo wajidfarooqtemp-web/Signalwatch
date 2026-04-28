@@ -489,7 +489,10 @@ def filter_and_rank(posts, query):
 
 def generate_insight(results, query):
     if not results:
-        return "Nothing meaningful came up — try a broader search or a slightly different angle."
+        return {
+            "briefing": "Nothing meaningful came up — try a broader search or a slightly different angle.",
+            "questions": []
+        }
 
     today = datetime.now().strftime("%d %B %Y")
     titles = [r["title"] for r in results[:20]]
@@ -512,20 +515,62 @@ Latest mentions from {', '.join(sources_used)}:
 
 {time_context}
 
-Write exactly 4 sentences in plain British English. Conversational. Like telling a colleague what you found, not writing a report. No bullet points, no headers, no asterisks, no labels like SITUATION or DECISION. Just four plain sentences under 120 words.
+Return a JSON object with exactly two keys: "briefing" and "questions".
 
-Sentence 1: What is actually going on with {query} right now based on these mentions.
-Sentence 2: Why it matters to a brand or anyone watching this space.
-Sentence 3: Whether it is picking up, fading, or just ticking along.
-Sentence 4: The one thing worth doing about it in the next day or two."""
+"briefing": Four plain sentences in British English. Conversational, like telling a colleague what you found over coffee. No bullet points, no headers, no asterisks, no labels. Under 120 words. Cover what is happening, why it matters, where it is heading, and what to do in the next day or two.
+
+"questions": An array of exactly 3 strategic questions that a senior executive or brand manager should be asking RIGHT NOW based purely on the patterns you see in the data above. Not generic questions. Questions that emerge directly from what these specific mentions reveal. Each question should be one sentence and feel like something a sharp CMO would ask in a board meeting. Include a one-sentence reason why that question matters based on the pattern you spotted.
+
+Format each question as an object with "question" and "reason" keys.
+
+Return only valid JSON. No markdown. No extra text."""
 
     result = ai_call(prompt)
+
     if not result:
-        return f"Found {len(results)} mentions across {len(sources_used)} sources. The briefing engine is under heavy load right now — the raw signals below tell the story."
-    return result
+        return {
+            "briefing": f"Found {len(results)} mentions across {len(sources_used)} sources. The briefing engine is under heavy load right now — raw signals below tell the story.",
+            "questions": []
+        }
+
+    try:
+        clean = result.strip()
+        if clean.startswith("```"):
+            clean = re.sub(r'^```[a-z]*\n?', '', clean)
+            clean = re.sub(r'\n?```$', '', clean)
+        parsed = json.loads(clean)
+        return {
+            "briefing": parsed.get("briefing", ""),
+            "questions": parsed.get("questions", [])
+        }
+    except:
+        return {
+            "briefing": result,
+            "questions": []
+        }
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
+
+def get_word_frequencies(results):
+    stop_words = {
+        "the","a","an","and","or","but","in","on","at","to","for","of","with",
+        "is","it","its","this","that","was","are","be","been","have","has","had",
+        "not","from","by","as","i","my","we","you","he","she","they","their",
+        "our","your","his","her","which","who","what","how","when","where","why",
+        "will","would","could","should","may","might","can","do","did","does",
+        "about","after","before","more","also","just","than","then","so","if",
+        "up","out","all","new","one","two","time","get","got","us","me","him",
+        "them","been","into","over","after","under","re","via","per","vs"
+    }
+    freq = {}
+    for r in results:
+        words = re.findall(r'\b[a-zA-Z]{4,}\b', r["title"].lower())
+        for w in words:
+            if w not in stop_words:
+                freq[w] = freq.get(w, 0) + 1
+    sorted_freq = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+    return [{"word": w, "count": c} for w, c in sorted_freq[:40]]
 
 @app.get("/")
 def home():
@@ -574,6 +619,8 @@ def search(query: str, request: Request, token: str = ""):
             "mastodon": len(mastodon),
             "wikipedia": len(wikipedia)
         },
-        "insight": insight,
-        "results": ranked[:20]
+        "insight": insight.get("briefing", "") if isinstance(insight, dict) else insight,
+"questions": insight.get("questions", []) if isinstance(insight, dict) else [],
+        "results": ranked[:20],
+"word_frequencies": get_word_frequencies(ranked[:50])
     }

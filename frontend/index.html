@@ -149,6 +149,24 @@
     .chart-card-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:4px; }
     .chart-card-sub { font-size:11px; color:var(--text3); margin-bottom:16px; }
 
+    .wordcloud-card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:22px 26px; margin-bottom:18px; box-shadow:var(--shadow); }
+.wordcloud-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:4px; }
+.wordcloud-sub { font-size:11px; color:var(--text3); margin-bottom:16px; }
+.wordcloud-wrap { display:flex; flex-wrap:wrap; gap:8px; align-items:center; line-height:1.8; }
+.wc-word { display:inline-block; border-radius:4px; padding:3px 8px; cursor:default; transition:transform 0.15s; font-weight:600; }
+.wc-word:hover { transform:scale(1.1); }
+
+.questions-card { background:#fff; border:1px solid var(--border); border-top:3px solid var(--amber); border-radius:12px; padding:28px; margin-bottom:18px; box-shadow:var(--shadow); }
+.questions-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+.questions-icon { width:38px; height:38px; background:var(--amber-light); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.questions-title { font-size:14px; font-weight:700; color:var(--text); }
+.questions-subtitle { font-size:11px; color:var(--text3); margin-top:2px; }
+.question-item { padding:16px 18px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; margin-bottom:10px; }
+.question-item:last-child { margin-bottom:0; }
+.question-text { font-size:14px; font-weight:600; color:var(--text); margin-bottom:6px; line-height:1.5; }
+.question-reason { font-size:12px; color:var(--text2); line-height:1.6; }
+.question-number { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; background:var(--amber); color:#fff; border-radius:50%; font-size:11px; font-weight:700; margin-right:8px; flex-shrink:0; float:left; margin-top:1px; }
+
     .sources-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
     .source-badge { padding:5px 12px; border-radius:20px; font-size:11px; font-weight:600; }
     .badge-reddit { background:#fff4ef; color:#c2410c; border:1px solid #fed7aa; }
@@ -607,6 +625,55 @@ mastodon:"Mastodon"
       }
 
       html+=`<div class="chart-card"><div class="chart-card-title">Signal timeline — sampled last 90 days</div><div class="chart-card-sub">Each dot is a result. Click any dot to open the source article.</div><canvas id="signalChart" style="max-height:200px"></canvas></div>`;
+      
+      if (data.word_frequencies && data.word_frequencies.length > 0) {
+  const colors = [
+    "#0d9488","#d97706","#6d28d9","#dc2626","#059669",
+    "#2563eb","#c2410c","#0369a1","#15803d","#92400e"
+  ];
+  const maxCount = data.word_frequencies[0].count;
+  const minCount = data.word_frequencies[data.word_frequencies.length - 1].count;
+
+  html += `<div class="wordcloud-card">
+    <div class="wordcloud-title">Word patterns</div>
+    <div class="wordcloud-sub">Most frequent words across all mentions. Bigger means more mentions.</div>
+    <div class="wordcloud-wrap">`;
+
+  data.word_frequencies.forEach((item, i) => {
+    const range = maxCount - minCount || 1;
+    const normalized = (item.count - minCount) / range;
+    const size = Math.round(11 + normalized * 22);
+    const color = colors[i % colors.length];
+    const opacity = 0.15 + normalized * 0.25;
+    html += `<span class="wc-word" style="font-size:${size}px;color:${color};background:${color}${Math.round(opacity*255).toString(16).padStart(2,'0')}" title="${item.count} mentions">${item.word}</span>`;
+  });
+
+  html += `</div></div>`;
+}
+
+if (data.questions && data.questions.length > 0) {
+  html += `
+    <div class="questions-card">
+      <div class="questions-header">
+        <div class="questions-icon">?</div>
+        <div>
+          <div class="questions-title">Questions your team should be asking</div>
+          <div class="questions-subtitle">Derived from patterns in the data — not generic advice</div>
+        </div>
+      </div>`;
+
+  data.questions.forEach((q, i) => {
+    const question = typeof q === 'string' ? q : q.question || q;
+    const reason = typeof q === 'object' ? q.reason || '' : '';
+    html += `
+      <div class="question-item">
+        <div class="question-text"><span class="question-number">${i+1}</span>${question}</div>
+        ${reason ? `<div class="question-reason" style="margin-left:30px">${reason}</div>` : ''}
+      </div>`;
+  });
+
+  html += `</div>`;
+}
 
       if(data.sources){
         html+=`<div class="sources-row">`;
