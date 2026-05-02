@@ -447,326 +447,626 @@
   </div>
 
   <script>
-    const API_BASE = "https://signalwatch-production.up.railway.app";
+  // ── API_BASE ────────────────────────────────────────────────────────────────
+  // This is the address of your Railway backend.
+  // Every fetch() call in this file sends requests to this URL.
+  // Without this being correct, nothing works.
+  const API_BASE = "https://signalwatch-production.up.railway.app";
 
-function getToken() {
-  let t = localStorage.getItem("sw_token");
-  if (!t) {
-    t = "sw_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    localStorage.setItem("sw_token", t);
-  }
-  return t;
-}
-const SW_TOKEN = getToken();
+  // ── SOURCE LABELS ───────────────────────────────────────────────────────────
+  // Maps internal source names (from backend) to display names shown to users.
+  // Example: "hackernews" in the data becomes "Tech Forums" on screen.
+  const sourceLabels = {
+    reddit:     "Reddit",
+    hackernews: "Tech Forums",
+    newsapi:    "News",
+    newsdata:   "Global News",
+    youtube:    "YouTube",
+    rss:        "RSS",
+    wikipedia:  "Wikipedia",
+    mastodon:   "Mastodon",
+    trustpilot: "Trustpilot Reviews",
+    appstore:   "App Store",
+    playstore:  "Play Store"
+  };
 
-    function showLimitMessage(container) {
-  container.innerHTML = `
-    <div style="text-align:center;padding:60px 24px;max-width:440px;margin:0 auto;">
-      <div style="font-size:32px;margin-bottom:16px;">◎</div>
-      <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px;letter-spacing:-0.3px;">
-        That's your three for today
-      </div>
-      <div style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:0;">
-        Signalwatch runs on live APIs with daily limits. Your searches reset at midnight. See you tomorrow.
-      </div>
-    </div>`;
-}
-
-function checkLocalLimit() {
-  const savedDate = localStorage.getItem("sw_limit_date");
-  const savedCount = parseInt(localStorage.getItem("sw_searches") || "0");
-  const today = new Date().toDateString();
-  if (savedDate === today && savedCount >= 3) {
-    const btn = document.getElementById("searchBtn");
-    btn.disabled = true;
-    btn.textContent = "Come back tomorrow";
-    document.getElementById("remainingPill").style.display = "block";
-    document.getElementById("remainingCount").textContent = "0";
-    showLimitMessage(document.getElementById("resultsContainer"));
-  }
-}
-
-function showLimitMessage(container) {
-  container.innerHTML = `
-    <div style="text-align:center;padding:60px 24px;max-width:440px;margin:0 auto;">
-      <div style="font-size:32px;margin-bottom:16px;">◎</div>
-      <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:12px;letter-spacing:-0.3px;">
-        That is your three for today
-      </div>
-      <div style="font-size:14px;color:var(--text2);line-height:1.7;">
-        Signalwatch runs on live APIs with daily limits. Your searches reset at midnight. See you tomorrow.
-      </div>
-    </div>`;
-}
-
-function checkLocalLimit() {
-  const today = new Date().toDateString();
-  const savedDate = localStorage.getItem("sw_date");
-  const savedCount = parseInt(localStorage.getItem("sw_count") || "0");
-  if (savedDate !== today) {
-    localStorage.setItem("sw_date", today);
-    localStorage.setItem("sw_count", "0");
-    return;
-  }
-  if (savedCount >= 3) {
-    const btn = document.getElementById("searchBtn");
-    btn.disabled = true;
-    btn.textContent = "Come back tomorrow";
-    document.getElementById("remainingPill").style.display = "block";
-    document.getElementById("remainingCount").textContent = "0";
-    showLimitMessage(document.getElementById("resultsContainer"));
-  }
-}
-
-checkLocalLimit();
-
-    const sourceLabels = {
-      reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
-      newsdata:"Global News", youtube:"YouTube", rss:"RSS", wikipedia:"Wikipedia",
-      mastodon:"Mastodon",
-trustpilot:"Trustpilot Reviews"
-    };
-
-    let signalChart = null;
-
-    function toggleMenu() {
-      document.getElementById("mobileMenu").classList.toggle("open");
+  // ── TOKEN ───────────────────────────────────────────────────────────────────
+  // Each browser gets a unique random token stored in localStorage.
+  // This token is sent with every search request.
+  // The backend tracks how many searches this token has done today.
+  // localStorage is like a small notebook inside the browser that persists
+  // even when you close and reopen the tab.
+  function getToken() {
+    let t = localStorage.getItem("sw_token");
+    if (!t) {
+      // Math.random() creates a random decimal like 0.8472...
+      // .toString(36) converts it to base-36 (letters + numbers)
+      // .slice(2) removes the "0." at the start
+      // Date.now() is the current time in milliseconds
+      // We combine both to make it even more unique
+      t = "sw_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem("sw_token", t);
     }
-
-    function showPage(page) {
-      document.getElementById("searchPage").className = page==="search" ? "search-page" : "search-page hidden";
-      document.getElementById("aboutPage").className = page==="about" ? "about-page active" : "about-page";
-      document.getElementById("navSearch").className = "nav-link"+(page==="search"?" active":"");
-      document.getElementById("navAbout").className = "nav-link"+(page==="about"?" active":"");
-      document.getElementById("mNavSearch").className = "mobile-nav-link"+(page==="search"?" active":"");
-      document.getElementById("mNavAbout").className = "mobile-nav-link"+(page==="about"?" active":"");
-      window.scrollTo(0,0);
-    }
-
-    document.getElementById("queryInput").addEventListener("keydown", e=>{
-      if(e.key==="Enter") runSearch();
-    });
-
-    async function runSearch() {
-      const query = document.getElementById("queryInput").value.trim();
-      if(!query) return;
-      const btn = document.getElementById("searchBtn");
-      const loading = document.getElementById("loading");
-      const container = document.getElementById("resultsContainer");
-      btn.disabled=true; btn.textContent="Analysing...";
-      loading.style.display="block"; container.innerHTML="";
-      if(signalChart){signalChart.destroy();signalChart=null;}
-      try {
-        const res = await fetch(`${API_BASE}/search?query=${encodeURIComponent(query)}&token=${encodeURIComponent(SW_TOKEN)}`);
-        const data = await res.json();
-        renderResults(data, query);
-      } catch(err) {
-        container.innerHTML=`<div class="error-msg">Could not reach the server. Please try again.</div>`;
-      } finally {
-        btn.disabled=false; btn.textContent="Analyse"; loading.style.display="none";
-      }
-    }
-
-    function renderResults(data, query) {
-      const container = document.getElementById("resultsContainer");
-
-      if (data.limit_reached) {
-  localStorage.setItem("sw_count", "3");
-  localStorage.setItem("sw_date", new Date().toDateString());
-  document.getElementById("searchBtn").disabled = true;
-  document.getElementById("searchBtn").textContent = "Come back tomorrow";
-  showLimitMessage(container);
-  return;
-}
-
-      if (data.searches_remaining !== undefined) {
-  const used = 3 - data.searches_remaining;
-  localStorage.setItem("sw_count", used.toString());
-  localStorage.setItem("sw_date", new Date().toDateString());
-  document.getElementById("remainingPill").style.display = "block";
-  document.getElementById("remainingCount").textContent = data.searches_remaining;
-  if (data.searches_remaining <= 0) {
-    document.getElementById("searchBtn").disabled = true;
-    document.getElementById("searchBtn").textContent = "Come back tomorrow";
+    return t;
   }
-  localStorage.setItem("sw_searches", 3 - data.searches_remaining);
-  localStorage.setItem("sw_limit_date", new Date().toDateString());
-  if (data.searches_remaining === 0) {
-    document.getElementById("searchBtn").disabled = true;
-    document.getElementById("searchBtn").textContent = "Come back tomorrow";
-  }
-}
+  const SW_TOKEN = getToken();
 
-      if(data.error){container.innerHTML=`<div class="error-msg">${data.error}</div>`;return;}
-      if(!data.results||data.results.length===0){container.innerHTML=`<div class="error-msg">No signals found. Try broader keywords.</div>`;return;}
+  // ── CHART ───────────────────────────────────────────────────────────────────
+  // signalChart holds the current Chart.js chart instance.
+  // We keep track of it so we can destroy it before creating a new one.
+  // If we did not destroy it first, charts would stack on top of each other.
+  let signalChart = null;
 
-      const activeSources=Object.values(data.sources||{}).filter(v=>v>0).length;
-      animateCount("statTotal", data.total);
-      animateCount("statTopScore", data.results[0]?.score||0);
-      animateCount("statActiveSources", activeSources);
-
-      let html="";
-
-
-      if(data.insight && data.insight!=="Insight unavailable at this time.") {
-        const sentences=data.insight.match(/[^.!?]+[.!?]+/g)||[data.insight];
-        const actionSentence=sentences.length>=4?sentences[3].trim():"";
-        html+=`
-          <div class="decision-card">
-            <div class="decision-header">
-              <div class="decision-icon">⚡</div>
-              <div>
-                <div class="decision-title">Intelligence Briefing — "${query}"</div>
-                <div class="decision-subtitle">Situation · Significance · Momentum · Decision · Risk</div>
-              </div>
-            </div>
-            <div class="decision-text">${data.insight}</div>
-            ${actionSentence?`<div class="action-box"><div class="action-label">Recommended action</div><div class="action-text">${actionSentence}</div></div>`:""}
-          </div>`;
-      } else {
-        html+=`<div class="decision-card"><div class="decision-text" style="color:var(--text3)">Intelligence briefing unavailable. Raw signals shown below.</div></div>`;
-      }
-
-      html+=`<div class="chart-card"><div class="chart-card-title">Signal timeline — sampled last 90 days</div><div class="chart-card-sub">Each dot is a result. Click any dot to open the source article.</div><canvas id="signalChart" style="max-height:200px"></canvas></div>`;
-      
-      if (data.word_frequencies && data.word_frequencies.length > 0) {
-  const colors = [
-    "#0d9488","#d97706","#6d28d9","#dc2626","#059669",
-    "#2563eb","#c2410c","#0369a1","#15803d","#92400e"
-  ];
-  const maxCount = data.word_frequencies[0].count;
-  const minCount = data.word_frequencies[data.word_frequencies.length - 1].count;
-
-  html += `<div class="wordcloud-card">
-    <div class="wordcloud-title">Word patterns</div>
-    <div class="wordcloud-sub">Most frequent words across all mentions. Bigger means more mentions.</div>
-    <div class="wordcloud-wrap">`;
-
-  data.word_frequencies.forEach((item, i) => {
-    const range = maxCount - minCount || 1;
-    const normalized = (item.count - minCount) / range;
-    const size = Math.round(11 + normalized * 22);
-    const color = colors[i % colors.length];
-    const opacity = 0.15 + normalized * 0.25;
-    html += `<span class="wc-word" style="font-size:${size}px;color:${color};background:${color}${Math.round(opacity*255).toString(16).padStart(2,'0')}" title="${item.count} mentions">${item.word}</span>`;
-  });
-
-  html += `</div></div>`;
-}
-
-if (data.questions && data.questions.length > 0) {
-  html += `
-    <div class="questions-card">
-      <div class="questions-header">
-        <div class="questions-icon">?</div>
-        <div>
-          <div class="questions-title">Questions your team should be asking</div>
-          <div class="questions-subtitle">Derived from patterns in the data — not generic advice</div>
+  // ── LIMIT MESSAGE ───────────────────────────────────────────────────────────
+  // Shows a friendly message when the user has used all 3 searches.
+  // Takes the container element as a parameter and fills it with HTML.
+  function showLimitMessage(container) {
+    container.innerHTML = `
+      <div style="text-align:center;padding:60px 24px;max-width:440px;margin:0 auto;">
+        <div style="font-size:32px;margin-bottom:16px;">◎</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:12px;letter-spacing:-0.3px;">
+          That is your three for today
+        </div>
+        <div style="font-size:14px;color:var(--text2);line-height:1.7;">
+          Signalwatch runs on live APIs with daily limits. Your searches reset at midnight. See you tomorrow.
         </div>
       </div>`;
+  }
 
-  data.questions.forEach((q, i) => {
-    const question = typeof q === 'string' ? q : q.question || q;
-    const reason = typeof q === 'object' ? q.reason || '' : '';
-    html += `
-      <div class="question-item">
-        <div class="question-text"><span class="question-number">${i+1}</span>${question}</div>
-        ${reason ? `<div class="question-reason" style="margin-left:30px">${reason}</div>` : ''}
-      </div>`;
+  // ── CHECK LOCAL LIMIT ───────────────────────────────────────────────────────
+  // Runs when the page loads.
+  // Checks if this browser has already used 3 searches today.
+  // If yes, disables the search button immediately without needing a server call.
+  // This is the client-side enforcement — the server also checks independently.
+  function checkLocalLimit() {
+    const today = new Date().toDateString();
+    // toDateString() gives something like "Mon Apr 21 2026"
+    // We compare this to what we stored last time
+
+    const savedDate = localStorage.getItem("sw_date");
+    const savedCount = parseInt(localStorage.getItem("sw_count") || "0");
+    // parseInt() converts the stored string "2" into the number 2
+    // || "0" means if nothing is stored yet, use "0" as default
+
+    if (savedDate !== today) {
+      // It is a new day — reset the count
+      localStorage.setItem("sw_date", today);
+      localStorage.setItem("sw_count", "0");
+      return; // Stop here, nothing more to do
+    }
+
+    if (savedCount >= 3) {
+      // Already used 3 searches today — disable button and show message
+      const btn = document.getElementById("searchBtn");
+      btn.disabled = true;
+      btn.textContent = "Come back tomorrow";
+      document.getElementById("remainingPill").style.display = "block";
+      document.getElementById("remainingCount").textContent = "0";
+      showLimitMessage(document.getElementById("resultsContainer"));
+    }
+  }
+
+  // Run the limit check as soon as the page loads
+  checkLocalLimit();
+
+  // ── MOBILE MENU TOGGLE ──────────────────────────────────────────────────────
+  // Adds or removes the "open" class on the mobile menu.
+  // CSS shows the menu when it has the "open" class, hides it otherwise.
+  function toggleMenu() {
+    document.getElementById("mobileMenu").classList.toggle("open");
+  }
+
+  // ── PAGE SWITCHER ───────────────────────────────────────────────────────────
+  // Shows either the Search page or About page.
+  // Does this by adding/removing CSS classes that show or hide the pages.
+  // No page reload — just hiding and showing divs instantly.
+  function showPage(page) {
+    // Show/hide pages
+    document.getElementById("searchPage").className =
+      page === "search" ? "search-page" : "search-page hidden";
+    document.getElementById("aboutPage").className =
+      page === "about" ? "about-page active" : "about-page";
+
+    // Update nav link styles — highlight the active page
+    document.getElementById("navSearch").className =
+      "nav-link" + (page === "search" ? " active" : "");
+    document.getElementById("navAbout").className =
+      "nav-link" + (page === "about" ? " active" : "");
+
+    // Update mobile menu link styles too
+    document.getElementById("mNavSearch").className =
+      "mobile-nav-link" + (page === "search" ? " active" : "");
+    document.getElementById("mNavAbout").className =
+      "mobile-nav-link" + (page === "about" ? " active" : "");
+
+    // Scroll back to the top of the page
+    window.scrollTo(0, 0);
+  }
+
+  // ── ENTER KEY LISTENER ──────────────────────────────────────────────────────
+  // Makes pressing Enter in the search box trigger a search.
+  // addEventListener listens for events on an element.
+  // "keydown" fires when any key is pressed.
+  // e.key tells us which key was pressed.
+  document.getElementById("queryInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") runSearch();
   });
 
-  html += `</div>`;
-}
+  // ── RUN SEARCH ──────────────────────────────────────────────────────────────
+  // Called when the user clicks Analyse or presses Enter.
+  // Sends the query to the backend and calls renderResults with the response.
+  async function runSearch() {
+    // .trim() removes spaces from start and end of the query
+    const query = document.getElementById("queryInput").value.trim();
 
-      if(data.sources){
-        html+=`<div class="sources-row">`;
-        for(const[s,c] of Object.entries(data.sources)){
-          if(c>0) html+=`<span class="source-badge badge-${s}">${sourceLabels[s]||s} · ${c}</span>`;
-        }
-        html+=`</div>`;
+    // Do nothing if the search box is empty
+    if (!query) return;
+
+    const btn       = document.getElementById("searchBtn");
+    const loading   = document.getElementById("loading");
+    const container = document.getElementById("resultsContainer");
+
+    // Disable button while searching to prevent double-clicks
+    btn.disabled = true;
+    btn.textContent = "Analysing...";
+
+    // Show the loading bar animation
+    loading.style.display = "block";
+
+    // Clear previous results
+    container.innerHTML = "";
+
+    // Destroy previous chart to prevent stacking
+    if (signalChart) {
+      signalChart.destroy();
+      signalChart = null;
+    }
+
+    try {
+      // fetch() sends an HTTP request to our backend
+      // encodeURIComponent() makes the query URL-safe
+      // e.g. "iphone battery" becomes "iphone%20battery"
+      const res = await fetch(
+        `${API_BASE}/search?query=${encodeURIComponent(query)}&token=${encodeURIComponent(SW_TOKEN)}`
+      );
+
+      // .json() converts the response text into a JavaScript object
+      const data = await res.json();
+
+      // Pass the data to our rendering function
+      renderResults(data, query);
+
+    } catch (err) {
+      // This catch block runs if the network request completely fails
+      // e.g. no internet, server is down, CORS error
+      console.error("Search error:", err);
+      container.innerHTML = `<div class="error-msg">Could not reach the server. Please try again.</div>`;
+    } finally {
+      // finally runs whether the request succeeded or failed
+      // Always re-enable the button and hide loading
+      btn.disabled = false;
+      btn.textContent = "Analyse";
+      loading.style.display = "none";
+    }
+  }
+
+  // ── RENDER RESULTS ──────────────────────────────────────────────────────────
+  // Takes the data object from the backend and builds the HTML to display it.
+  // This is the biggest function — it builds the whole results page.
+  function renderResults(data, query) {
+    const container = document.getElementById("resultsContainer");
+
+    // ── Handle rate limit hit ──
+    if (data.limit_reached) {
+      // Save to localStorage so button stays disabled on refresh
+      localStorage.setItem("sw_count", "3");
+      localStorage.setItem("sw_date", new Date().toDateString());
+      document.getElementById("searchBtn").disabled = true;
+      document.getElementById("searchBtn").textContent = "Come back tomorrow";
+      showLimitMessage(container);
+      return; // Stop here — do not render results
+    }
+
+    // ── Update remaining searches display ──
+    if (data.searches_remaining !== undefined) {
+      // How many searches have been used = 3 minus remaining
+      const used = 3 - data.searches_remaining;
+
+      // Save to localStorage for offline enforcement
+      localStorage.setItem("sw_count", used.toString());
+      localStorage.setItem("sw_date", new Date().toDateString());
+
+      // Show the pill in the nav bar
+      document.getElementById("remainingPill").style.display = "block";
+      document.getElementById("remainingCount").textContent = data.searches_remaining;
+
+      // Disable button if no searches left
+      if (data.searches_remaining <= 0) {
+        document.getElementById("searchBtn").disabled = true;
+        document.getElementById("searchBtn").textContent = "Come back tomorrow";
       }
+    }
 
-      html+=`<div class="results-header"><div class="results-title">All mentions — ${data.total} signals</div><div class="results-count">relevance-filtered · last 90 days</div></div>`;
+    // ── Handle errors ──
+    if (data.error) {
+      container.innerHTML = `<div class="error-msg">${data.error}</div>`;
+      return;
+    }
 
-      data.results.forEach(r=>{
-        const titleHtml=r.url?`<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>`:r.title;
-        const dateStr=r.created&&r.created>0?new Date(r.created*1000).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"";
-        html += `<div class="result-item" ${r.score_reason ? `title="${r.score_reason}"` : ''}>
-  <div class="result-score" style="cursor:${r.score_reason ? 'help' : 'default'}" title="${r.score_reason || ''}">${r.score}</div>
-  <div class="result-content">
-    <div class="result-title">${titleHtml}</div>
-    <span class="result-source">${sourceDisplay}${dateStr ? " · " + dateStr : ""}${r.score_reason ? ' · <span style="color:var(--teal);font-style:italic">' + r.score_reason + '</span>' : ''}</span>
-  </div>
-</div>`;
+    // ── Handle empty results ──
+    if (!data.results || data.results.length === 0) {
+      container.innerHTML = `<div class="error-msg">No signals found. Try broader keywords.</div>`;
+      return;
+    }
+
+    // ── Update stat cards ──
+    // Count how many sources returned at least 1 result
+    const activeSources = Object.values(data.sources || {}).filter(v => v > 0).length;
+    animateCount("statTotal",        data.total);
+    animateCount("statTopScore",     data.results[0]?.score || 0);
+    animateCount("statActiveSources", activeSources);
+
+    // ── Build HTML string ──
+    // We build a big HTML string then set it all at once with innerHTML.
+    // This is faster than creating individual DOM elements one by one.
+    let html = "";
+
+    // ── Intelligence briefing card ──
+    if (data.insight && data.insight !== "Insight unavailable at this time.") {
+      // Split the insight into individual sentences
+      // The regex [^.!?]+[.!?]+ matches each sentence including its punctuation
+      const sentences = data.insight.match(/[^.!?]+[.!?]+/g) || [data.insight];
+
+      // The 4th sentence (index 3) is the Decision sentence — we highlight it
+      const actionSentence = sentences.length >= 4 ? sentences[3].trim() : "";
+
+      html += `
+        <div class="decision-card">
+          <div class="decision-header">
+            <div class="decision-icon">⚡</div>
+            <div>
+              <div class="decision-title">Intelligence Briefing — "${query}"</div>
+              <div class="decision-subtitle">Situation · Significance · Momentum · Decision · Risk</div>
+            </div>
+          </div>
+          <div class="decision-text">${data.insight}</div>
+          ${actionSentence
+            ? `<div class="action-box">
+                 <div class="action-label">Recommended action</div>
+                 <div class="action-text">${actionSentence}</div>
+               </div>`
+            : ""}
+        </div>`;
+    } else {
+      html += `<div class="decision-card">
+                 <div class="decision-text" style="color:var(--text3)">
+                   Intelligence briefing unavailable. Raw signals shown below.
+                 </div>
+               </div>`;
+    }
+
+    // ── Signal timeline chart ──
+    html += `
+      <div class="chart-card">
+        <div class="chart-card-title">Signal timeline — sampled last 90 days</div>
+        <div class="chart-card-sub">Each dot is a result. Click any dot to open the source article.</div>
+        <canvas id="signalChart" style="max-height:200px"></canvas>
+      </div>`;
+
+    // ── Word cloud ──
+    if (data.word_frequencies && data.word_frequencies.length > 0) {
+      // Colours cycle through this array for each word
+      const colors = [
+        "#0d9488","#d97706","#6d28d9","#dc2626","#059669",
+        "#2563eb","#c2410c","#0369a1","#15803d","#92400e"
+      ];
+
+      // maxCount and minCount used to scale font sizes proportionally
+      const maxCount = data.word_frequencies[0].count;
+      const minCount = data.word_frequencies[data.word_frequencies.length - 1].count;
+
+      html += `<div class="wordcloud-card">
+        <div class="wordcloud-title">Word patterns</div>
+        <div class="wordcloud-sub">Most frequent words across all mentions. Bigger means more mentions.</div>
+        <div class="wordcloud-wrap">`;
+
+      data.word_frequencies.forEach((item, i) => {
+        // normalized goes from 0 (least frequent) to 1 (most frequent)
+        const range = maxCount - minCount || 1;
+        const normalized = (item.count - minCount) / range;
+
+        // Font size scales from 11px (rare) to 33px (very common)
+        const size = Math.round(11 + normalized * 22);
+
+        // Pick a colour from the array, cycling back to start if needed
+        const color = colors[i % colors.length];
+
+        // Background opacity scales with frequency
+        const opacity = 0.15 + normalized * 0.25;
+
+        // Convert opacity (0-1) to hex (00-ff) for the CSS colour
+        const opacityHex = Math.round(opacity * 255).toString(16).padStart(2, "0");
+
+        html += `<span class="wc-word"
+          style="font-size:${size}px;color:${color};background:${color}${opacityHex}"
+          title="${item.count} mentions">${item.word}</span>`;
       });
 
-      container.innerHTML=html;
-      if(data.sources&&data.results) buildChart(data.sources,data.results);
+      html += `</div></div>`;
     }
 
-    function animateCount(id, target) {
-      const el=document.getElementById(id);
-      if(!el||target==="—") return;
-      let start=0; const dur=600; const step=dur/30;
-      const timer=setInterval(()=>{
-        start+=target/30;
-        el.textContent=Math.min(Math.round(start),target);
-        if(start>=target) clearInterval(timer);
-      },step);
+    // ── Strategic questions card ──
+    if (data.questions && data.questions.length > 0) {
+      html += `
+        <div class="questions-card">
+          <div class="questions-header">
+            <div class="questions-icon">?</div>
+            <div>
+              <div class="questions-title">Questions your team should be asking</div>
+              <div class="questions-subtitle">Derived from patterns in the data — not generic advice</div>
+            </div>
+          </div>`;
+
+      data.questions.forEach((q, i) => {
+        // q can be either a plain string or an object with question+reason
+        const questionText = typeof q === "string" ? q : (q.question || "");
+        const reasonText   = typeof q === "object" ? (q.reason || "") : "";
+
+        html += `
+          <div class="question-item">
+            <div class="question-text">
+              <span class="question-number">${i + 1}</span>${questionText}
+            </div>
+            ${reasonText
+              ? `<div class="question-reason" style="margin-left:30px">${reasonText}</div>`
+              : ""}
+          </div>`;
+      });
+
+      html += `</div>`;
     }
 
-    function buildChart(sources,results) {
-      const colors={reddit:"#c2410c",hackernews:"#92400e",newsapi:"#0f766e",newsdata:"#0369a1",youtube:"#be123c",rss:"#15803d",wikipedia:"#6d28d9"};
-      const timed=results.filter(r=>r.created&&r.created>0);
-      if(timed.length<2){buildBarChart(sources,results,colors);return;}
-      timed.sort((a,b)=>a.created-b.created);
-      const sourcesSeen=[...new Set(timed.map(r=>r.source))];
-      const datasets=sourcesSeen.map(source=>({
-        label:sourceLabels[source]||source,
-        data:timed.filter(r=>r.source===source).map((r,i)=>({
-          x:new Date(r.created*1000),
-          y:r.score+Math.sin(i*1.9+source.charCodeAt(0)*0.1)*0.35,
-          url:r.url,title:r.title,realScore:r.score
+    // ── Source badges ──
+    if (data.sources) {
+      html += `<div class="sources-row">`;
+      for (const [s, c] of Object.entries(data.sources)) {
+        // Only show badge if source returned at least 1 result
+        if (c > 0) {
+          // sourceLabels[s] looks up the display name
+          // || s means "use s itself as fallback if no label found"
+          html += `<span class="source-badge badge-${s}">${sourceLabels[s] || s} · ${c}</span>`;
+        }
+      }
+      html += `</div>`;
+    }
+
+    // ── Results header ──
+    html += `
+      <div class="results-header">
+        <div class="results-title">All mentions — ${data.total} signals</div>
+        <div class="results-count">relevance-filtered · last 90 days</div>
+      </div>`;
+
+    // ── Individual result items ──
+    data.results.forEach(r => {
+      // If result has a URL, make the title a clickable link
+      // target="_blank" opens in new tab
+      // rel="noopener" is a security best practice for external links
+      const titleHtml = r.url
+        ? `<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>`
+        : r.title;
+
+      // Format the date if we have a timestamp
+      // r.created is a Unix timestamp (seconds since 1970)
+      // Multiplying by 1000 converts to milliseconds (what JS Date expects)
+      const dateStr = r.created && r.created > 0
+        ? new Date(r.created * 1000).toLocaleDateString("en-GB", {
+            day: "numeric", month: "short", year: "numeric"
+          })
+        : "";
+
+      // Get the human-readable source name
+      const sourceDisplay = sourceLabels[r.source] || r.source;
+
+      html += `
+        <div class="result-item" ${r.score_reason ? `title="${r.score_reason}"` : ""}>
+          <div class="result-score"
+            style="cursor:${r.score_reason ? "help" : "default"}"
+            title="${r.score_reason || ""}">
+            ${r.score}
+          </div>
+          <div class="result-content">
+            <div class="result-title">${titleHtml}</div>
+            <span class="result-source">
+              ${sourceDisplay}${dateStr ? " · " + dateStr : ""}
+              ${r.score_reason
+                ? ` · <span style="color:var(--teal);font-style:italic">${r.score_reason}</span>`
+                : ""}
+            </span>
+          </div>
+        </div>`;
+    });
+
+    // Set all the HTML we built into the container at once
+    container.innerHTML = html;
+
+    // Build the chart after setting innerHTML
+    // (the canvas element must exist in the DOM before Chart.js can use it)
+    if (data.sources && data.results) buildChart(data.sources, data.results);
+  }
+
+  // ── ANIMATE COUNT ───────────────────────────────────────────────────────────
+  // Makes the stat numbers count up from 0 to their target value.
+  // Creates a satisfying "loading" feel.
+  function animateCount(id, target) {
+    const el = document.getElementById(id);
+    if (!el || target === "—") return;
+
+    let start = 0;
+    const duration = 600;       // Total animation time in milliseconds
+    const steps    = 30;        // Number of steps in the animation
+    const stepTime = duration / steps;  // Time between each step
+
+    const timer = setInterval(() => {
+      start += target / steps;  // Increment by 1/30th of target each step
+      el.textContent = Math.min(Math.round(start), target);
+      if (start >= target) clearInterval(timer);  // Stop when we reach the target
+    }, stepTime);
+  }
+
+  // ── BUILD CHART ─────────────────────────────────────────────────────────────
+  // Builds the signal timeline scatter chart.
+  // If not enough timed data, falls back to a bar chart.
+  function buildChart(sources, results) {
+    const colors = {
+      reddit:     "#c2410c",
+      hackernews: "#92400e",
+      newsapi:    "#0f766e",
+      newsdata:   "#0369a1",
+      youtube:    "#be123c",
+      rss:        "#15803d",
+      wikipedia:  "#6d28d9",
+      mastodon:   "#563acc",
+      trustpilot: "#007b5e",
+      appstore:   "#0066cc",
+      playstore:  "#1a7340"
+    };
+
+    // Filter to only results that have a timestamp
+    const timed = results.filter(r => r.created && r.created > 0);
+
+    // If fewer than 2 timed results, use bar chart instead
+    if (timed.length < 2) {
+      buildBarChart(sources, results, colors);
+      return;
+    }
+
+    // Sort by date so the line draws left to right
+    timed.sort((a, b) => a.created - b.created);
+
+    // Get unique source names from the results
+    // new Set() removes duplicates automatically
+    // [...] converts the Set back to an array
+    const sourcesSeen = [...new Set(timed.map(r => r.source))];
+
+    // Build a dataset for each source
+    // Each dataset is one coloured line on the chart
+    const datasets = sourcesSeen.map(source => ({
+      label: sourceLabels[source] || source,
+      data: timed
+        .filter(r => r.source === source)
+        .map((r, i) => ({
+          // x is the date, y is the score with tiny jitter so line is not flat
+          x: new Date(r.created * 1000),
+          y: r.score + Math.sin(i * 1.9 + source.charCodeAt(0) * 0.1) * 0.35,
+          url:       r.url,
+          title:     r.title,
+          realScore: r.score   // Keep the real score for tooltips
         })),
-        borderColor:colors[source]||"#888",
-        backgroundColor:colors[source]||"#888",
-        pointRadius:6,pointHoverRadius:9,showLine:true,tension:0.4,borderWidth:1.5
-      }));
-      const ctx=document.getElementById("signalChart").getContext("2d");
-      signalChart=new Chart(ctx,{
-        type:"scatter",data:{datasets},
-        options:{
-          onClick:(evt,els)=>{if(els.length>0){const pt=signalChart.data.datasets[els[0].datasetIndex].data[els[0].index];if(pt.url)window.open(pt.url,"_blank");}},
-          plugins:{
-            legend:{labels:{color:"#7a9a9a",font:{size:11},boxWidth:10}},
-            tooltip:{callbacks:{
-              title:items=>new Date(items[0].raw.x).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
-              label:items=>{const d=items.raw;const t=d.title.length>55?d.title.substring(0,55)+"…":d.title;return[`Score: ${d.realScore}`,t,"Click to open →"];}
-            }}
+      borderColor:     colors[source] || "#888",
+      backgroundColor: colors[source] || "#888",
+      pointRadius:     6,
+      pointHoverRadius: 9,
+      showLine:  true,
+      tension:   0.4,
+      borderWidth: 1.5
+    }));
+
+    const ctx = document.getElementById("signalChart").getContext("2d");
+    signalChart = new Chart(ctx, {
+      type: "scatter",
+      data: { datasets },
+      options: {
+        // Click a dot to open the source article
+        onClick: (evt, els) => {
+          if (els.length > 0) {
+            const pt = signalChart.data.datasets[els[0].datasetIndex].data[els[0].index];
+            if (pt.url) window.open(pt.url, "_blank");
+          }
+        },
+        plugins: {
+          legend: { labels: { color: "#7a9a9a", font: { size: 11 }, boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              title: items => new Date(items[0].raw.x).toLocaleDateString("en-GB", {
+                day: "numeric", month: "short", year: "numeric",
+                hour: "2-digit", minute: "2-digit"
+              }),
+              label: items => {
+                const d = items.raw;
+                const t = d.title.length > 55 ? d.title.substring(0, 55) + "…" : d.title;
+                return [`Score: ${d.realScore}`, t, "Click to open →"];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: "time",
+            ticks: { color: "#7a9a9a", font: { size: 10 }, maxTicksLimit: 6 },
+            grid:  { color: "#eef4f4" }
           },
-          scales:{
-            x:{type:"time",ticks:{color:"#7a9a9a",font:{size:10},maxTicksLimit:6},grid:{color:"#eef4f4"}},
-            y:{title:{display:true,text:"Signal score",color:"#7a9a9a",font:{size:10}},ticks:{color:"#7a9a9a",font:{size:10}},grid:{color:"#eef4f4"}}
+          y: {
+            title: { display: true, text: "Signal score", color: "#7a9a9a", font: { size: 10 } },
+            ticks: { color: "#7a9a9a", font: { size: 10 } },
+            grid:  { color: "#eef4f4" }
           }
         }
-      });
+      }
+    });
+  }
+
+  // ── BUILD BAR CHART ─────────────────────────────────────────────────────────
+  // Fallback chart when not enough timed data for a timeline.
+  // Shows average signal score per source as vertical bars.
+  function buildBarChart(sources, results, colors) {
+    // Group scores by source
+    const scoresBySource = {};
+    results.forEach(r => {
+      if (!scoresBySource[r.source]) scoresBySource[r.source] = [];
+      scoresBySource[r.source].push(r.score);
+    });
+
+    const labels    = [];
+    const avgScores = [];
+    const bgColors  = [];
+
+    for (const [s, c] of Object.entries(sources)) {
+      if (c > 0 && scoresBySource[s]) {
+        labels.push(sourceLabels[s] || s);
+
+        // Calculate average score for this source
+        // reduce((a,b) => a+b, 0) sums all numbers in the array
+        // dividing by length gives the average
+        const avg = scoresBySource[s].reduce((a, b) => a + b, 0) / scoresBySource[s].length;
+        avgScores.push(Math.round(avg * 10) / 10);  // Round to 1 decimal
+        bgColors.push(colors[s] || "#888");
+      }
     }
 
-    function buildBarChart(sources,results,colors){
-      const sbs={};
-      results.forEach(r=>{if(!sbs[r.source])sbs[r.source]=[];sbs[r.source].push(r.score);});
-      const labels=[],avgScores=[],bgColors=[];
-      for(const[s,c] of Object.entries(sources)){
-        if(c>0&&sbs[s]){labels.push(sourceLabels[s]||s);avgScores.push(Math.round(sbs[s].reduce((a,b)=>a+b,0)/sbs[s].length*10)/10);bgColors.push(colors[s]||"#888");}
+    const ctx = document.getElementById("signalChart").getContext("2d");
+    signalChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Avg signal score",
+          data:  avgScores,
+          backgroundColor: bgColors,
+          borderRadius:    4,
+          borderSkipped:   false
+        }]
+      },
+      options: {
+        plugins: { legend: { labels: { color: "#7a9a9a", font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: "#7a9a9a" }, grid: { color: "#eef4f4" } },
+          y: { ticks: { color: "#7a9a9a" }, grid: { color: "#eef4f4" } }
+        }
       }
-      const ctx=document.getElementById("signalChart").getContext("2d");
-      signalChart=new Chart(ctx,{
-        type:"bar",
-        data:{labels,datasets:[{label:"Avg signal score",data:avgScores,backgroundColor:bgColors,borderRadius:4,borderSkipped:false}]},
-        options:{plugins:{legend:{labels:{color:"#7a9a9a",font:{size:11}}}},scales:{x:{ticks:{color:"#7a9a9a"},grid:{color:"#eef4f4"}},y:{ticks:{color:"#7a9a9a"},grid:{color:"#eef4f4"}}}}
-      });
-    }
-  </script>
+    });
+  }
+</script>
 
 </body>
 </html>
