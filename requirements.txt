@@ -4,3 +4,4 @@ requests
 google-generativeai
 python-dotenv
 psycopg2-binary
+google-play-scraper
