@@ -176,6 +176,8 @@
     .badge-youtube { background:#fff1f2; color:#be123c; border:1px solid #fecdd3; }
     .badge-rss { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
     .badge-wikipedia { background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe; }
+    /* Trustpilot uses their brand green colour */
+.badge-trustpilot { background:#f0fdf4; color:#007b5e; border:1px solid #86efac; }
     .badge-mastodon { background:#f3f0ff; color:#563acc; border:1px solid #d4bbff; }
 
     .results-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-top:6px; }
@@ -521,7 +523,8 @@ checkLocalLimit();
     const sourceLabels = {
       reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
       newsdata:"Global News", youtube:"YouTube", rss:"RSS", wikipedia:"Wikipedia",
-mastodon:"Mastodon"
+      mastodon:"Mastodon",
+trustpilot:"Trustpilot Reviews"
     };
 
     let signalChart = null;
@@ -688,7 +691,13 @@ if (data.questions && data.questions.length > 0) {
       data.results.forEach(r=>{
         const titleHtml=r.url?`<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>`:r.title;
         const dateStr=r.created&&r.created>0?new Date(r.created*1000).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"";
-        html+=`<div class="result-item"><div class="result-score">${r.score}</div><div class="result-content"><div class="result-title">${titleHtml}</div><span class="result-source">${sourceLabels[r.source]||r.source}${dateStr?" · "+dateStr:""}</span></div></div>`;
+        html += `<div class="result-item" ${r.score_reason ? `title="${r.score_reason}"` : ''}>
+  <div class="result-score" style="cursor:${r.score_reason ? 'help' : 'default'}" title="${r.score_reason || ''}">${r.score}</div>
+  <div class="result-content">
+    <div class="result-title">${titleHtml}</div>
+    <span class="result-source">${sourceDisplay}${dateStr ? " · " + dateStr : ""}${r.score_reason ? ' · <span style="color:var(--teal);font-style:italic">' + r.score_reason + '</span>' : ''}</span>
+  </div>
+</div>`;
       });
 
       container.innerHTML=html;

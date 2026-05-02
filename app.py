@@ -304,6 +304,109 @@ def fetch_mastodon(query):
     except Exception as e:
         print("Mastodon error:", e)
         return []
+    # ─── TRUSTPILOT ───────────────────────────────────────────────────────────────
+# Trustpilot has a public web endpoint that returns review data.
+# We search for the company name and pull recent reviews.
+# No API key needed for basic public data.
+# This is important because reviews are high-signal — customers who bother
+# to write a review have strong opinions. This is what the Google engineer
+# meant by "commercially relevant signal".
+
+def fetch_trustpilot(query):
+    results = []
+    try:
+        # Search Trustpilot for the company
+        # We use their public search endpoint
+        search_url = f"https://www.trustpilot.com/search?query={requests.utils.quote(query)}"
+        
+        # Trustpilot returns HTML, not JSON, so we parse it
+        # We look for review snippets in the page source
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        res = requests.get(search_url, headers=headers, timeout=10)
+        
+        # Extract company domain from search results using regex
+        # Trustpilot URLs follow pattern: /review/companyname.com
+        domains = re.findall(r'/review/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', res.text)
+        
+        if not domains:
+            return []
+        
+        # Take the first (most relevant) company result
+        domain = domains[0]
+        print(f"Trustpilot: found domain {domain}")
+        
+        # Now fetch reviews for that company
+        # Trustpilot's public review page
+        review_url = f"https://www.trustpilot.com/review/{domain}?sort=recency"
+        res2 = requests.get(review_url, headers=headers, timeout=10)
+        
+        # Extract review text using regex patterns from the HTML
+        # Trustpilot embeds review data in JSON within script tags
+        # Look for the __NEXT_DATA__ JSON block which contains all page data
+        next_data_match = re.search(
+            r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+            res2.text,
+            re.DOTALL
+        )
+        
+        if next_data_match:
+            try:
+                page_data = json.loads(next_data_match.group(1))
+                # Navigate to reviews in the data structure
+                reviews_data = (
+                    page_data
+                    .get("props", {})
+                    .get("pageProps", {})
+                    .get("reviews", [])
+                )
+                
+                cutoff = datetime.now() - timedelta(days=90)
+                
+                for review in reviews_data[:20]:
+                    # Each review has title, text, rating, date
+                    title = review.get("title", "")
+                    text = review.get("text", "")
+                    rating = review.get("rating", 0)
+                    date_str = review.get("dates", {}).get("publishedDate", "")
+                    
+                    # Combine title and first 150 chars of text
+                    full_text = f"{title}: {text[:150]}" if title else text[:150]
+                    
+                    if not full_text or len(full_text) < 10:
+                        continue
+                    
+                    # Parse date
+                    ts = 0
+                    if date_str:
+                        try:
+                            dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+                            if dt < cutoff:
+                                continue
+                            ts = int(dt.timestamp())
+                        except:
+                            pass
+                    
+                    # Add star rating to title so it appears in results
+                    star_label = f"[{rating}★] " if rating else ""
+                    
+                    results.append({
+                        "title": f"{star_label}{full_text}",
+                        "source": "trustpilot",
+                        "url": f"https://www.trustpilot.com/review/{domain}",
+                        "created": ts
+                    })
+                    
+            except Exception as e:
+                print(f"Trustpilot parse error: {e}")
+        
+        print(f"Trustpilot: {len(results)} reviews")
+        return results
+        
+    except Exception as e:
+        print(f"Trustpilot error: {e}")
+        return []
 
 def fetch_wikipedia(query):
     results = []
@@ -425,6 +528,41 @@ def ai_call(prompt):
 
 # ─── SCORING AND RANKING ──────────────────────────────────────────────────────
 
+# ─── SCORE EXPLANATION ────────────────────────────────────────────────────────
+# The Google engineer said scoring needs to be explainable.
+# Right now a result gets a score of 9 and nobody knows why.
+# This function generates a plain English reason for each score.
+# Example: "Score 9 — mentions 'battery' twice and 'iphone' once, all in same title"
+# This builds trust. Users understand why something ranked high.
+
+def explain_score(title, keywords, phrases, score):
+    reasons = []
+    t = title.lower()
+    
+    # Check which keywords matched and how many times
+    for w in keywords:
+        count = t.count(w.lower())
+        if count == 1:
+            reasons.append(f"contains '{w}'")
+        elif count > 1:
+            reasons.append(f"mentions '{w}' {count} times")
+    
+    # Check if all keywords appeared together (the +3 bonus)
+    if len(keywords) > 1:
+        all_present = all(w.lower() in t for w in keywords)
+        if all_present:
+            reasons.append("all search terms in one result")
+    
+    # Check phrase matches
+    for p in phrases:
+        if p.lower() in t:
+            reasons.append(f"exact phrase match: '{p}'")
+    
+    if not reasons:
+        return ""
+    
+    return "Ranked high because: " + ", ".join(reasons)
+
 def score_post(text, keywords):
     t = text.lower()
     score = 0
@@ -474,12 +612,13 @@ def filter_and_rank(posts, query):
         if s == 0:
             continue
         results.append({
-            "title": title,
-            "score": s,
-            "source": post["source"],
-            "url": post.get("url", ""),
-            "created": post.get("created", 0)
-        })
+    "title": title,
+    "score": s,
+    "score_reason": explain_score(title, keywords, phrases, s),
+    "source": post["source"],
+    "url": post.get("url", ""),
+    "created": post.get("created", 0)
+})
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
@@ -598,9 +737,10 @@ def search(query: str, request: Request, token: str = ""):
     youtube = fetch_youtube(query)
     mastodon = fetch_mastodon(query)
     wikipedia = fetch_wikipedia(query)
+    trustpilot = fetch_trustpilot(query)
 
-    all_posts = reddit + hn + newsapi + newsdata + rss + youtube + mastodon + wikipedia
-    print(f"Total: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)}")
+    all_posts = reddit + hn + newsapi + newsdata + rss + youtube + mastodon + wikipedia + trustpilot
+    print(f"Total: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)} trustpilot:{len(trustpilot)}")
 
     ranked = filter_and_rank(all_posts, query)
     insight = generate_insight(ranked, query)
@@ -617,7 +757,8 @@ def search(query: str, request: Request, token: str = ""):
             "rss": len(rss),
             "youtube": len(youtube),
             "mastodon": len(mastodon),
-            "wikipedia": len(wikipedia)
+            "wikipedia": len(wikipedia),
+            "trustpilot": len(trustpilot)
         },
         "insight": insight.get("briefing", "") if isinstance(insight, dict) else insight,
 "questions": insight.get("questions", []) if isinstance(insight, dict) else [],
