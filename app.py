@@ -1,50 +1,85 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from datetime import date, datetime, timedelta
-import requests
-import re
-import xml.etree.ElementTree as ET
-import os
-import json
+# ─────────────────────────────────────────────────────────────────────────────
+# SIGNALWATCH — app.py
+# This is the backend brain of Signalwatch.
+# It receives search queries, fetches data from multiple sources,
+# scores and ranks the results, and uses AI to generate an intelligence briefing.
+#
+# How it all connects:
+# 1. Browser (index.html) sends a search query to this file
+# 2. This file fetches data from 11 sources simultaneously
+# 3. Results are scored and ranked
+# 4. Top results are sent to AI to generate a briefing + strategic questions
+# 5. Everything is sent back to the browser as JSON
+# ─────────────────────────────────────────────────────────────────────────────
 
+# These lines import tools we need
+# "from X import Y" means: from library X, get tool Y
+# "import X" means: get the entire library X
+from fastapi import FastAPI, Request   # FastAPI builds our server and handles requests
+from fastapi.middleware.cors import CORSMiddleware  # CORS allows browser to talk to server
+from datetime import date, datetime, timedelta  # Tools for working with dates and times
+import requests   # Tool for making HTTP requests to other websites
+import re         # Tool for finding patterns in text (regex)
+import xml.etree.ElementTree as ET  # Tool for reading XML files (used for RSS feeds)
+import os         # Tool for reading environment variables (our API keys)
+import json       # Tool for reading and writing JSON data
+
+# Create the FastAPI application object
+# Think of this as turning on the server engine
 app = FastAPI()
 
+# Allow browsers to talk to this server from different domains
+# Without this, the browser would block requests from Vercel to Railway
+# This is called CORS — Cross-Origin Resource Sharing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],    # "*" means allow requests from any website
+    allow_methods=["*"],    # Allow any HTTP method (GET, POST, etc.)
+    allow_headers=["*"],    # Allow any HTTP headers
 )
 
+# ─── API KEYS ────────────────────────────────────────────────────────────────
+# os.getenv() reads environment variables — these are stored securely on Railway
+# The second argument "" is the default value if the variable is not found
+# Never hardcode real API keys in code — always use environment variables
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
-NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "")
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+NEWS_API_KEY       = os.getenv("NEWS_API_KEY", "")
+NEWSDATA_API_KEY   = os.getenv("NEWSDATA_API_KEY", "")
+YOUTUBE_API_KEY    = os.getenv("YOUTUBE_API_KEY", "")
+DATABASE_URL       = os.getenv("DATABASE_URL", "")
+
+# How many searches each person gets per day
 DAILY_LIMIT = 3
 
 
 # ─── DATABASE ────────────────────────────────────────────────────────────────
-# We use PostgreSQL on Railway to store how many searches each browser token
-# has done today. This persists across server restarts — unlike the old file
-# system approach which reset every time Railway restarted the server.
+# We use PostgreSQL (a database) to track how many searches each browser has done today
+# A database is like a spreadsheet that persists even when the server restarts
+# Our table has 3 columns: token (who), search_date (when), count (how many)
 
 def get_db():
+    # Opens a connection to the database
+    # A connection is like picking up a phone to call the database
     try:
-        import psycopg2
+        import psycopg2  # psycopg2 is the Python library for PostgreSQL
         conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
-        return conn
+        return conn  # Return the open connection
     except Exception as e:
         print("DB connection error:", e)
-        return None
+        return None  # Return None if connection failed
 
 def setup_db():
+    # Creates the searches table if it does not already exist
+    # Runs once when the server starts
     conn = get_db()
     if not conn:
         print("No DB — rate limiting will not work")
         return
     try:
-        cur = conn.cursor()
+        cur = conn.cursor()  # A cursor lets us run SQL commands
+        # SQL command: CREATE TABLE IF NOT EXISTS
+        # This creates a table but only if it does not already exist
+        # PRIMARY KEY (token, search_date) means no two rows can have the same token+date
         cur.execute("""
             CREATE TABLE IF NOT EXISTS searches (
                 token TEXT NOT NULL,
@@ -53,37 +88,47 @@ def setup_db():
                 PRIMARY KEY (token, search_date)
             )
         """)
-        conn.commit()
-        cur.close()
-        conn.close()
+        conn.commit()  # Save the changes
+        cur.close()    # Close the cursor
+        conn.close()   # Close the connection
         print("Database ready")
     except Exception as e:
         print("DB setup error:", e)
 
 def get_count(token):
+    # Asks the database: how many searches has this token done today?
+    # Returns 0 if no record found (first search today)
     conn = get_db()
     if not conn:
         return 0
     try:
         cur = conn.cursor()
+        # %s is a placeholder — psycopg2 fills it in safely to prevent injection attacks
+        # CURRENT_DATE is today's date in the database's timezone
         cur.execute(
             "SELECT count FROM searches WHERE token = %s AND search_date = CURRENT_DATE",
-            (token,)
+            (token,)  # The comma makes this a tuple — required by psycopg2
         )
-        row = cur.fetchone()
+        row = cur.fetchone()  # Get one row from results
         cur.close()
         conn.close()
-        return row[0] if row else 0
+        return row[0] if row else 0  # Return the count, or 0 if no row found
     except Exception as e:
         print("DB get error:", e)
         return 0
 
 def increment_count(token):
+    # Adds 1 to the search count for this token today
+    # If no record exists yet, creates one
     conn = get_db()
     if not conn:
         return 1
     try:
         cur = conn.cursor()
+        # INSERT ... ON CONFLICT ... DO UPDATE is one smart SQL command
+        # It means: try to insert a new row
+        # If a row already exists for this token+date, just add 1 to the count instead
+        # RETURNING count gives us back the new count value
         cur.execute("""
             INSERT INTO searches (token, search_date, count)
             VALUES (%s, CURRENT_DATE, 1)
@@ -91,7 +136,7 @@ def increment_count(token):
             DO UPDATE SET count = searches.count + 1
             RETURNING count
         """, (token,))
-        count = cur.fetchone()[0]
+        count = cur.fetchone()[0]  # Get the returned count value
         conn.commit()
         cur.close()
         conn.close()
@@ -100,76 +145,77 @@ def increment_count(token):
         print("DB increment error:", e)
         return 1
 
+# Run setup_db() once when the server starts
+# This creates the table if it does not exist
 setup_db()
 
 
 # ─── DATA SOURCES ─────────────────────────────────────────────────────────────
+# Each fetch_ function goes to one data source and returns a list of results
+# Every result is a dictionary with these keys:
+#   title:   the headline or text of the post/article/review
+#   source:  which platform it came from (e.g. "reddit", "youtube")
+#   url:     link to the original content
+#   created: when it was published, as a Unix timestamp (seconds since 1970)
+#            0 means we do not know the date
 
 def fetch_reddit(query):
-    results = []
-    cutoff = datetime.now() - timedelta(days=90)
-    headers = {"User-Agent": "signalwatch/1.0"}
-    sorts = ["new", "relevance", "hot"]
-    seen = set()
-    for sort in sorts:
-        try:
-            url = f"https://www.reddit.com/search.json?q={requests.utils.quote(query)}&limit=100&sort={sort}&t=year"
-            res = requests.get(url, headers=headers, timeout=10)
-            data = res.json()
-            for item in data["data"]["children"]:
-                d = item["data"]
-                title = d.get("title", "")
-                if title in seen:
-                    continue
-                seen.add(title)
-                created = d.get("created_utc", 0)
-                if created and datetime.fromtimestamp(created) < cutoff:
-                    continue
-                results.append({
-                    "title": title,
-                    "source": "reddit",
-                    "url": f"https://reddit.com{d['permalink']}",
-                    "created": created
-                })
-        except Exception as e:
-            print(f"Reddit {sort} error:", e)
-    print(f"Reddit total: {len(results)}")
-    return results
+    # Reddit's API is closed to new apps as of late 2025
+    # Returning empty list gracefully — other 10 sources cover the signal
+    print("Reddit: skipped (API access closed)")
+    return []
+
 
 def fetch_hackernews(query):
+    # Searches HackerNews using their Algolia search API
+    # HackerNews is where tech people discuss things early
+    # No API key needed
     url = f"https://hn.algolia.com/api/v1/search?query={requests.utils.quote(query)}&tags=story&hitsPerPage=100"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
         cutoff = datetime.now() - timedelta(days=90)
         results = []
+
         for hit in data.get("hits", []):
             if not hit.get("title"):
                 continue
-            created = hit.get("created_at_i", 0)
+
+            created = hit.get("created_at_i", 0)  # Unix timestamp
+
             if created and datetime.fromtimestamp(created) < cutoff:
                 continue
+
             results.append({
-                "title": hit["title"],
-                "source": "hackernews",
-                "url": hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}",
+                "title":   hit["title"],
+                "source":  "hackernews",
+                # If no URL provided, link to the HN discussion page instead
+                "url":     hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}",
                 "created": created
             })
+
         return results
     except Exception as e:
         print("HackerNews error:", e)
         return []
 
+
 def fetch_newsapi(query):
+    # Fetches news articles from thousands of publications via NewsAPI
+    # Requires a free API key from newsapi.org
+    # We limit to the last 30 days and sort by publication date (newest first)
     from_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     url = f"https://newsapi.org/v2/everything?q={requests.utils.quote(query)}&pageSize=100&language=en&sortBy=publishedAt&from={from_date}&apiKey={NEWS_API_KEY}"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
         results = []
+
         for a in data.get("articles", []):
             if not a.get("title") or a["title"] == "[Removed]":
                 continue
+
+            # Convert the ISO date string to a Unix timestamp
             published = a.get("publishedAt", "")
             ts = 0
             if published:
@@ -177,39 +223,51 @@ def fetch_newsapi(query):
                     dt = datetime.strptime(published, "%Y-%m-%dT%H:%M:%SZ")
                     ts = int(dt.timestamp())
                 except:
-                    pass
+                    pass  # If date parsing fails, keep ts as 0
+
             results.append({
-                "title": a["title"],
-                "source": "newsapi",
-                "url": a.get("url", ""),
+                "title":   a["title"],
+                "source":  "newsapi",
+                "url":     a.get("url", ""),
                 "created": ts
             })
+
         return results
     except Exception as e:
         print("NewsAPI error:", e)
         return []
 
+
 def fetch_newsdata(query):
+    # Fetches news from NewsData.io — a different news aggregator
+    # Gives us broader international coverage
+    # Requires a free API key from newsdata.io
     url = f"https://newsdata.io/api/1/news?apikey={NEWSDATA_API_KEY}&q={requests.utils.quote(query)}&language=en"
     try:
         res = requests.get(url, timeout=10)
         data = res.json()
         results = []
+
         for a in data.get("results", []):
             if not a.get("title"):
                 continue
             results.append({
-                "title": a["title"],
-                "source": "newsdata",
-                "url": a.get("link", ""),
-                "created": 0
+                "title":   a["title"],
+                "source":  "newsdata",
+                "url":     a.get("link", ""),
+                "created": 0  # NewsData free tier does not always include dates
             })
+
         return results
     except Exception as e:
         print("NewsData error:", e)
         return []
 
+
 def fetch_rss(query):
+    # Reads RSS feeds from major news outlets
+    # RSS (Really Simple Syndication) is a public format news sites use
+    # No API key needed — it is like a public noticeboard
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
         "https://feeds.theguardian.com/theguardian/world/rss",
@@ -218,39 +276,60 @@ def fetch_rss(query):
         "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
     ]
     results = []
-    keywords = query.lower().split()
+    keywords = query.lower().split()  # Split query into individual words
+
     for feed_url in feeds:
         try:
             res = requests.get(feed_url, timeout=8, headers={"User-Agent": "signalwatch/1.0"})
+            # ET.fromstring() parses the XML content of the RSS feed
             root = ET.fromstring(res.content)
+
+            # RSS feeds contain <item> elements, each being one article
             for item in root.iter("item"):
-                title_el = item.find("title")
+                title_el = item.find("title")  # Find the <title> tag inside each item
                 if title_el is not None and title_el.text:
                     title = title_el.text.strip()
+                    # Only include articles that contain at least one search keyword
                     if any(k in title.lower() for k in keywords):
-                        results.append({"title": title, "source": "rss", "url": "", "created": 0})
+                        results.append({
+                            "title":   title,
+                            "source":  "rss",
+                            "url":     "",
+                            "created": 0
+                        })
         except Exception as e:
             print(f"RSS error {feed_url}:", e)
+
     return results
 
+
 def fetch_youtube(query):
+    # Searches YouTube for recent videos matching the query
+    # Requires a free YouTube Data API v3 key from Google Cloud Console
+    # We fetch up to 4 pages of 50 results each = up to 200 videos
     published_after = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
     results = []
     seen = set()
     page_token = None
-    for _ in range(4):
+
+    for _ in range(4):  # Try up to 4 pages
         try:
             url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={requests.utils.quote(query)}&type=video&maxResults=50&order=date&publishedAfter={published_after}&key={YOUTUBE_API_KEY}"
             if page_token:
-                url += f"&pageToken={page_token}"
+                url += f"&pageToken={page_token}"  # Add page token for subsequent pages
+
             res = requests.get(url, timeout=10)
             data = res.json()
+
             for item in data.get("items", []):
                 snippet = item.get("snippet", {})
                 title = snippet.get("title", "")
+
                 if not title or title in seen:
                     continue
                 seen.add(title)
+
+                # Convert YouTube's date format to Unix timestamp
                 published = snippet.get("publishedAt", "")
                 ts = 0
                 if published:
@@ -259,138 +338,111 @@ def fetch_youtube(query):
                         ts = int(dt.timestamp())
                     except:
                         pass
+
                 results.append({
-                    "title": title,
-                    "source": "youtube",
-                    "url": f"https://youtube.com/watch?v={item['id']['videoId']}",
+                    "title":   title,
+                    "source":  "youtube",
+                    "url":     f"https://youtube.com/watch?v={item['id']['videoId']}",
                     "created": ts
                 })
+
+            # Get the next page token — if None, there are no more pages
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
+
         except Exception as e:
             print("YouTube error:", e)
             break
+
     return results
 
+
 def fetch_mastodon(query):
+    # Searches Mastodon — an open-source social network
+    # mastodon.social is the largest public instance
+    # No API key needed for public search
     try:
         url = f"https://mastodon.social/api/v2/search?q={requests.utils.quote(query)}&type=statuses&limit=40&resolve=false"
         res = requests.get(url, timeout=8, headers={"User-Agent": "signalwatch/1.0"})
         data = res.json()
         results = []
         cutoff = datetime.now() - timedelta(days=90)
+
         for status in data.get("statuses", []):
             content = status.get("content", "")
+            # Strip HTML tags — Mastodon content comes with HTML formatting
+            # re.sub() replaces the pattern <...> with empty string ""
             content = re.sub(r'<[^>]+>', '', content).strip()
+
             if not content or len(content) < 20:
                 continue
+
             created_at = status.get("created_at", "")
             ts = 0
             try:
+                # Parse the timestamp — take first 19 characters to remove timezone info
                 dt = datetime.strptime(created_at[:19], "%Y-%m-%dT%H:%M:%S")
                 ts = int(dt.timestamp())
                 if dt < cutoff:
                     continue
             except:
                 pass
+
             results.append({
-                "title": content[:200],
-                "source": "mastodon",
-                "url": status.get("url", ""),
+                "title":   content[:200],  # Limit to 200 characters
+                "source":  "mastodon",
+                "url":     status.get("url", ""),
                 "created": ts
             })
+
         return results
     except Exception as e:
         print("Mastodon error:", e)
         return []
-    # ─── TRUSTPILOT ───────────────────────────────────────────────────────────────
-# Trustpilot has a public web endpoint that returns review data.
-# We search for the company name and pull recent reviews.
-# No API key needed for basic public data.
-# This is important because reviews are high-signal — customers who bother
-# to write a review have strong opinions. This is what the Google engineer
-# meant by "commercially relevant signal".
+
 
 def fetch_trustpilot(query):
-    # ── What this function does ──────────────────────────────────────────────
-    # Fetches reviews from Trustpilot for a given brand or company name.
-    # Trustpilot has a public consumer API that does not require authentication
-    # for basic searches. We search for the company, find their profile,
-    # then fetch their recent reviews.
-    #
-    # Why reviews matter: A brand with 2.1 stars has a very different story
-    # than one with 4.8 stars. Trustpilot reviews are written by real customers
-    # which makes them high-quality signal for brand intelligence.
-    # ─────────────────────────────────────────────────────────────────────────
-
+    # Fetches customer reviews from Trustpilot
+    # Trustpilot is a major review platform — reviews are high-quality signal
+    # because real customers write them after using a product or service
+    # No API key needed — we read the public web page
     results = []
 
     try:
-        # Step 1: Search Trustpilot for the business
-        # This is their public business search endpoint
-        # "query" is the search term we pass in
         headers = {
-            # We identify ourselves as a browser to avoid being blocked
-            # Some websites block requests that do not look like browsers
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            # Accept-Language tells the server we want English content
             "Accept-Language": "en-US,en;q=0.9"
         }
 
-        # Trustpilot's public business unit search
-        # This returns JSON with matching companies
+        # Step 1: Search for the business on Trustpilot
         search_url = f"https://www.trustpilot.com/api/categoriespages/search/businessunits?query={requests.utils.quote(query)}&language=en&perPage=5"
-
         search_res = requests.get(search_url, headers=headers, timeout=10)
 
-        # Check if we got a successful response
-        # Status code 200 means OK, anything else means something went wrong
         if search_res.status_code != 200:
-            # Try the alternative approach — scrape the search page directly
+            # Try scraping search page directly as fallback
             alt_url = f"https://www.trustpilot.com/search?query={requests.utils.quote(query)}"
             alt_res = requests.get(alt_url, headers=headers, timeout=10)
-
-            # Look for business profile links in the HTML
-            # Trustpilot profile URLs follow this pattern: /review/companyname.com
-            profiles = re.findall(
-                r'href="(/review/[a-zA-Z0-9._-]+)"',
-                alt_res.text
-            )
-
+            profiles = re.findall(r'href="(/review/[a-zA-Z0-9._-]+)"', alt_res.text)
             if not profiles:
-                print(f"Trustpilot: no results found for '{query}'")
+                print(f"Trustpilot: no results for '{query}'")
                 return []
-
-            # Take the first profile found
             profile_path = profiles[0]
-            print(f"Trustpilot: found profile {profile_path}")
-
         else:
-            # Parse the JSON response from the API
             search_data = search_res.json()
-
-            # Navigate to the list of businesses
-            # .get() safely retrieves a value from a dictionary
-            # If the key does not exist, it returns the default value ([] here)
             businesses = search_data.get("businessUnits", [])
-
             if not businesses:
                 print(f"Trustpilot: no businesses found for '{query}'")
                 return []
-
-            # Get the identifier of the first business
-            # identifyingName is like a slug: "nike.com" or "apple.com"
             profile_path = f"/review/{businesses[0].get('identifyingName', '')}"
 
-        # Step 2: Fetch the actual review page for this business
+        # Step 2: Fetch reviews from the company's Trustpilot page
         review_page_url = f"https://www.trustpilot.com{profile_path}?sort=recency"
         review_res = requests.get(review_page_url, headers=headers, timeout=10)
 
-        # Look for the __NEXT_DATA__ script tag which contains structured data
-        # This is how Next.js websites embed their data — as JSON in a script tag
-        # re.search finds the first match of a pattern in a string
-        # re.DOTALL makes . match newlines too (for multi-line JSON)
+        # Trustpilot is built with Next.js which embeds all data in a JSON script tag
+        # re.search() finds the first match of the pattern in the page HTML
+        # re.DOTALL makes . match newline characters too
         match = re.search(
             r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
             review_res.text,
@@ -398,79 +450,52 @@ def fetch_trustpilot(query):
         )
 
         if not match:
-            print("Trustpilot: could not find review data on page")
+            print("Trustpilot: could not find review data")
             return []
 
-        # Parse the JSON we found inside the script tag
         page_data = json.loads(match.group(1))
-
-        # Navigate deep into the nested structure to find reviews
-        # Each .get() call goes one level deeper into the nested dictionaries
-        # If any level is missing we get {} (empty dict) and continue safely
         page_props = page_data.get("props", {}).get("pageProps", {})
-
-        # Reviews can be in different locations depending on page version
-        # We try multiple possible locations
-        reviews_list = (
-            page_props.get("reviews", []) or
-            page_props.get("businessUnit", {}).get("reviews", []) or
-            []
-        )
+        reviews_list = page_props.get("reviews", []) or page_props.get("businessUnit", {}).get("reviews", []) or []
 
         if not reviews_list:
-            # Try finding reviews another way — look for review JSON in the page
-            # Trustpilot sometimes embeds individual review data differently
-            review_matches = re.findall(
-                r'"text":"([^"]{20,300})".*?"rating":(\d)',
-                review_res.text
-            )
+            # Fallback: find reviews using regex pattern matching
+            review_matches = re.findall(r'"text":"([^"]{20,300})".*?"rating":(\d)', review_res.text)
             for text, rating in review_matches[:15]:
                 results.append({
-                    "title": f"[{rating}★ Trustpilot] {text}",
-                    "source": "trustpilot",
-                    "url": f"https://www.trustpilot.com{profile_path}",
+                    "title":   f"[{rating}★ Trustpilot] {text}",
+                    "source":  "trustpilot",
+                    "url":     f"https://www.trustpilot.com{profile_path}",
                     "created": 0
                 })
-            print(f"Trustpilot: {len(results)} reviews via fallback method")
+            print(f"Trustpilot: {len(results)} reviews (fallback method)")
             return results
 
-        # Process each review from the structured data
         cutoff = datetime.now() - timedelta(days=90)
-
         for review in reviews_list[:20]:
-            # Extract the pieces we care about
-            title = review.get("title", "")
-            text = review.get("text", "")
-            rating = review.get("rating", 0)
+            title    = review.get("title", "")
+            text     = review.get("text", "")
+            rating   = review.get("rating", 0)
             date_str = review.get("dates", {}).get("publishedDate", "")
 
-            # Combine title and text for a fuller picture
-            # The colon : separates them visually
             full_text = f"{title}: {text[:150]}" if title and text else (title or text[:150])
-
             if not full_text or len(full_text) < 10:
-                continue  # Skip empty reviews
+                continue
 
-            # Parse the publication date
             ts = 0
             if date_str:
                 try:
-                    # Date comes as "2026-01-15T10:30:00.000Z"
-                    # We take the first 10 characters: "2026-01-15"
                     dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
                     if dt < cutoff:
-                        continue  # Skip reviews older than 90 days
+                        continue
                     ts = int(dt.timestamp())
                 except:
-                    pass  # If date parsing fails, keep ts as 0
+                    pass
 
-            # Add star rating label at the start of the title
             star_label = f"[{rating}★ Trustpilot] " if rating else "[Trustpilot] "
-
             results.append({
-                "title": f"{star_label}{full_text}",
-                "source": "trustpilot",
-                "url": f"https://www.trustpilot.com{profile_path}",
+                "title":   f"{star_label}{full_text}",
+                "source":  "trustpilot",
+                "url":     f"https://www.trustpilot.com{profile_path}",
                 "created": ts
             })
 
@@ -480,232 +505,172 @@ def fetch_trustpilot(query):
     except Exception as e:
         print(f"Trustpilot error: {e}")
         return []
-    
-    def fetch_appstore(query):
-    # ── What this function does ──────────────────────────────────────────────
-    # Searches Apple's App Store for apps matching the query.
-    # Then fetches recent reviews for the most relevant app found.
-    # Apple provides a free public RSS feed for reviews — no API key needed.
-    # This is valuable because App Store reviews are verified purchases,
-    # meaning they are more trustworthy than random social media posts.
-    # ─────────────────────────────────────────────────────────────────────────
 
-     results = []
+
+def fetch_appstore(query):
+    # Searches Apple's App Store for apps matching the query
+    # Then fetches recent customer reviews for the most relevant app
+    # Apple provides a free public RSS feed for reviews — no API key needed
+    results = []
 
     try:
-        # Step 1: Search the App Store for apps matching the query
-        # Apple has a public search endpoint that returns JSON
-        # "term" is the search query
-        # "entity=software" means we want apps, not music or books
-        # "limit=5" means get up to 5 app results
+        # Step 1: Search the App Store
+        # entity=software means we want apps (not music or podcasts)
         search_url = f"https://itunes.apple.com/search?term={requests.utils.quote(query)}&entity=software&limit=5"
-
-        # Make the HTTP request
-        # requests.get() sends a GET request to a URL and returns the response
         search_res = requests.get(search_url, timeout=10)
-
-        # .json() converts the response text into a Python dictionary
         search_data = search_res.json()
 
-        # Check if we got any results
-        # .get("resultCount", 0) safely gets resultCount, defaulting to 0 if missing
         if search_data.get("resultCount", 0) == 0:
             print(f"App Store: no apps found for '{query}'")
             return []
 
-        # Get the first (most relevant) app result
-        # search_data["results"] is a list of apps
-        # [0] gets the first item in that list
+        # Get the first (most relevant) app
         app = search_data["results"][0]
-
-        # Extract the app ID — Apple uses numeric IDs like 284882215
-        app_id = app.get("trackId")
+        app_id   = app.get("trackId")    # Apple's numeric app ID
         app_name = app.get("trackName", query)
 
         if not app_id:
             return []
 
-        print(f"App Store: found app '{app_name}' (ID: {app_id})")
+        print(f"App Store: found '{app_name}' (ID: {app_id})")
 
-        # Step 2: Fetch reviews using Apple's RSS feed
-        # Apple provides reviews as a JSON feed for any app
-        # The URL structure is always the same — just change the app ID
-        # "page=1" gets the first page of reviews
-        # "json" at the end means get JSON format instead of XML
+        # Step 2: Fetch reviews using Apple's public RSS feed
         review_url = f"https://itunes.apple.com/rss/customerreviews/page=1/id={app_id}/sortby=mostrecent/json"
-
         review_res = requests.get(review_url, timeout=10)
         review_data = review_res.json()
 
-        # Navigate the nested data structure Apple returns
-        # This is like opening a box inside a box inside a box
-        # feed → entry is where the actual reviews live
+        # Apple's response has a "feed" with "entry" items
+        # The first entry is the app itself, not a review — so we start from index 1
         entries = review_data.get("feed", {}).get("entry", [])
 
-        # The first entry is actually the app info, not a review
-        # So we skip it by starting from index 1
-        # entries[1:] means "give me everything from position 1 onwards"
-        for entry in entries[1:20]:  # Maximum 20 reviews
-
-            # Each entry has nested dictionaries with "label" keys
-            # This is Apple's specific data format
-            title = entry.get("title", {}).get("label", "")
+        for entry in entries[1:20]:  # Skip first entry, max 20 reviews
+            # Apple uses nested dictionaries with "label" keys for text values
+            title   = entry.get("title", {}).get("label", "")
             content = entry.get("content", {}).get("label", "")
-            rating = entry.get("im:rating", {}).get("label", "")
+            rating  = entry.get("im:rating", {}).get("label", "")
 
-            # Combine title and first 150 characters of review content
-            # We limit content length so titles are not too long
             full_text = f"{title}: {content[:150]}" if title else content[:150]
-
             if not full_text or len(full_text) < 10:
-                continue  # Skip empty or very short reviews
+                continue
 
-            # Add star rating to make it visible in results
-            # f-string: the {} parts get replaced with variable values
             star_label = f"[{rating}★ App Store] " if rating else "[App Store] "
-
             results.append({
-                "title": f"{star_label}{full_text}",
-                "source": "appstore",
-                # Link to the app's review page
-                "url": f"https://apps.apple.com/app/id{app_id}",
-                "created": 0  # Apple RSS does not always include timestamps
+                "title":   f"{star_label}{full_text}",
+                "source":  "appstore",
+                "url":     f"https://apps.apple.com/app/id{app_id}",
+                "created": 0
             })
 
-        print(f"App Store: {len(results)} reviews found for {app_name}")
+        print(f"App Store: {len(results)} reviews for {app_name}")
         return results
 
     except Exception as e:
-        # If anything goes wrong, print why and return empty list
-        # This way other sources still work even if App Store fails
         print(f"App Store error: {e}")
         return []
-    
-    def fetch_playstore(query):
-    # ── What this function does ──────────────────────────────────────────────
-    # Searches Google Play Store for apps matching the query.
-    # Then fetches recent reviews using google-play-scraper library.
-    # Play Store reviews are important because Android has the majority
-    # of smartphone market share globally, especially in India and Asia.
-    # ─────────────────────────────────────────────────────────────────────────
 
-     results = []
+
+def fetch_playstore(query):
+    # Searches Google Play Store for apps matching the query
+    # Then fetches recent customer reviews
+    # Uses the google-play-scraper library (added to requirements.txt)
+    results = []
 
     try:
-        # Import the Play Store scraper library
-        # We import inside the function so if the library fails to import,
-        # only this function fails — not the whole server
+        # Import inside function — if library is missing, only this function fails
         from google_play_scraper import search, reviews, Sort
 
-        # Step 1: Search for the app on Play Store
-        # search() returns a list of apps matching our query
-        # n_hits=3 means get top 3 results
-        # lang="en" means English language results
-        # country="us" means US store
-        search_results = search(
-            query,
-            n_hits=3,
-            lang="en",
-            country="us"
-        )
+        # Step 1: Search Play Store
+        # n_hits=3 means return top 3 matching apps
+        search_results = search(query, n_hits=3, lang="en", country="us")
 
         if not search_results:
             print(f"Play Store: no apps found for '{query}'")
             return []
 
-        # Take the first (most relevant) result
-        app = search_results[0]
-        app_id = app.get("appId")  # Like "com.nike.snkrs"
+        app    = search_results[0]
+        app_id   = app.get("appId")   # Like "com.nike.snkrs"
         app_name = app.get("title", query)
 
         if not app_id:
             return []
 
-        print(f"Play Store: found app '{app_name}' (ID: {app_id})")
+        print(f"Play Store: found '{app_name}' (ID: {app_id})")
 
-        # Step 2: Fetch recent reviews for this app
-        # reviews() returns a list of review dictionaries
-        # count=20 means fetch 20 reviews
-        # sort=Sort.NEWEST means get the most recent reviews first
-        # This is important — we want current sentiment, not old reviews
-        review_list, _ = reviews(
-            app_id,
-            count=20,
-            sort=Sort.NEWEST,
-            lang="en",
-            country="us"
-        )
+        # Step 2: Fetch recent reviews
+        # Sort.NEWEST gets the most recent reviews first
+        # The function returns a tuple: (list of reviews, continuation token)
+        # We only need the list, so we use _ for the token we do not need
+        review_list, _ = reviews(app_id, count=20, sort=Sort.NEWEST, lang="en", country="us")
 
-        # Calculate 90-day cutoff for filtering old reviews
         cutoff = datetime.now() - timedelta(days=90)
 
         for review in review_list:
-            # Each review has: content, score (1-5), at (date), userName
-            content = review.get("content", "")
-            score = review.get("score", 0)  # 1 to 5 stars
-            review_date = review.get("at")  # This is a datetime object
+            content     = review.get("content", "")
+            score       = review.get("score", 0)    # 1 to 5 stars
+            review_date = review.get("at")           # datetime object
 
             if not content or len(content) < 10:
-                continue  # Skip empty reviews
+                continue
 
-            # Skip reviews older than 90 days
             if review_date and review_date < cutoff:
                 continue
 
-            # Convert datetime to Unix timestamp for consistency
-            # All our sources use timestamps, so we keep the same format
             ts = int(review_date.timestamp()) if review_date else 0
-
-            # Add star rating label
             star_label = f"[{score}★ Play Store] " if score else "[Play Store] "
 
             results.append({
-                "title": f"{star_label}{content[:200]}",
-                "source": "playstore",
-                "url": f"https://play.google.com/store/apps/details?id={app_id}",
+                "title":   f"{star_label}{content[:200]}",
+                "source":  "playstore",
+                "url":     f"https://play.google.com/store/apps/details?id={app_id}",
                 "created": ts
             })
 
-        print(f"Play Store: {len(results)} reviews found for {app_name}")
+        print(f"Play Store: {len(results)} reviews for {app_name}")
         return results
 
     except ImportError:
-        # This means the library was not installed properly
         print("Play Store: google-play-scraper not installed")
         return []
     except Exception as e:
         print(f"Play Store error: {e}")
         return []
 
+
 def fetch_wikipedia(query):
+    # Uses Wikipedia's search API to find context about the query topic
+    # This gives background knowledge that helps the AI understand the topic
+    # No API key needed
     results = []
-    clean = re.sub(r'".*?"', '', query).lower()
+    clean = re.sub(r'".*?"', '', query).lower()  # Remove quoted phrases from query
     stop = {"not", "or", "and", "the", "a", "is", "in", "of", "to", "complaints"}
     keywords = [w for w in clean.split() if w not in stop]
-    search_term = " ".join(keywords[:3])
+    search_term = " ".join(keywords[:3])  # Use first 3 keywords
+
     url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={requests.utils.quote(search_term)}&limit=3&format=json"
     try:
         res = requests.get(url, timeout=8)
         data = res.json()
+        # Wikipedia returns: [query, [titles], [descriptions], [urls]]
         for title, desc in zip(data[1], data[2]):
             if desc:
                 results.append({
-                    "title": f"Wikipedia: {title} — {desc[:120]}",
-                    "source": "wikipedia",
-                    "url": f"https://en.wikipedia.org/wiki/{requests.utils.quote(title)}",
+                    "title":   f"Wikipedia: {title} — {desc[:120]}",
+                    "source":  "wikipedia",
+                    "url":     f"https://en.wikipedia.org/wiki/{requests.utils.quote(title)}",
                     "created": 0
                 })
     except Exception as e:
         print("Wikipedia error:", e)
+
     return results
 
 
 # ─── AI ───────────────────────────────────────────────────────────────────────
-# We fetch the live list of free models from OpenRouter instead of hardcoding
-# names. Free model names change constantly. Hardcoding breaks. This way we
-# always have the latest working ones.
 
 def get_free_models():
+    # Fetches the current list of free AI models from OpenRouter
+    # We do this dynamically instead of hardcoding model names
+    # because free models change frequently — hardcoding causes breakage
     try:
         res = requests.get(
             "https://openrouter.ai/api/v1/models",
@@ -714,31 +679,43 @@ def get_free_models():
         )
         data = res.json()
         free_models = []
+
         for model in data.get("data", []):
-            model_id = model.get("id", "")
-            pricing = model.get("pricing", {})
+            model_id   = model.get("id", "")
+            pricing    = model.get("pricing", {})
+            # prompt cost of 0 means free
             prompt_cost = float(pricing.get("prompt", "1") or "1")
             if ":free" in model_id or prompt_cost == 0:
                 free_models.append(model_id)
+
         print(f"Found {len(free_models)} free models")
-        return free_models[:6]
+        return free_models[:6]  # Use first 6 to avoid trying too many
+
     except Exception as e:
         print("Could not fetch model list:", e)
+        # Fallback models if we cannot fetch the list
         return [
             "meta-llama/llama-3.2-3b-instruct:free",
             "qwen/qwen-2-7b-instruct:free",
             "google/gemma-2-9b-it:free"
         ]
 
+
 def strip_markdown(text):
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-    text = re.sub(r'\*([^*]+)\*', r'\1', text)
-    text = re.sub(r'#{1,6}\s', '', text)
-    text = re.sub(r'`([^`]+)`', r'\1', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Removes markdown formatting characters from AI responses
+    # Some models add **bold** or ## headers even when told not to
+    # This function cleans all of that out
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Remove **bold**
+    text = re.sub(r'\*([^*]+)\*',     r'\1', text)  # Remove *italic*
+    text = re.sub(r'#{1,6}\s',        '',    text)  # Remove ## headers
+    text = re.sub(r'`([^`]+)`',       r'\1', text)  # Remove `code`
+    text = re.sub(r'\n{3,}',         '\n\n', text)  # Collapse extra blank lines
     return text.strip()
 
+
 def ai_call(prompt):
+    # Sends a prompt to the AI and returns the response text
+    # Tries multiple free models in order — if one fails, tries the next
     models = get_free_models()
     print(f"Trying {len(models)} models")
 
@@ -748,24 +725,26 @@ def ai_call(prompt):
             res = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://signalwatch.netlify.app",
-                    "X-Title": "Signalwatch"
+                    "Authorization":  f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type":   "application/json",
+                    "HTTP-Referer":   "https://signalwatch-production.up.railway.app",
+                    "X-Title":        "Signalwatch"
                 },
                 json={
-                    "model": model,
+                    "model":    model,
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 400
+                    "max_tokens": 600
                 },
                 timeout=40
             )
 
             print(f"Status {res.status_code} from {model}")
 
+            # 429 = rate limited, 502/503 = server error — try next model
             if res.status_code in [429, 502, 503]:
                 continue
 
+            # 401 = bad API key — no point trying other models
             if res.status_code == 401:
                 print("Bad API key — stopping")
                 return None
@@ -775,6 +754,7 @@ def ai_call(prompt):
             if "choices" not in data:
                 continue
 
+            # content can be a string or a list of objects depending on the model
             content = data["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
@@ -783,6 +763,7 @@ def ai_call(prompt):
 
             text = strip_markdown(text.strip())
 
+            # Only accept responses longer than 50 characters
             if len(text) > 50:
                 print(f"Got response from {model}")
                 return text
@@ -797,60 +778,62 @@ def ai_call(prompt):
 
 # ─── SCORING AND RANKING ──────────────────────────────────────────────────────
 
-# ─── SCORE EXPLANATION ────────────────────────────────────────────────────────
-# The Google engineer said scoring needs to be explainable.
-# Right now a result gets a score of 9 and nobody knows why.
-# This function generates a plain English reason for each score.
-# Example: "Score 9 — mentions 'battery' twice and 'iphone' once, all in same title"
-# This builds trust. Users understand why something ranked high.
-
 def explain_score(title, keywords, phrases, score):
+    # Generates a plain English explanation of why a result scored the way it did
+    # This makes the ranking transparent and trustworthy
     reasons = []
     t = title.lower()
-    
-    # Check which keywords matched and how many times
+
     for w in keywords:
         count = t.count(w.lower())
         if count == 1:
             reasons.append(f"contains '{w}'")
         elif count > 1:
             reasons.append(f"mentions '{w}' {count} times")
-    
-    # Check if all keywords appeared together (the +3 bonus)
+
+    # Check for the all-keywords-together bonus
     if len(keywords) > 1:
-        all_present = all(w.lower() in t for w in keywords)
-        if all_present:
-            reasons.append("all search terms in one result")
-    
-    # Check phrase matches
+        if all(w.lower() in t for w in keywords):
+            reasons.append("all search terms appear together")
+
     for p in phrases:
         if p.lower() in t:
-            reasons.append(f"exact phrase match: '{p}'")
-    
+            reasons.append(f"exact phrase: '{p}'")
+
     if not reasons:
         return ""
-    
-    return "Ranked high because: " + ", ".join(reasons)
+
+    return "Ranked high: " + ", ".join(reasons)
+
 
 def score_post(text, keywords):
+    # Calculates a relevance score for one result
+    # +2 for each time a keyword appears in the title
+    # +3 bonus if ALL keywords appear together in the same title
     t = text.lower()
     score = 0
     for w in keywords:
         count = t.count(w.lower())
-        score += count * 2
+        score += count * 2  # Each mention of a keyword adds 2 points
     if len(keywords) > 1:
         if sum(1 for w in keywords if w.lower() in t) == len(keywords):
-            score += 3
+            score += 3  # Bonus for having all keywords
     return score
 
+
 def extract_keywords(query):
+    # Splits the query into: keywords, excluded words, and exact phrases
+    # Exact phrases are surrounded by "quotes"
     stop = {"not", "or", "and", "the", "a", "is", "in", "of", "to"}
-    phrases = re.findall(r'"(.*?)"', query)
-    clean = re.sub(r'".*?"', '', query).lower()
-    words = [w for w in clean.split() if w not in stop]
+    phrases = re.findall(r'"(.*?)"', query)        # Find "quoted phrases"
+    clean   = re.sub(r'".*?"', '', query).lower()  # Remove phrases from query
+    words   = [w for w in clean.split() if w not in stop]
     return words, phrases
 
+
 def filter_and_rank(posts, query):
+    # Filters and ranks all results by relevance score
+    # Results with score 0 (no keyword matches) are removed
     raw_words = query.split()
     exclude = []
     i = 0
@@ -870,48 +853,87 @@ def filter_and_rank(posts, query):
         if title in seen_titles:
             continue
         seen_titles.add(title)
+
         text = title.lower()
+
+        # Skip if title contains an excluded word (from NOT operator)
         if any(w in text for w in exclude):
             continue
+
         s = score_post(title, keywords)
+
+        # Bonus points for exact phrase matches
         if phrases:
             for p in phrases:
                 if p.lower() in text:
                     s += 5
-        if s == 0:
-            continue
-        results.append({
-    "title": title,
-    "score": s,
-    "score_reason": explain_score(title, keywords, phrases, s),
-    "source": post["source"],
-    "url": post.get("url", ""),
-    "created": post.get("created", 0)
-})
 
+        if s == 0:
+            continue  # Drop results with no keyword matches
+
+        results.append({
+            "title":        title,
+            "score":        s,
+            "score_reason": explain_score(title, keywords, phrases, s),
+            "source":       post["source"],
+            "url":          post.get("url", ""),
+            "created":      post.get("created", 0)
+        })
+
+    # Sort by score, highest first
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
 
 
-# ─── INSIGHT ──────────────────────────────────────────────────────────────────
+# ─── WORD FREQUENCIES ─────────────────────────────────────────────────────────
+
+def get_word_frequencies(results):
+    # Counts how often each word appears across all result titles
+    # Used to build the word cloud showing dominant themes
+    stop_words = {
+        "the","a","an","and","or","but","in","on","at","to","for","of","with",
+        "is","it","its","this","that","was","are","be","been","have","has","had",
+        "not","from","by","as","i","my","we","you","he","she","they","their",
+        "our","your","his","her","which","who","what","how","when","where","why",
+        "will","would","could","should","may","might","can","do","did","does",
+        "about","after","before","more","also","just","than","then","so","if",
+        "up","out","all","new","one","two","time","get","got","us","me","him",
+        "them","been","into","over","after","under","re","via","per","vs"
+    }
+    freq = {}
+    for r in results:
+        # \b[a-zA-Z]{4,}\b matches whole words of 4+ letters
+        words = re.findall(r'\b[a-zA-Z]{4,}\b', r["title"].lower())
+        for w in words:
+            if w not in stop_words:
+                freq[w] = freq.get(w, 0) + 1
+
+    # Sort by frequency, most common first
+    sorted_freq = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+    return [{"word": w, "count": c} for w, c in sorted_freq[:40]]
+
+
+# ─── INSIGHT GENERATION ───────────────────────────────────────────────────────
 
 def generate_insight(results, query):
+    # Sends the top results to AI and asks for a briefing + strategic questions
+    # Returns a dictionary with "briefing" and "questions" keys
     if not results:
         return {
-            "briefing": "Nothing meaningful came up — try a broader search or a slightly different angle.",
+            "briefing":  "Nothing meaningful came up — try a broader search or a slightly different angle.",
             "questions": []
         }
 
-    today = datetime.now().strftime("%d %B %Y")
-    titles = [r["title"] for r in results[:20]]
+    today      = datetime.now().strftime("%d %B %Y")
+    titles     = [r["title"] for r in results[:20]]
     titles_text = "\n".join(f"- {t}" for t in titles)
     sources_used = list(set(r["source"] for r in results))
 
     timed = [r for r in results if r.get("created", 0) > 0]
     time_context = ""
     if timed:
-        newest = max(timed, key=lambda x: x["created"])
-        oldest = min(timed, key=lambda x: x["created"])
+        newest      = max(timed, key=lambda x: x["created"])
+        oldest      = min(timed, key=lambda x: x["created"])
         newest_date = datetime.fromtimestamp(newest["created"]).strftime("%d %b %Y")
         oldest_date = datetime.fromtimestamp(oldest["created"]).strftime("%d %b %Y")
         time_context = f"Mentions span {oldest_date} to {newest_date}."
@@ -925,114 +947,120 @@ Latest mentions from {', '.join(sources_used)}:
 
 Return a JSON object with exactly two keys: "briefing" and "questions".
 
-"briefing": Four plain sentences in British English. Conversational, like telling a colleague what you found over coffee. No bullet points, no headers, no asterisks, no labels. Under 120 words. Cover what is happening, why it matters, where it is heading, and what to do in the next day or two.
+"briefing": Four plain sentences in British English. Conversational, like telling a colleague what you found over coffee. No bullet points, no headers, no asterisks, no labels. Under 120 words. Cover: what is happening now, why it matters, where it is heading, and what to do in the next day or two.
 
-"questions": An array of exactly 3 strategic questions that a senior executive or brand manager should be asking RIGHT NOW based purely on the patterns you see in the data above. Not generic questions. Questions that emerge directly from what these specific mentions reveal. Each question should be one sentence and feel like something a sharp CMO would ask in a board meeting. Include a one-sentence reason why that question matters based on the pattern you spotted.
+"questions": Array of exactly 3 strategic questions a senior executive should be asking RIGHT NOW, based purely on patterns in the data above. Not generic. Each is an object with "question" and "reason" keys.
 
-Format each question as an object with "question" and "reason" keys.
-
-Return only valid JSON. No markdown. No extra text."""
+Return only valid JSON. No markdown. No extra text outside the JSON."""
 
     result = ai_call(prompt)
 
     if not result:
         return {
-            "briefing": f"Found {len(results)} mentions across {len(sources_used)} sources. The briefing engine is under heavy load right now — raw signals below tell the story.",
+            "briefing":  f"Found {len(results)} mentions across {len(sources_used)} sources. Briefing engine is under load — raw signals below tell the story.",
             "questions": []
         }
 
     try:
         clean = result.strip()
+        # Remove markdown code fences if present
         if clean.startswith("```"):
             clean = re.sub(r'^```[a-z]*\n?', '', clean)
-            clean = re.sub(r'\n?```$', '', clean)
+            clean = re.sub(r'\n?```$',       '', clean)
         parsed = json.loads(clean)
         return {
-            "briefing": parsed.get("briefing", ""),
+            "briefing":  parsed.get("briefing", ""),
             "questions": parsed.get("questions", [])
         }
     except:
+        # If JSON parsing fails, return the raw text as the briefing
         return {
-            "briefing": result,
+            "briefing":  result,
             "questions": []
         }
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
-
-def get_word_frequencies(results):
-    stop_words = {
-        "the","a","an","and","or","but","in","on","at","to","for","of","with",
-        "is","it","its","this","that","was","are","be","been","have","has","had",
-        "not","from","by","as","i","my","we","you","he","she","they","their",
-        "our","your","his","her","which","who","what","how","when","where","why",
-        "will","would","could","should","may","might","can","do","did","does",
-        "about","after","before","more","also","just","than","then","so","if",
-        "up","out","all","new","one","two","time","get","got","us","me","him",
-        "them","been","into","over","after","under","re","via","per","vs"
-    }
-    freq = {}
-    for r in results:
-        words = re.findall(r'\b[a-zA-Z]{4,}\b', r["title"].lower())
-        for w in words:
-            if w not in stop_words:
-                freq[w] = freq.get(w, 0) + 1
-    sorted_freq = sorted(freq.items(), key=lambda x: x[1], reverse=True)
-    return [{"word": w, "count": c} for w, c in sorted_freq[:40]]
+# Endpoints are the URLs your frontend can call
+# @app.get("/") means: when someone visits / run this function
 
 @app.get("/")
 def home():
+    # Simple health check — tells us the server is running
     return {"status": "Signalwatch running — beta"}
+
 
 @app.get("/search")
 def search(query: str, request: Request, token: str = ""):
+    # Main search endpoint — called by the frontend when user searches
+    # query: what the user typed
+    # request: contains information about who is making the request
+    # token: the browser's unique identifier (for rate limiting)
+
+    # Validate the token — must start with "sw_"
     if not token or not token.startswith("sw_"):
         return {"error": "invalid", "limit_reached": True}
 
+    # Check how many searches this token has done today
     current_count = get_count(token)
 
     if current_count >= DAILY_LIMIT:
         return {"error": "limit", "limit_reached": True}
 
+    # Add 1 to their count and get the new total
     new_count = increment_count(token)
     remaining = max(0, DAILY_LIMIT - new_count)
     print(f"Token search {new_count}/{DAILY_LIMIT}")
 
-    reddit = fetch_reddit(query)
-    hn = fetch_hackernews(query)
-    newsapi = fetch_newsapi(query)
-    newsdata = fetch_newsdata(query)
-    rss = fetch_rss(query)
-    youtube = fetch_youtube(query)
-    mastodon = fetch_mastodon(query)
-    wikipedia = fetch_wikipedia(query)
+    # Fetch from all sources simultaneously (Python runs them in sequence
+    # but each has a timeout so slow sources do not block fast ones)
+    reddit     = fetch_reddit(query)
+    hn         = fetch_hackernews(query)
+    newsapi    = fetch_newsapi(query)
+    newsdata   = fetch_newsdata(query)
+    rss        = fetch_rss(query)
+    youtube    = fetch_youtube(query)
+    mastodon   = fetch_mastodon(query)
+    wikipedia  = fetch_wikipedia(query)
     trustpilot = fetch_trustpilot(query)
-    appstore = fetch_appstore(query)
-    playstore = fetch_playstore(query)
+    appstore   = fetch_appstore(query)
+    playstore  = fetch_playstore(query)
 
-    all_posts = reddit + hn + newsapi + newsdata + rss + youtube + mastodon + wikipedia + trustpilot + appstore + playstore
-    print(f"Total: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)} Trustpilot:{len(trustpilot)} AppStore:{len(appstore)} PlayStore:{len(playstore)}")
+    # Combine all results into one big list
+    # The + operator joins lists together
+    all_posts = (reddit + hn + newsapi + newsdata + rss +
+                 youtube + mastodon + wikipedia + trustpilot +
+                 appstore + playstore)
 
-    ranked = filter_and_rank(all_posts, query)
+    print(f"Total: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} "
+          f"News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} "
+          f"YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)} "
+          f"Trustpilot:{len(trustpilot)} AppStore:{len(appstore)} PlayStore:{len(playstore)}")
+
+    ranked  = filter_and_rank(all_posts, query)
     insight = generate_insight(ranked, query)
 
+    # Return everything as JSON — the frontend reads this
     return {
-        "query": query,
-        "total": len(ranked),
+        "query":             query,
+        "total":             len(ranked),
         "searches_remaining": remaining,
         "sources": {
-            "reddit": len(reddit),
+            "reddit":     len(reddit),
             "hackernews": len(hn),
-            "newsapi": len(newsapi),
-            "newsdata": len(newsdata),
-            "rss": len(rss),
-            "youtube": len(youtube),
-            "mastodon": len(mastodon),
-            "wikipedia": len(wikipedia),
-            "trustpilot": len(trustpilot)
+            "newsapi":    len(newsapi),
+            "newsdata":   len(newsdata),
+            "rss":        len(rss),
+            "youtube":    len(youtube),
+            "mastodon":   len(mastodon),
+            "wikipedia":  len(wikipedia),
+            "trustpilot": len(trustpilot),
+            "appstore":   len(appstore),
+            "playstore":  len(playstore)
         },
-        "insight": insight.get("briefing", "") if isinstance(insight, dict) else insight,
-"questions": insight.get("questions", []) if isinstance(insight, dict) else [],
-        "results": ranked[:20],
-"word_frequencies": get_word_frequencies(ranked[:50])
+        # insight is a dict — we extract briefing and questions separately
+        "insight":           insight.get("briefing", "") if isinstance(insight, dict) else insight,
+        "questions":         insight.get("questions", []) if isinstance(insight, dict) else [],
+        "results":           ranked[:20],
+        "word_frequencies":  get_word_frequencies(ranked[:50])
     }
