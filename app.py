@@ -508,15 +508,14 @@ def fetch_trustpilot(query):
 
 
 def fetch_appstore(query):
-    # Searches Apple's App Store for apps matching the query
-    # Then fetches recent customer reviews for the most relevant app
-    # Apple provides a free public RSS feed for reviews — no API key needed
+    # Fetches customer reviews from Apple App Store
+    # Uses Apple's iTunes search API to find the app
+    # Then uses their customer review RSS feed for the actual reviews
     results = []
 
     try:
-        # Step 1: Search the App Store
-        # entity=software means we want apps (not music or podcasts)
-        search_url = f"https://itunes.apple.com/search?term={requests.utils.quote(query)}&entity=software&limit=5"
+        # Search for the app — entity=software means apps only
+        search_url = f"https://itunes.apple.com/search?term={requests.utils.quote(query)}&entity=software&limit=5&country=us"
         search_res = requests.get(search_url, timeout=10)
         search_data = search_res.json()
 
@@ -524,9 +523,8 @@ def fetch_appstore(query):
             print(f"App Store: no apps found for '{query}'")
             return []
 
-        # Get the first (most relevant) app
-        app = search_data["results"][0]
-        app_id   = app.get("trackId")    # Apple's numeric app ID
+        app      = search_data["results"][0]
+        app_id   = app.get("trackId")
         app_name = app.get("trackName", query)
 
         if not app_id:
@@ -534,32 +532,77 @@ def fetch_appstore(query):
 
         print(f"App Store: found '{app_name}' (ID: {app_id})")
 
-        # Step 2: Fetch reviews using Apple's public RSS feed
+        # Apple's review feed — try both JSON and XML formats
+        # Format changed in 2024 — we try JSON first, fall back to XML
         review_url = f"https://itunes.apple.com/rss/customerreviews/page=1/id={app_id}/sortby=mostrecent/json"
-        review_res = requests.get(review_url, timeout=10)
-        review_data = review_res.json()
+        review_res = requests.get(review_url, timeout=10, headers={"User-Agent": "signalwatch/1.0"})
 
-        # Apple's response has a "feed" with "entry" items
-        # The first entry is the app itself, not a review — so we start from index 1
-        entries = review_data.get("feed", {}).get("entry", [])
+        if review_res.status_code != 200:
+            print(f"App Store: review feed returned {review_res.status_code}")
+            return []
 
-        for entry in entries[1:20]:  # Skip first entry, max 20 reviews
-            # Apple uses nested dictionaries with "label" keys for text values
-            title   = entry.get("title", {}).get("label", "")
-            content = entry.get("content", {}).get("label", "")
-            rating  = entry.get("im:rating", {}).get("label", "")
+        # Check what format we got back
+        content_type = review_res.headers.get("content-type", "")
 
-            full_text = f"{title}: {content[:150]}" if title else content[:150]
-            if not full_text or len(full_text) < 10:
-                continue
+        if "json" in content_type or review_res.text.strip().startswith("{"):
+            # JSON format
+            try:
+                review_data = review_res.json()
+                entries = review_data.get("feed", {}).get("entry", [])
 
-            star_label = f"[{rating}★ App Store] " if rating else "[App Store] "
-            results.append({
-                "title":   f"{star_label}{full_text}",
-                "source":  "appstore",
-                "url":     f"https://apps.apple.com/app/id{app_id}",
-                "created": 0
-            })
+                # First entry is app info not a review — skip it
+                for entry in entries[1:25]:
+                    title   = entry.get("title", {}).get("label", "")
+                    content = entry.get("content", {}).get("label", "")
+                    rating  = entry.get("im:rating", {}).get("label", "")
+
+                    full_text = f"{title}: {content[:150]}" if title else content[:150]
+                    if not full_text or len(full_text) < 10:
+                        continue
+
+                    star_label = f"[{rating}★ App Store] " if rating else "[App Store] "
+                    results.append({
+                        "title":   f"{star_label}{full_text}",
+                        "source":  "appstore",
+                        "url":     f"https://apps.apple.com/app/id{app_id}",
+                        "created": 0
+                    })
+            except Exception as e:
+                print(f"App Store JSON parse error: {e}")
+
+        else:
+            # XML format — parse differently
+            try:
+                root = ET.fromstring(review_res.content)
+                # Apple RSS namespace
+                ns = {
+                    "atom":  "http://www.w3.org/2005/Atom",
+                    "im":    "http://itunes.apple.com/rss"
+                }
+                entries = root.findall("atom:entry", ns)
+
+                for entry in entries[1:25]:  # Skip first — it is app info
+                    title_el   = entry.find("atom:title", ns)
+                    content_el = entry.find("atom:content", ns)
+                    rating_el  = entry.find("im:rating", ns)
+
+                    title   = title_el.text   if title_el   and title_el.text   else ""
+                    content = content_el.text if content_el and content_el.text else ""
+                    rating  = rating_el.text  if rating_el  and rating_el.text  else ""
+
+                    full_text = f"{title}: {content[:150]}" if title else content[:150]
+                    if not full_text or len(full_text) < 10:
+                        continue
+
+                    star_label = f"[{rating}★ App Store] " if rating else "[App Store] "
+                    results.append({
+                        "title":   f"{star_label}{full_text}",
+                        "source":  "appstore",
+                        "url":     f"https://apps.apple.com/app/id{app_id}",
+                        "created": 0
+                    })
+            except Exception as e:
+                print(f"App Store XML parse error: {e}")
 
         print(f"App Store: {len(results)} reviews for {app_name}")
         return results
@@ -635,7 +678,78 @@ def fetch_playstore(query):
         print(f"Play Store error: {e}")
         return []
 
+def fetch_google_news(query):
+    # Google News provides a free RSS feed for any search query
+    # This is different from the paid Google News API
+    # No API key needed — it is a public RSS feed
+    # Very reliable — Google indexes news from thousands of sources
 
+    results = []
+    try:
+        # Google News RSS URL format
+        # q= is the search query
+        # hl=en means English language results
+        # gl=US means United States edition
+        # ceid=US:en is required by Google News RSS
+        url = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=en&gl=US&ceid=US:en"
+
+        res = requests.get(
+            url,
+            timeout=10,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; signalwatch/1.0)"}
+        )
+
+        if res.status_code != 200:
+            print(f"Google News: status {res.status_code}")
+            return []
+
+        # Parse the RSS XML
+        root = ET.fromstring(res.content)
+
+        # Google News RSS: channel > item > title + pubDate
+        cutoff = datetime.now() - timedelta(days=30)  # Last 30 days only
+
+        for item in root.iter("item"):
+            title_el = item.find("title")
+            date_el  = item.find("pubDate")
+            link_el  = item.find("link")
+
+            if not title_el or not title_el.text:
+                continue
+
+            title = title_el.text.strip()
+
+            # Parse publication date
+            ts = 0
+            if date_el and date_el.text:
+                try:
+                    # Google News date format: "Mon, 21 Apr 2026 10:00:00 GMT"
+                    from email.utils import parsedate_to_datetime
+                    dt = parsedate_to_datetime(date_el.text)
+                    # Make datetime naive (remove timezone info) for comparison
+                    dt_naive = dt.replace(tzinfo=None)
+                    if dt_naive < cutoff:
+                        continue
+                    ts = int(dt.timestamp())
+                except Exception:
+                    pass
+
+            url_text = link_el.text if link_el and link_el.text else ""
+
+            results.append({
+                "title":   title,
+                "source":  "googlenews",
+                "url":     url_text,
+                "created": ts
+            })
+
+        print(f"Google News: {len(results)} articles")
+        return results
+
+    except Exception as e:
+        print(f"Google News error: {e}")
+        return []
+    
 def fetch_wikipedia(query):
     # Uses Wikipedia's search API to find context about the query topic
     # This gives background knowledge that helps the AI understand the topic
@@ -1025,17 +1139,19 @@ def search(query: str, request: Request, token: str = ""):
     trustpilot = fetch_trustpilot(query)
     appstore   = fetch_appstore(query)
     playstore  = fetch_playstore(query)
+    googlenews = fetch_google_news(query)
 
     # Combine all results into one big list
     # The + operator joins lists together
     all_posts = (reddit + hn + newsapi + newsdata + rss +
                  youtube + mastodon + wikipedia + trustpilot +
-                 appstore + playstore)
+                 appstore + playstore + googlenews)
 
     print(f"Total: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} "
-          f"News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} "
-          f"YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)} "
-          f"Trustpilot:{len(trustpilot)} AppStore:{len(appstore)} PlayStore:{len(playstore)}")
+      f"News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} "
+      f"YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)} "
+      f"Trustpilot:{len(trustpilot)} AppStore:{len(appstore)} "
+      f"PlayStore:{len(playstore)} GNews:{len(googlenews)}")
 
     ranked  = filter_and_rank(all_posts, query)
     insight = generate_insight(ranked, query)
@@ -1056,7 +1172,8 @@ def search(query: str, request: Request, token: str = ""):
             "wikipedia":  len(wikipedia),
             "trustpilot": len(trustpilot),
             "appstore":   len(appstore),
-            "playstore":  len(playstore)
+            "playstore":  len(playstore),
+            "googlenews": len(googlenews)
         },
         # insight is a dict — we extract briefing and questions separately
         "insight":           insight.get("briefing", "") if isinstance(insight, dict) else insight,
