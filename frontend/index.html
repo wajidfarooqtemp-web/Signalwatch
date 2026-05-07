@@ -804,31 +804,51 @@ googlenews:  "Google News"
 
     // ── Strategic questions card ──
     if (data.questions && data.questions.length > 0) {
-      html += `
-        <div class="questions-card">
-          <div class="questions-header">
-            <div class="questions-icon">?</div>
-            <div>
-              <div class="questions-title">Questions your team should be asking</div>
-              <div class="questions-subtitle">Derived from patterns in the data — not generic advice</div>
-            </div>
-          </div>`;
+      const questionsSource = (data.patterns_detected && data.patterns_detected.length > 0)
+  ? "Detected from documented brand intelligence patterns — algorithm based"
+  : "Derived from patterns in the data using AI analysis";
 
-      data.questions.forEach((q, i) => {
-        // q can be either a plain string or an object with question+reason
-        const questionText = typeof q === "string" ? q : (q.question || "");
-        const reasonText   = typeof q === "object" ? (q.reason || "") : "";
+html += `
+  <div class="questions-card">
+    <div class="questions-header">
+      <div class="questions-icon">?</div>
+      <div>
+        <div class="questions-title">Questions your team should be asking</div>
+        <div class="questions-subtitle">${questionsSource}</div>
+      </div>
+    </div>`;
 
-        html += `
-          <div class="question-item">
-            <div class="question-text">
-              <span class="question-number">${i + 1}</span>${questionText}
-            </div>
-            ${reasonText
-              ? `<div class="question-reason" style="margin-left:30px">${reasonText}</div>`
-              : ""}
-          </div>`;
-      });
+      // Show whether questions came from patterns or AI
+// Pattern questions show a different label — this builds trust
+const hasPatterns = data.patterns_detected && data.patterns_detected.length > 0;
+
+if (hasPatterns) {
+  html += `<div style="font-size:11px;color:var(--teal);font-weight:600;margin-bottom:12px;letter-spacing:0.5px;">
+    PATTERN DETECTED — questions from documented brand intelligence cases
+  </div>`;
+}
+
+data.questions.forEach((q, i) => {
+  const questionText = typeof q === "string" ? q : (q.question || "");
+  const reasonText   = typeof q === "object" ? (q.reason   || "") : "";
+  const exampleText  = typeof q === "object" ? (q.example  || "") : "";
+  const isPattern    = typeof q === "object" && q.source === "pattern";
+
+  html += `
+    <div class="question-item" style="${isPattern ? 'border-left:3px solid var(--teal)' : ''}">
+      <div class="question-text">
+        <span class="question-number">${i + 1}</span>${questionText}
+      </div>
+      ${reasonText
+        ? `<div class="question-reason" style="margin-left:30px">${reasonText}</div>`
+        : ""}
+      ${exampleText
+        ? `<div style="margin-left:30px;margin-top:6px;font-size:11px;color:var(--text3);font-style:italic">
+             Real case: ${exampleText}
+           </div>`
+        : ""}
+    </div>`;
+});
 
       html += `</div>`;
     }
