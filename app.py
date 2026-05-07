@@ -183,7 +183,7 @@ def fetch_reddit(query):
             f"?q={requests.utils.quote(query)}"
             f"&limit=100"
             f"&after={after_ts}"
-            f"&sort=created_utc"
+            f"&order=desc"
         )
 
         headers = {"User-Agent": "signalwatch/1.0"}
@@ -1117,257 +1117,339 @@ def get_word_frequencies(results):
     return [{"word": w, "count": c} for w, c in sorted_freq[:40]]
 
 # ─── PATTERN LIBRARY ─────────────────────────────────────────────────────────
+# 15 documented patterns from real brand intelligence cases.
+# Each pattern uses THEME-BASED detection — looking for groups of related
+# concepts rather than exact words. This makes detection much more robust.
 #
-# These are 15 real documented patterns from brand intelligence history.
-# Each pattern has:
-#   name:        what this pattern is called
-#   signals:     words or themes that trigger this pattern in the results
-#   question:    the strategic question this pattern demands
-#   reason:      why this question matters — the business logic behind it
-#   example:     a real case where this pattern played out
-#
-# The algorithm scans all results for these signals.
-# When a pattern fires, it generates the question automatically.
-# No AI needed. No guessing. Pure pattern recognition.
-#
-# Sources: Harvard Business Review, Brandwatch case studies,
-# Nielsen consumer research, Edelman Trust Barometer,
-# Byron Sharp "How Brands Grow", various published marketing post-mortems
+# How scoring works:
+# Each pattern has multiple signal GROUPS.
+# A group fires if ANY word in that group appears in the results.
+# Pattern fires if at least 2 groups fire.
+# This catches "consuming content" and "watching" and "streaming" as the same theme.
 
 PATTERN_LIBRARY = [
 
     {
         "name": "Unexpected Context Discovery",
-        # The ice cream + Netflix pattern. Brand used in a context the brand
-        # never designed for or marketed toward. This is almost always a
-        # campaign opportunity because it reveals an authentic consumer habit.
-        "signals": ["while", "watching", "during", "eating", "drinking",
-                    "with", "before bed", "morning", "commute", "gym"],
-        "question": "Are customers using this product in contexts we have never marketed to — and is that an untapped campaign territory?",
-        "reason":   "Unexpected usage contexts are the most reliable source of authentic campaign ideas. They reveal habits the brand did not create but can own.",
-        "example":  "Ben and Jerry's discovered via social listening that customers ate their ice cream while watching Netflix. The resulting Netflix-themed campaign drove measurable sales lift."
+        "signal_groups": [
+            # Context words — where/when people use the product
+            ["while", "during", "alongside", "with", "pairing", "combo",
+             "together", "at home", "watching", "listening", "gaming"],
+            # Activity words — what they are doing
+            ["netflix", "streaming", "sports", "gym", "commute", "morning",
+             "evening", "weekend", "holiday", "party", "date", "work"],
+            # Discovery words — surprise at the combination
+            ["discovered", "realised", "turns out", "never thought",
+             "weird but", "surprisingly", "actually works", "obsessed"]
+        ],
+        "question": "Are customers using this product in a context the brand has never marketed toward — and is that an untapped campaign territory?",
+        "reason":   "Unexpected usage contexts reveal authentic consumer habits that brands did not create but can own. They are the most reliable source of campaign ideas that feel real.",
+        "example":  "Ben and Jerry's found through social listening that customers ate their ice cream while watching Netflix. The campaign they built around this drove measurable sales lift."
     },
 
     {
-        "name": "Competitor Gap Signal",
-        # When people complain about a competitor in the same breath as
-        # searching for alternatives. Classic switching intent signal.
-        "signals": ["better than", "instead of", "switched from", "left",
-                    "moved to", "vs", "alternative", "compared to", "unlike"],
-        "question": "Are dissatisfied competitor customers actively searching for alternatives — and is our brand positioned to capture that switching intent?",
-        "reason":   "Switching intent signals have a short window. Brands that respond within 48 hours of competitor complaints capture 3x more switchers than those who wait.",
-        "example":  "Dollar Shave Club monitored Gillette complaint threads and targeted those users directly. Their 2013 campaign reached people mid-complaint and converted 20% of them."
+        "name": "Competitor Switching Signal",
+        "signal_groups": [
+            # Switching language
+            ["switched", "switching", "left", "moving", "moving to",
+             "abandoned", "dropped", "replaced", "cancel", "quit"],
+            # Comparison language
+            ["better", "worse", "vs", "versus", "compared to", "unlike",
+             "instead", "alternative", "option", "choice"],
+            # Competitor references — generic
+            ["competitor", "rival", "other brand", "different brand"]
+        ],
+        "question": "Are customers actively switching away or toward this brand right now — and what is the specific reason driving that decision?",
+        "reason":   "Switching intent signals have a short window. Brands that respond within 48 hours of competitor complaint spikes capture significantly more switchers than those who wait.",
+        "example":  "Dollar Shave Club monitored Gillette complaint threads and targeted switching-intent users directly. Their campaign reached people mid-complaint and converted 20% of them."
     },
 
     {
-        "name": "Ingredient Anxiety Pattern",
-        # Consumers researching specific ingredients, chemicals, or components.
-        # Common in food, cosmetics, pharma. Usually precedes a PR issue.
-        "signals": ["ingredient", "chemical", "contains", "what is in",
-                    "toxic", "safe", "harmful", "side effect", "allergy",
-                    "preservative", "artificial", "natural", "organic"],
-        "question": "Is there rising consumer anxiety about a specific ingredient or component — and do we have a transparency response ready before it becomes a crisis?",
-        "reason":   "Ingredient anxiety typically gives brands a 2-3 week window before mainstream media picks it up. Early transparency responses reduce crisis severity by 60%.",
-        "example":  "Panera Bread monitored 'artificial' ingredient mentions in 2014 and preemptively announced their clean ingredient pledge 8 weeks before competitors faced pressure."
+        "name": "Product Quality Alert",
+        "signal_groups": [
+            # Failure words
+            ["broken", "defective", "fault", "issue", "problem", "error",
+             "fail", "fails", "failed", "doesn't work", "not working", "stopped"],
+            # Body or experience words
+            ["quality", "cheap", "disappointing", "worse than", "used to be",
+             "downgraded", "changed", "different now", "not what it was"],
+            # Action words — what they did about it
+            ["returned", "refund", "complained", "threw away", "binned",
+             "replaced", "bought elsewhere", "never again"]
+        ],
+        "question": "Is there a product quality issue emerging in recent signals — and is it concentrated in a specific model, batch, or region?",
+        "reason":   "Product quality signals in social media typically appear 3-6 weeks before formal complaint channels register volume. Early identification changes the response from damage control to proactive fix.",
+        "example":  "Samsung identified Note 7 battery complaints in enthusiast forums 11 days before mainstream media coverage. Their response timeline was still reactive — but pattern detection could have activated earlier."
     },
 
     {
-        "name": "Price Sensitivity Spike",
-        # Sudden increase in price-related mentions. Can signal market
-        # opportunity (premium gap) or threat (affordability complaints).
-        "signals": ["expensive", "price", "cost", "afford", "cheap", "worth it",
-                    "overpriced", "value", "budget", "too much", "save money"],
-        "question": "Is price sensitivity driving customers away or toward this brand — and is the current pricing strategy aligned with what customers believe is fair value?",
-        "reason":   "Price perception and actual price are often disconnected. Brands that address perceived value outperform those that compete purely on actual price by 2:1.",
-        "example":  "Tesco used social listening in 2019 to identify specific product categories where price perception was damaged. Targeted promotions in those categories reversed brand trust scores."
-    },
-
-    {
-        "name": "Loyalty Signal",
-        # People expressing strong positive attachment, advocacy,
-        # repeat purchase intent, or brand defence.
-        "signals": ["love", "best", "always buy", "loyal", "never switch",
-                    "recommend", "told my friends", "years", "lifetime",
-                    "would not use anything else", "fan", "obsessed"],
-        "question": "Who are the most vocal advocates for this brand right now — and are they being systematically identified, nurtured, and amplified?",
-        "reason":   "Word of mouth from genuine advocates drives 20-50% of purchase decisions. Most brands under-invest in advocate programs because they do not measure advocacy signal.",
-        "example":  "Lego identified its most vocal adult fan community through social listening and launched the Lego Ideas platform, which became a major product innovation channel."
-    },
-
-    {
-        "name": "Service Failure Pattern",
-        # Complaints about customer service, delivery, support, or
-        # post-purchase experience. Different from product complaints.
-        "signals": ["customer service", "support", "waited", "never responded",
-                    "returns", "refund", "delivery", "shipping", "broken",
-                    "complaint", "ignored", "worst service", "no help"],
-        "question": "Is the service experience damaging brand equity that the product experience builds — and are service failures concentrated in a specific channel or region?",
-        "reason":   "Service failures spread 3x faster on social media than product praise. Identifying whether failures are systemic or isolated determines whether this is an ops fix or a communications fix.",
-        "example":  "Zappos used complaint pattern analysis to identify that 80% of their service complaints came from a single shipping partner. Switching partners reduced negative mentions by 70%."
-    },
-
-    {
-        "name": "Cultural Moment Attachment",
-        # Brand being organically discussed alongside a cultural event,
-        # trend, show, sport, or moment. Unsolicited brand-culture linking.
-        "signals": ["season", "episode", "game", "match", "festival",
-                    "election", "movie", "trend", "viral", "challenge",
-                    "meme", "celebrity", "award", "launch"],
-        "question": "Is this brand being organically attached to a cultural moment — and is there a 48-hour window to authentically amplify that connection before it fades?",
-        "reason":   "Organic brand-culture moments have a 48-72 hour peak. Brands that respond within that window see 8x the engagement of brands that plan cultural content in advance.",
-        "example":  "Oreo's famous 2013 Super Bowl blackout tweet succeeded because they had a team monitoring cultural moments in real time and had pre-approved content templates."
-    },
-
-    {
-        "name": "Generational Divide Signal",
-        # Different age groups talking about the brand in fundamentally
-        # different ways. Signals possible brand relevance gap.
-        "signals": ["millennial", "gen z", "boomer", "young people", "kids",
-                    "my parents", "old fashioned", "outdated", "modern",
-                    "classic", "nostalgia", "throwback", "retro"],
-        "question": "Are different generations using fundamentally different language about this brand — and is the brand actively managing relevance across age cohorts?",
-        "reason":   "Brands that rely on one generation without monitoring generational shift lose relevance over an average of 7 years. Early detection gives a 2-3 year repositioning window.",
-        "example":  "McDonald's identified in 2015 through social listening that Millennial language about them was negative while Baby Boomer language was nostalgic. This led to the 'Create Your Taste' platform."
-    },
-
-    {
-        "name": "Crisis Acceleration Pattern",
-        # Volume of negative mentions doubling in a short time window.
-        # Early warning system for PR crisis before it hits mainstream media.
-        "signals": ["boycott", "disgusting", "never again", "unacceptable",
-                    "scandal", "fired", "resign", "apologise", "outrageous",
-                    "cancel", "exposed", "shame", "irresponsible"],
-        "question": "Is negative sentiment accelerating fast enough to suggest a crisis is forming — and has a crisis communications protocol been activated?",
-        "reason":   "Social media crises reach mainstream press in an average of 18 hours. Brands with active monitoring and pre-approved response protocols contain crises 4x more effectively.",
-        "example":  "United Airlines had 18 hours of social signal before the dragging incident went mainstream. No monitoring response was activated. The crisis cost $1.4B in market cap."
-    },
-
-    {
-        "name": "Innovation Hunger Signal",
-        # Consumers asking for features, products, or improvements
-        # the brand has not announced. Organic product ideation.
-        "signals": ["wish", "if only", "why don't they", "would be better",
-                    "need to add", "please make", "feature request",
-                    "missing", "want them to", "should have", "idea"],
-        "question": "What specific product improvements or new features are customers asking for that no competitor currently offers?",
-        "reason":   "Consumer innovation requests that appear in social signals have a higher product-market fit success rate than internally generated ideas because they are validated by existing customers.",
-        "example":  "Slack built its threaded replies feature directly from monitoring user requests on Twitter. It became their most-used feature within 6 months of launch."
-    },
-
-    {
-        "name": "Geographic Concentration Signal",
-        # Mentions concentrated in specific locations, suggesting
-        # local campaign opportunity or regional issue.
-        "signals": ["in london", "in new york", "in india", "in australia",
-                    "here in", "our city", "locally", "near me", "regional",
-                    "nationwide", "global", "international"],
-        "question": "Are signal patterns concentrated in specific geographies — and does the marketing strategy reflect regional variation in brand perception?",
-        "reason":   "Brands with identical global messaging in markets with different brand perception leave regional revenue on the table. Geo-specific signal is the diagnostic tool.",
-        "example":  "Diageo used geographic social signal clustering to discover Guinness had 40% stronger cultural affinity in Nigeria than the UK. A regional campaign strategy followed."
+        "name": "Price Sensitivity Shift",
+        "signal_groups": [
+            # Price language
+            ["expensive", "price", "cost", "pricing", "overpriced",
+             "too much", "afford", "affordable", "value", "cheap"],
+            # Decision language
+            ["worth it", "not worth", "justifiable", "can't justify",
+             "budget", "spend", "paying", "paying for", "money"],
+            # Comparison to value
+            ["used to be", "was cheaper", "inflation", "other options",
+             "for that price", "at that price", "same price"]
+        ],
+        "question": "Is price perception shifting faster than actual pricing — and is there a specific tier or product where the perceived value gap is widest?",
+        "reason":   "Price perception and actual price are often disconnected. Addressing perceived value is 3x more effective than price cuts at restoring purchase intent.",
+        "example":  "Tesco identified specific product categories where price perception was damaged and ran targeted promotions in those categories, reversing brand trust scores without blanket price cuts."
     },
 
     {
         "name": "Trust Erosion Pattern",
-        # Gradual increase in scepticism, fact-checking mentions,
-        # or references to past brand failures being re-circulated.
-        "signals": ["trust", "honest", "transparent", "hiding", "lied",
-                    "misleading", "fake", "greenwashing", "remember when",
-                    "never forgot", "still not over", "lost faith"],
-        "question": "Is there a slow accumulation of trust-erosion signals that has not yet reached crisis volume — and what is the trust repair strategy?",
-        "reason":   "Trust erosion happens gradually then suddenly. The slow phase is the only window for proactive repair. Brands that wait for crisis volume face a 3-5 year trust recovery cycle.",
-        "example":  "Volkswagen had 18 months of trust-erosion signals around emissions before the scandal broke. Social listening could have triggered early response."
+        "signal_groups": [
+            # Scepticism language
+            ["trust", "don't trust", "trusted", "used to trust",
+             "honest", "dishonest", "transparency", "hiding", "lied"],
+            # Credibility attacks
+            ["fake", "misleading", "greenwashing", "corporate",
+             "just about money", "don't care", "forgotten", "sold out"],
+            # Historical grievance
+            ["remember when", "used to", "back when", "not forgotten",
+             "still haven't", "years ago", "scandal", "controversy"]
+        ],
+        "question": "Is trust eroding gradually in the signal data — and is there a specific incident or perception that is being re-surfaced by current events?",
+        "reason":   "Trust erosion happens slowly then suddenly. The gradual phase is the only window for proactive repair. Brands that wait for crisis volume face multi-year recovery cycles.",
+        "example":  "Volkswagen had months of low-level emissions scepticism signals before the scandal broke. Pattern detection during the slow phase would have given a repair window."
     },
 
     {
-        "name": "Seasonal Anticipation Pattern",
-        # Consumer mentions that peak before a seasonal event,
-        # product launch, or annual moment.
-        "signals": ["this year", "next month", "coming soon", "can not wait",
-                    "last year was", "hopefully", "looking forward",
-                    "excited for", "planning to", "already"],
-        "question": "Is there seasonal anticipation building that the brand can capitalise on with pre-emptive content or offers before competitors identify the same window?",
-        "reason":   "Brands that publish content 2-3 weeks before consumer anticipation peaks get 5x the organic reach of brands that respond when the moment is already trending.",
-        "example":  "Cadbury monitored Easter anticipation signals 6 weeks out and ran pre-emptive campaigns that achieved 40% more impressions than post-peak campaigns from previous years."
+        "name": "Service Experience Gap",
+        "signal_groups": [
+            # Service contact language
+            ["customer service", "support", "helpline", "chat",
+             "agent", "representative", "response", "reply", "ticket"],
+            # Failure language
+            ["waiting", "waited", "no response", "ignored", "automated",
+             "useless", "unhelpful", "passed around", "never resolved"],
+            # Consequence language
+            ["left", "gave up", "went elsewhere", "cancelled", "frustrated",
+             "exhausted", "still waiting", "weeks later", "unacceptable"]
+        ],
+        "question": "Is the service experience creating a loyalty gap that the product experience is building — and are failures concentrated in a specific channel?",
+        "reason":   "Service failures spread faster on social media than product praise. Identifying whether failures are systemic or isolated determines whether the fix is operational or communicational.",
+        "example":  "Zappos identified that 80 percent of their service complaints traced to a single shipping partner. Switching partners reduced negative mentions by 70 percent within one quarter."
     },
 
     {
-        "name": "Influencer Organic Adoption",
-        # Content creators or public figures mentioning the brand
-        # without paid partnership. Organic influencer signal.
-        "signals": ["youtuber", "influencer", "creator", "tiktoker",
-                    "reviewer", "blogger", "podcast", "youtube",
-                    "video", "review", "unboxing", "sponsored", "gifted",
-                    "not sponsored", "my honest"],
-        "question": "Are content creators organically adopting this brand — and is there a systematic program to identify and nurture micro-influencer relationships before competitors formalise them?",
-        "reason":   "Organic influencer mentions convert at 11x the rate of paid influencer content because they carry implicit social proof. Early identification allows first-mover partnership.",
+        "name": "Cultural Moment Window",
+        "signal_groups": [
+            # Cultural events
+            ["season", "final", "match", "game", "award", "ceremony",
+             "launch", "release", "premiere", "festival", "election"],
+            # Organic brand attachment
+            ["brand", "ad", "campaign", "marketing", "promotion",
+             "collaboration", "partnership", "together with"],
+            # Urgency language
+            ["now", "today", "this week", "trending", "viral",
+             "everyone", "all over", "blowing up", "moment"]
+        ],
+        "question": "Is this brand being organically attached to a cultural moment — and is there a 48-hour window to authentically amplify that connection before it passes?",
+        "reason":   "Organic brand-culture moments peak within 48-72 hours. Brands that respond in that window see dramatically higher engagement than brands with pre-planned cultural content.",
+        "example":  "Oreo's 2013 Super Bowl blackout tweet succeeded because they monitored cultural moments in real time and had pre-approved response templates ready."
+    },
+
+    {
+        "name": "Advocate Identification Signal",
+        "signal_groups": [
+            # Strong positive language
+            ["love", "obsessed", "best", "amazing", "incredible",
+             "changed my life", "never going back", "only brand"],
+            # Recommendation language
+            ["recommend", "told my friends", "shared", "showed",
+             "got my partner", "convinced my", "everyone should"],
+            # Loyalty language
+            ["years", "forever", "always", "loyal", "fan", "faithful",
+             "bought again", "repurchased", "lifetime"]
+        ],
+        "question": "Who are the most vocal brand advocates in these signals — and is there a systematic program to identify, nurture, and amplify them before competitors find them?",
+        "reason":   "Word of mouth from genuine advocates drives 20-50 percent of purchase decisions. Most brands under-invest in advocate programs because they do not measure advocacy signal volume.",
+        "example":  "Lego identified its most vocal adult fan community through social listening and launched Lego Ideas, which became a major product innovation channel driven by advocates."
+    },
+
+    {
+        "name": "Innovation Request Cluster",
+        "signal_groups": [
+            # Request language
+            ["wish", "want", "need", "please", "would love",
+             "if only", "why don't they", "should have", "missing"],
+            # Feature or product language
+            ["feature", "option", "version", "mode", "update",
+             "upgrade", "model", "product", "add", "include"],
+            # Unmet need language
+            ["doesn't have", "lacks", "no option", "can't do",
+             "not possible", "limitation", "workaround", "hack to"]
+        ],
+        "question": "What specific improvements are customers requesting that no competitor currently offers — and is there a fast-track product response possible?",
+        "reason":   "Consumer innovation requests that appear in social signals have higher product-market fit success rates than internally generated ideas because they are validated by existing customers.",
+        "example":  "Slack built threaded replies directly from monitoring user requests on Twitter. It became their most-used feature within six months of launch."
+    },
+
+    {
+        "name": "Crisis Acceleration Signal",
+        "signal_groups": [
+            # Crisis language
+            ["boycott", "cancel", "disgusting", "unacceptable",
+             "outrageous", "scandal", "exposed", "shame"],
+            # Spread language
+            ["spreading", "viral", "everyone talking", "trending",
+             "news", "media", "reported", "journalist", "story"],
+            # Action language
+            ["sign the petition", "sharing", "retweeting", "telling everyone",
+             "warning others", "stay away", "avoid", "never buy"]
+        ],
+        "question": "Is negative sentiment accelerating at a rate that suggests a forming crisis — and has a crisis communications protocol been activated?",
+        "reason":   "Social media crises reach mainstream press in an average of 18 hours from the point of acceleration. Brands with active monitoring contain crises significantly more effectively.",
+        "example":  "United Airlines had 18 hours of social signal acceleration before the dragging incident went mainstream. No monitoring response was activated. The crisis cost 1.4 billion dollars in market cap."
+    },
+
+    {
+        "name": "Generational Relevance Gap",
+        "signal_groups": [
+            # Generation language
+            ["young", "old", "millennials", "gen z", "boomers",
+             "kids", "parents", "my generation", "these days"],
+            # Relevance language
+            ["outdated", "dated", "modern", "classic", "retro",
+             "nostalgia", "throwback", "irrelevant", "cool again"],
+            # Adoption language
+            ["using", "discovered", "found out", "didn't know",
+             "new to me", "been around forever", "back in style"]
+        ],
+        "question": "Are different generations talking about this brand in fundamentally different ways — and is the brand actively managing relevance across age cohorts?",
+        "reason":   "Brands that rely on one generation without monitoring generational shift lose relevance over an average of 7 years. Early detection gives a repositioning window.",
+        "example":  "McDonald's identified in 2015 that Millennial language about them was negative while Baby Boomer language was nostalgic. This led to the Create Your Taste platform targeting younger audiences."
+    },
+
+    {
+        "name": "Seasonal Opportunity Signal",
+        "signal_groups": [
+            # Time reference
+            ["this year", "next month", "coming up", "soon",
+             "can't wait", "looking forward", "planning", "preparing"],
+            # Seasonal context
+            ["christmas", "summer", "back to school", "valentine",
+             "black friday", "new year", "easter", "halloween",
+             "spring", "autumn", "winter", "season"],
+            # Purchase intent
+            ["buying", "getting", "gift", "treat", "shopping",
+             "order", "purchase", "pick up", "looking for"]
+        ],
+        "question": "Is there seasonal purchase intent building that the brand can act on with pre-emptive content or offers before competitors identify the same window?",
+        "reason":   "Brands that publish content 2-3 weeks before consumer anticipation peaks get significantly more organic reach than brands that respond when the moment is already trending.",
+        "example":  "Cadbury monitored Easter anticipation signals 6 weeks out and ran pre-emptive campaigns that achieved 40 percent more impressions than post-peak campaigns from previous years."
+    },
+
+    {
+        "name": "Organic Influencer Adoption",
+        "signal_groups": [
+            # Creator language
+            ["youtube", "tiktok", "instagram", "creator",
+             "influencer", "reviewer", "blogger", "podcast"],
+            # Organic vs paid signals
+            ["not sponsored", "own money", "genuinely", "honest review",
+             "unboxing", "trying", "testing", "first impressions"],
+            # Reach language
+            ["views", "followers", "subscribers", "audience",
+             "shared", "went viral", "millions", "thousands"]
+        ],
+        "question": "Are content creators organically adopting this brand without paid partnerships — and is there a program to identify and formalise those relationships before competitors do?",
+        "reason":   "Organic influencer mentions convert at significantly higher rates than paid influencer content because they carry implicit social proof. Early identification allows first-mover partnership.",
         "example":  "GoPro identified 50 organic creator advocates through social monitoring in 2012 before running any influencer program. Those 50 became the foundation of their entire content strategy."
     },
 
     {
-        "name": "Comparison Shopping Signal",
-        # Consumers explicitly comparing multiple brands,
-        # seeking validation before a purchase decision.
-        "signals": ["or", "vs", "which is better", "recommend", "should i",
-                    "thinking of buying", "worth it", "reviews", "comparison",
-                    "difference between", "help me choose", "deciding between"],
-        "question": "At which point in the comparison shopping journey is this brand winning or losing — and is the brand's owned content optimised for the specific questions shoppers are asking?",
-        "reason":   "82% of purchase decisions involve online research. Brands that appear in comparison conversations with clear differentiation messages win 3x more consideration.",
-        "example":  "Samsung monitored Apple vs Samsung comparison threads and built content specifically addressing the top 10 recurring objections. Consideration scores improved 15% in 6 months."
+        "name": "Ingredient or Safety Anxiety",
+        "signal_groups": [
+            # Health or safety language
+            ["safe", "unsafe", "harmful", "toxic", "chemical",
+             "ingredient", "contains", "what is in", "side effects"],
+            # Concern language
+            ["worried", "concerned", "scared", "nervous", "avoiding",
+             "checking", "reading labels", "researching", "looked into"],
+            # Alternative seeking
+            ["natural", "organic", "clean", "better option",
+             "alternative", "switched to", "found a safer"]
+        ],
+        "question": "Is there rising consumer anxiety about what is in this product — and is there a proactive transparency response ready before this reaches mainstream media?",
+        "reason":   "Ingredient anxiety typically gives brands a 2-3 week window before mainstream media picks it up. Early transparency responses reduce crisis severity significantly.",
+        "example":  "Panera Bread monitored artificial ingredient mentions in 2014 and preemptively announced their clean ingredient pledge 8 weeks before competitors faced similar pressure."
+    },
+
+    {
+        "name": "Comparison Shopping Cluster",
+        "signal_groups": [
+            # Decision language
+            ["which one", "should I", "help me choose", "can't decide",
+             "thinking of", "considering", "looking at", "deciding"],
+            # Comparison language
+            ["or", "vs", "versus", "difference between", "compared to",
+             "better than", "worse than", "same as", "similar to"],
+            # Research language
+            ["reviews", "recommend", "worth it", "anyone used",
+             "experience with", "thoughts on", "is it good", "feedback"]
+        ],
+        "question": "At what point in the comparison shopping journey is this brand winning or losing — and is the brand's content optimised for the specific questions shoppers are asking?",
+        "reason":   "The majority of purchase decisions involve online research. Brands that appear in comparison conversations with clear differentiation messages win significantly more consideration.",
+        "example":  "Samsung monitored Apple vs Samsung comparison threads and built content addressing the top 10 recurring objections. Consideration scores improved 15 percent in 6 months."
     }
 ]
 
 
 def detect_patterns(results, query):
-    # ── What this function does ──────────────────────────────────────────────
-    # Scans all results looking for signals that match our documented patterns.
-    # When a pattern fires, it generates a specific strategic question.
-    # This is algorithm-based — no AI involved.
-    # Returns a list of fired patterns with their questions and reasons.
+    # ── What this does ───────────────────────────────────────────────────────
+    # Scans all result titles against the 15 pattern signal groups.
+    # Each pattern has multiple signal groups — a group fires if ANY word
+    # in that group appears in the combined text of all results.
+    # Pattern fires if at least 2 groups fire.
+    # Returns up to 3 patterns, strongest first.
+    # No AI. No external calls. Pure Python string matching.
     # ─────────────────────────────────────────────────────────────────────────
 
     if not results:
         return []
 
-    # Combine all result titles into one big lowercase text block
-    # This makes it easy to search for signal words across all results
+    # Combine all result titles into one searchable text block
     all_text = " ".join(r["title"].lower() for r in results)
-
-    # Also build a list of individual words for frequency counting
-    all_words = all_text.split()
 
     fired_patterns = []
 
     for pattern in PATTERN_LIBRARY:
-        # Count how many signal words from this pattern appear in our results
-        # A signal is relevant if it appears at least twice
-        # (one mention could be coincidence, two suggests a theme)
-        signal_hits = 0
-        matched_signals = []
 
-        for signal in pattern["signals"]:
-            # Count occurrences of this signal word in all results
-            count = all_text.count(signal.lower())
-            if count >= 2:
-                signal_hits += 1
-                matched_signals.append(signal)
+        groups_fired = 0
+        matched_words = []
 
-        # Pattern fires if at least 2 different signal words matched
-        # This prevents false positives from single word coincidence
-        if signal_hits >= 2:
+        for group in pattern["signal_groups"]:
+            # Check if any word in this group appears in all the results
+            for word in group:
+                if word.lower() in all_text:
+                    groups_fired += 1
+                    matched_words.append(word)
+                    break  # Only count this group once even if multiple words match
+
+        # Pattern fires if at least 2 signal groups matched
+        if groups_fired >= 2:
             fired_patterns.append({
                 "pattern_name": pattern["name"],
                 "question":     pattern["question"],
                 "reason":       pattern["reason"],
-                "evidence":     f"Detected signals: {', '.join(matched_signals[:4])}",
-                "example":      pattern["example"]
+                "evidence":     f"Signals found: {', '.join(matched_words[:5])}",
+                "example":      pattern["example"],
+                "groups_fired": groups_fired  # More groups = stronger match
             })
 
-        # Stop after finding 3 patterns — more than 3 overwhelms the user
-        if len(fired_patterns) >= 3:
-            break
+    # Sort by strength — patterns with more signal groups firing first
+    fired_patterns.sort(key=lambda x: x["groups_fired"], reverse=True)
 
-    print(f"Patterns detected: {len(fired_patterns)}")
-    return fired_patterns
+    # Return top 3
+    result = fired_patterns[:3]
+    print(f"Patterns detected: {len(result)} from {len(fired_patterns)} candidates")
+    return result
 
 # ─── INSIGHT GENERATION ───────────────────────────────────────────────────────
 
@@ -1419,19 +1501,26 @@ def generate_insight(results, query):
         pattern_names = [p["pattern_name"] for p in detected_patterns]
         pattern_context = f"\nDetected patterns in the data: {', '.join(pattern_names)}."
 
-    prompt = f"""You are a brand analyst at a London agency. Today is {today}. A client asked about "{query}".
+    prompt = f"""Today is {today}. You have been handed signal data about "{query}" from {', '.join(sources_used)}.
 
-Latest mentions from {', '.join(sources_used)}:
+{time_context}
+
+Signal data:
 {titles_text}
 
-{time_context}{pattern_context}
+Write exactly 4 sentences. Plain British English. Sharp, Conversational, and human. No jargon. No labels. No asterisks.
 
-Write exactly 4 sentences in plain British English. Conversational, like telling a colleague what you found over coffee. No bullet points, no headers, no asterisks, no labels. Under 120 words.
+Sentence 1 — What is concretely happening with {query} right now. One specific observation from the signals, not a vague summary.
+Sentence 2 — What this means for the brand commercially. Not "it is important" — say what the actual consequence is.
+Sentence 3 — Whether this is getting bigger, staying flat, or dying down. Give a direction, not a hedge.
+Sentence 4 — The single most important thing to do in the next 48 hours. An action, not a suggestion to monitor.
 
-Sentence 1: What is happening with {query} right now based on these mentions.
-Sentence 2: Why this matters to a brand or business watching this space.
-Sentence 3: Whether the signal is growing, stable, or fading.
-Sentence 4: The one specific action worth taking in the next 24-48 hours."""
+Rules that cannot be broken:
+- Do not start any sentence with "The signals" or "The data"
+- Do not use the word "suggests" or "indicates" or "appears"
+- Do not hedge. Pick a direction and commit to it.
+- If the data is thin, say so in sentence 1 and still give a recommendation in sentence 4
+- Total length: under 100 words"""
 
     ai_result = ai_call(prompt)
 
