@@ -804,9 +804,12 @@ googlenews:  "Google News"
 
     // ── Strategic questions card ──
     if (data.questions && data.questions.length > 0) {
-      const questionsSource = (data.patterns_detected && data.patterns_detected.length > 0)
-  ? "Detected from documented brand intelligence patterns — algorithm based"
-  : "Derived from patterns in the data using AI analysis";
+      const coFound = data.cooccurrences_found || 0;
+const qFound  = data.questions_found || 0;
+
+const questionsSource = coFound > 0
+  ? `Based on ${coFound} results where multiple themes co-occur — AI interpreted the patterns`
+  : "Derived from signal patterns using AI analysis";
 
 html += `
   <div class="questions-card">
@@ -820,7 +823,7 @@ html += `
 
       // Show whether questions came from patterns or AI
 // Pattern questions show a different label — this builds trust
-const hasPatterns = data.patterns_detected && data.patterns_detected.length > 0;
+const hasPatterns = data.cooccurrences_found && data.cooccurrences_found > 0;
 
 if (hasPatterns) {
   html += `<div style="font-size:11px;color:var(--teal);font-weight:600;margin-bottom:12px;letter-spacing:0.5px;">

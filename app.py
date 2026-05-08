@@ -160,86 +160,58 @@ setup_db()
 #            0 means we do not know the date
 
 def fetch_reddit(query):
-    # ── What this does ───────────────────────────────────────────────────────
-    # Uses Arctic Shift — an independent Reddit archive run by the community.
-    # Arctic Shift stores Reddit posts and makes them searchable for free.
-    # No API key needed. No approval needed. Works from cloud servers.
-    # This is the most reliable free Reddit alternative available today.
-    # Source: arctic-shift.photon-reddit.com
-    # ─────────────────────────────────────────────────────────────────────────
-
+    # Uses Pullpush.io — the community-maintained Pushshift successor.
+    # Free, no API key, no approval, works from cloud servers.
+    # Returns Reddit posts from their archive database.
     results = []
 
     try:
-        # Arctic Shift search endpoint
-        # q = search query
-        # limit = how many results to return (max 100)
-        # after = only posts after this Unix timestamp (90 days ago)
-        cutoff = datetime.now() - timedelta(days=90)
-        after_ts = int(cutoff.timestamp())
+        cutoff_ts = int((datetime.now() - timedelta(days=90)).timestamp())
 
+        # Pullpush search endpoint — confirmed working as of 2026
         url = (
-            f"https://arctic-shift.photon-reddit.com/api/posts/search"
+            f"https://api.pullpush.io/reddit/search/submission/"
             f"?q={requests.utils.quote(query)}"
-            f"&limit=100"
-            f"&after={after_ts}"
-            f"&order=desc"
+            f"&size=100"
+            f"&after={cutoff_ts}"
+            f"&sort_type=score"
+            f"&sort=desc"
         )
 
-        headers = {"User-Agent": "signalwatch/1.0"}
-        res = requests.get(url, headers=headers, timeout=15)
+        res = requests.get(url, timeout=15, headers={"User-Agent": "signalwatch/1.0"})
 
         if res.status_code != 200:
-            print(f"Arctic Shift: status {res.status_code}")
-            # Try fallback URL format
-            url2 = (
-                f"https://arctic-shift.photon-reddit.com/api/posts/search"
-                f"?q={requests.utils.quote(query)}&limit=100"
-            )
-            res = requests.get(url2, headers=headers, timeout=15)
-            if res.status_code != 200:
-                return []
+            print(f"Pullpush: status {res.status_code}")
+            return []
 
         data = res.json()
-
-        # Arctic Shift returns data in different formats depending on version
-        # Try both possible response shapes
-        posts = data.get("data", data.get("posts", []))
+        posts = data.get("data", [])
 
         if not posts:
-            print(f"Arctic Shift: no results for '{query}'")
+            print(f"Pullpush: no results for '{query}'")
             return []
 
         seen = set()
+        cutoff = datetime.now() - timedelta(days=90)
 
         for post in posts:
             title = post.get("title", "")
-
             if not title or title in seen:
                 continue
             seen.add(title)
 
-            # created_utc is the Unix timestamp of when the post was made
             created = post.get("created_utc", 0)
-
-            # Convert to int if it came back as string or float
             try:
                 created = int(float(created))
             except:
                 created = 0
 
-            # Skip posts older than 90 days
             if created and datetime.fromtimestamp(created) < cutoff:
                 continue
 
-            # Build the Reddit URL from the permalink or id
-            permalink = post.get("permalink", "")
-            if permalink:
-                post_url = f"https://reddit.com{permalink}"
-            else:
-                post_id = post.get("id", "")
-                subreddit = post.get("subreddit", "all")
-                post_url = f"https://reddit.com/r/{subreddit}/comments/{post_id}/" if post_id else ""
+            subreddit = post.get("subreddit", "")
+            post_id   = post.get("id", "")
+            post_url  = f"https://reddit.com/r/{subreddit}/comments/{post_id}/" if post_id else ""
 
             results.append({
                 "title":   title,
@@ -248,11 +220,11 @@ def fetch_reddit(query):
                 "created": created
             })
 
-        print(f"Reddit (Arctic Shift): {len(results)} posts")
+        print(f"Reddit (Pullpush): {len(results)} posts")
         return results
 
     except Exception as e:
-        print(f"Arctic Shift error: {e}")
+        print(f"Pullpush error: {e}")
         return []
 
 
@@ -1127,452 +1099,253 @@ def get_word_frequencies(results):
 # Pattern fires if at least 2 groups fire.
 # This catches "consuming content" and "watching" and "streaming" as the same theme.
 
-PATTERN_LIBRARY = [
+# ─── INSIGHT GENERATION ───────────────────────────────────────────────────────
+#
+# Architecture:
+# Step 1 — Co-occurrence detection (algorithm, no AI)
+#           Finds results where multiple significant concepts appear together.
+#           This is what a human analyst actually does: spots the result that
+#           mentions BOTH "price" AND "switching" in the same sentence.
+#           Co-occurrence is real signal. Word frequency across all results is noise.
+#
+# Step 2 — Blind spot detection (algorithm, no AI)
+#           Finds what customers are asking that the brand has not answered.
+#           Finds complaint clusters with no visible brand response.
+#           This is the USP: not what everyone knows, but what was ignored.
+#
+# Step 3 — AI briefing (uses OpenRouter)
+#           Reads the co-occurrence clusters and blind spots.
+#           Writes a specific, non-generic briefing.
+#           Generates questions based on what the algorithm actually found.
+#           AI is given the algorithm output as context — not raw titles.
+#           This makes AI output specific rather than generic.
 
-    {
-        "name": "Unexpected Context Discovery",
-        "signal_groups": [
-            # Context words — where/when people use the product
-            ["while", "during", "alongside", "with", "pairing", "combo",
-             "together", "at home", "watching", "listening", "gaming"],
-            # Activity words — what they are doing
-            ["netflix", "streaming", "sports", "gym", "commute", "morning",
-             "evening", "weekend", "holiday", "party", "date", "work"],
-            # Discovery words — surprise at the combination
-            ["discovered", "realised", "turns out", "never thought",
-             "weird but", "surprisingly", "actually works", "obsessed"]
-        ],
-        "question": "Are customers using this product in a context the brand has never marketed toward — and is that an untapped campaign territory?",
-        "reason":   "Unexpected usage contexts reveal authentic consumer habits that brands did not create but can own. They are the most reliable source of campaign ideas that feel real.",
-        "example":  "Ben and Jerry's found through social listening that customers ate their ice cream while watching Netflix. The campaign they built around this drove measurable sales lift."
-    },
+# ── CONCEPT GROUPS ──────────────────────────────────────────────────────────
+# These are the building blocks of co-occurrence detection.
+# Each group is a cluster of semantically related words.
+# When a single result contains words from TWO different groups,
+# that is a meaningful signal worth surfacing.
 
-    {
-        "name": "Competitor Switching Signal",
-        "signal_groups": [
-            # Switching language
-            ["switched", "switching", "left", "moving", "moving to",
-             "abandoned", "dropped", "replaced", "cancel", "quit"],
-            # Comparison language
-            ["better", "worse", "vs", "versus", "compared to", "unlike",
-             "instead", "alternative", "option", "choice"],
-            # Competitor references — generic
-            ["competitor", "rival", "other brand", "different brand"]
-        ],
-        "question": "Are customers actively switching away or toward this brand right now — and what is the specific reason driving that decision?",
-        "reason":   "Switching intent signals have a short window. Brands that respond within 48 hours of competitor complaint spikes capture significantly more switchers than those who wait.",
-        "example":  "Dollar Shave Club monitored Gillette complaint threads and targeted switching-intent users directly. Their campaign reached people mid-complaint and converted 20% of them."
-    },
-
-    {
-        "name": "Product Quality Alert",
-        "signal_groups": [
-            # Failure words
-            ["broken", "defective", "fault", "issue", "problem", "error",
-             "fail", "fails", "failed", "doesn't work", "not working", "stopped"],
-            # Body or experience words
-            ["quality", "cheap", "disappointing", "worse than", "used to be",
-             "downgraded", "changed", "different now", "not what it was"],
-            # Action words — what they did about it
-            ["returned", "refund", "complained", "threw away", "binned",
-             "replaced", "bought elsewhere", "never again"]
-        ],
-        "question": "Is there a product quality issue emerging in recent signals — and is it concentrated in a specific model, batch, or region?",
-        "reason":   "Product quality signals in social media typically appear 3-6 weeks before formal complaint channels register volume. Early identification changes the response from damage control to proactive fix.",
-        "example":  "Samsung identified Note 7 battery complaints in enthusiast forums 11 days before mainstream media coverage. Their response timeline was still reactive — but pattern detection could have activated earlier."
-    },
-
-    {
-        "name": "Price Sensitivity Shift",
-        "signal_groups": [
-            # Price language
-            ["expensive", "price", "cost", "pricing", "overpriced",
-             "too much", "afford", "affordable", "value", "cheap"],
-            # Decision language
-            ["worth it", "not worth", "justifiable", "can't justify",
-             "budget", "spend", "paying", "paying for", "money"],
-            # Comparison to value
-            ["used to be", "was cheaper", "inflation", "other options",
-             "for that price", "at that price", "same price"]
-        ],
-        "question": "Is price perception shifting faster than actual pricing — and is there a specific tier or product where the perceived value gap is widest?",
-        "reason":   "Price perception and actual price are often disconnected. Addressing perceived value is 3x more effective than price cuts at restoring purchase intent.",
-        "example":  "Tesco identified specific product categories where price perception was damaged and ran targeted promotions in those categories, reversing brand trust scores without blanket price cuts."
-    },
-
-    {
-        "name": "Trust Erosion Pattern",
-        "signal_groups": [
-            # Scepticism language
-            ["trust", "don't trust", "trusted", "used to trust",
-             "honest", "dishonest", "transparency", "hiding", "lied"],
-            # Credibility attacks
-            ["fake", "misleading", "greenwashing", "corporate",
-             "just about money", "don't care", "forgotten", "sold out"],
-            # Historical grievance
-            ["remember when", "used to", "back when", "not forgotten",
-             "still haven't", "years ago", "scandal", "controversy"]
-        ],
-        "question": "Is trust eroding gradually in the signal data — and is there a specific incident or perception that is being re-surfaced by current events?",
-        "reason":   "Trust erosion happens slowly then suddenly. The gradual phase is the only window for proactive repair. Brands that wait for crisis volume face multi-year recovery cycles.",
-        "example":  "Volkswagen had months of low-level emissions scepticism signals before the scandal broke. Pattern detection during the slow phase would have given a repair window."
-    },
-
-    {
-        "name": "Service Experience Gap",
-        "signal_groups": [
-            # Service contact language
-            ["customer service", "support", "helpline", "chat",
-             "agent", "representative", "response", "reply", "ticket"],
-            # Failure language
-            ["waiting", "waited", "no response", "ignored", "automated",
-             "useless", "unhelpful", "passed around", "never resolved"],
-            # Consequence language
-            ["left", "gave up", "went elsewhere", "cancelled", "frustrated",
-             "exhausted", "still waiting", "weeks later", "unacceptable"]
-        ],
-        "question": "Is the service experience creating a loyalty gap that the product experience is building — and are failures concentrated in a specific channel?",
-        "reason":   "Service failures spread faster on social media than product praise. Identifying whether failures are systemic or isolated determines whether the fix is operational or communicational.",
-        "example":  "Zappos identified that 80 percent of their service complaints traced to a single shipping partner. Switching partners reduced negative mentions by 70 percent within one quarter."
-    },
-
-    {
-        "name": "Cultural Moment Window",
-        "signal_groups": [
-            # Cultural events
-            ["season", "final", "match", "game", "award", "ceremony",
-             "launch", "release", "premiere", "festival", "election"],
-            # Organic brand attachment
-            ["brand", "ad", "campaign", "marketing", "promotion",
-             "collaboration", "partnership", "together with"],
-            # Urgency language
-            ["now", "today", "this week", "trending", "viral",
-             "everyone", "all over", "blowing up", "moment"]
-        ],
-        "question": "Is this brand being organically attached to a cultural moment — and is there a 48-hour window to authentically amplify that connection before it passes?",
-        "reason":   "Organic brand-culture moments peak within 48-72 hours. Brands that respond in that window see dramatically higher engagement than brands with pre-planned cultural content.",
-        "example":  "Oreo's 2013 Super Bowl blackout tweet succeeded because they monitored cultural moments in real time and had pre-approved response templates ready."
-    },
-
-    {
-        "name": "Advocate Identification Signal",
-        "signal_groups": [
-            # Strong positive language
-            ["love", "obsessed", "best", "amazing", "incredible",
-             "changed my life", "never going back", "only brand"],
-            # Recommendation language
-            ["recommend", "told my friends", "shared", "showed",
-             "got my partner", "convinced my", "everyone should"],
-            # Loyalty language
-            ["years", "forever", "always", "loyal", "fan", "faithful",
-             "bought again", "repurchased", "lifetime"]
-        ],
-        "question": "Who are the most vocal brand advocates in these signals — and is there a systematic program to identify, nurture, and amplify them before competitors find them?",
-        "reason":   "Word of mouth from genuine advocates drives 20-50 percent of purchase decisions. Most brands under-invest in advocate programs because they do not measure advocacy signal volume.",
-        "example":  "Lego identified its most vocal adult fan community through social listening and launched Lego Ideas, which became a major product innovation channel driven by advocates."
-    },
-
-    {
-        "name": "Innovation Request Cluster",
-        "signal_groups": [
-            # Request language
-            ["wish", "want", "need", "please", "would love",
-             "if only", "why don't they", "should have", "missing"],
-            # Feature or product language
-            ["feature", "option", "version", "mode", "update",
-             "upgrade", "model", "product", "add", "include"],
-            # Unmet need language
-            ["doesn't have", "lacks", "no option", "can't do",
-             "not possible", "limitation", "workaround", "hack to"]
-        ],
-        "question": "What specific improvements are customers requesting that no competitor currently offers — and is there a fast-track product response possible?",
-        "reason":   "Consumer innovation requests that appear in social signals have higher product-market fit success rates than internally generated ideas because they are validated by existing customers.",
-        "example":  "Slack built threaded replies directly from monitoring user requests on Twitter. It became their most-used feature within six months of launch."
-    },
-
-    {
-        "name": "Crisis Acceleration Signal",
-        "signal_groups": [
-            # Crisis language
-            ["boycott", "cancel", "disgusting", "unacceptable",
-             "outrageous", "scandal", "exposed", "shame"],
-            # Spread language
-            ["spreading", "viral", "everyone talking", "trending",
-             "news", "media", "reported", "journalist", "story"],
-            # Action language
-            ["sign the petition", "sharing", "retweeting", "telling everyone",
-             "warning others", "stay away", "avoid", "never buy"]
-        ],
-        "question": "Is negative sentiment accelerating at a rate that suggests a forming crisis — and has a crisis communications protocol been activated?",
-        "reason":   "Social media crises reach mainstream press in an average of 18 hours from the point of acceleration. Brands with active monitoring contain crises significantly more effectively.",
-        "example":  "United Airlines had 18 hours of social signal acceleration before the dragging incident went mainstream. No monitoring response was activated. The crisis cost 1.4 billion dollars in market cap."
-    },
-
-    {
-        "name": "Generational Relevance Gap",
-        "signal_groups": [
-            # Generation language
-            ["young", "old", "millennials", "gen z", "boomers",
-             "kids", "parents", "my generation", "these days"],
-            # Relevance language
-            ["outdated", "dated", "modern", "classic", "retro",
-             "nostalgia", "throwback", "irrelevant", "cool again"],
-            # Adoption language
-            ["using", "discovered", "found out", "didn't know",
-             "new to me", "been around forever", "back in style"]
-        ],
-        "question": "Are different generations talking about this brand in fundamentally different ways — and is the brand actively managing relevance across age cohorts?",
-        "reason":   "Brands that rely on one generation without monitoring generational shift lose relevance over an average of 7 years. Early detection gives a repositioning window.",
-        "example":  "McDonald's identified in 2015 that Millennial language about them was negative while Baby Boomer language was nostalgic. This led to the Create Your Taste platform targeting younger audiences."
-    },
-
-    {
-        "name": "Seasonal Opportunity Signal",
-        "signal_groups": [
-            # Time reference
-            ["this year", "next month", "coming up", "soon",
-             "can't wait", "looking forward", "planning", "preparing"],
-            # Seasonal context
-            ["christmas", "summer", "back to school", "valentine",
-             "black friday", "new year", "easter", "halloween",
-             "spring", "autumn", "winter", "season"],
-            # Purchase intent
-            ["buying", "getting", "gift", "treat", "shopping",
-             "order", "purchase", "pick up", "looking for"]
-        ],
-        "question": "Is there seasonal purchase intent building that the brand can act on with pre-emptive content or offers before competitors identify the same window?",
-        "reason":   "Brands that publish content 2-3 weeks before consumer anticipation peaks get significantly more organic reach than brands that respond when the moment is already trending.",
-        "example":  "Cadbury monitored Easter anticipation signals 6 weeks out and ran pre-emptive campaigns that achieved 40 percent more impressions than post-peak campaigns from previous years."
-    },
-
-    {
-        "name": "Organic Influencer Adoption",
-        "signal_groups": [
-            # Creator language
-            ["youtube", "tiktok", "instagram", "creator",
-             "influencer", "reviewer", "blogger", "podcast"],
-            # Organic vs paid signals
-            ["not sponsored", "own money", "genuinely", "honest review",
-             "unboxing", "trying", "testing", "first impressions"],
-            # Reach language
-            ["views", "followers", "subscribers", "audience",
-             "shared", "went viral", "millions", "thousands"]
-        ],
-        "question": "Are content creators organically adopting this brand without paid partnerships — and is there a program to identify and formalise those relationships before competitors do?",
-        "reason":   "Organic influencer mentions convert at significantly higher rates than paid influencer content because they carry implicit social proof. Early identification allows first-mover partnership.",
-        "example":  "GoPro identified 50 organic creator advocates through social monitoring in 2012 before running any influencer program. Those 50 became the foundation of their entire content strategy."
-    },
-
-    {
-        "name": "Ingredient or Safety Anxiety",
-        "signal_groups": [
-            # Health or safety language
-            ["safe", "unsafe", "harmful", "toxic", "chemical",
-             "ingredient", "contains", "what is in", "side effects"],
-            # Concern language
-            ["worried", "concerned", "scared", "nervous", "avoiding",
-             "checking", "reading labels", "researching", "looked into"],
-            # Alternative seeking
-            ["natural", "organic", "clean", "better option",
-             "alternative", "switched to", "found a safer"]
-        ],
-        "question": "Is there rising consumer anxiety about what is in this product — and is there a proactive transparency response ready before this reaches mainstream media?",
-        "reason":   "Ingredient anxiety typically gives brands a 2-3 week window before mainstream media picks it up. Early transparency responses reduce crisis severity significantly.",
-        "example":  "Panera Bread monitored artificial ingredient mentions in 2014 and preemptively announced their clean ingredient pledge 8 weeks before competitors faced similar pressure."
-    },
-
-    {
-        "name": "Comparison Shopping Cluster",
-        "signal_groups": [
-            # Decision language
-            ["which one", "should I", "help me choose", "can't decide",
-             "thinking of", "considering", "looking at", "deciding"],
-            # Comparison language
-            ["or", "vs", "versus", "difference between", "compared to",
-             "better than", "worse than", "same as", "similar to"],
-            # Research language
-            ["reviews", "recommend", "worth it", "anyone used",
-             "experience with", "thoughts on", "is it good", "feedback"]
-        ],
-        "question": "At what point in the comparison shopping journey is this brand winning or losing — and is the brand's content optimised for the specific questions shoppers are asking?",
-        "reason":   "The majority of purchase decisions involve online research. Brands that appear in comparison conversations with clear differentiation messages win significantly more consideration.",
-        "example":  "Samsung monitored Apple vs Samsung comparison threads and built content addressing the top 10 recurring objections. Consideration scores improved 15 percent in 6 months."
-    }
-]
+CONCEPT_GROUPS = {
+    "switching":    ["switched", "switching", "left", "moved", "replaced",
+                     "cancelled", "quit", "abandoned", "dropped", "chose instead"],
+    "price":        ["price", "expensive", "cheap", "cost", "afford", "overpriced",
+                     "value", "worth", "budget", "pricing", "pay", "hike"],
+    "quality":      ["quality", "broken", "defective", "poor", "excellent",
+                     "durable", "lasts", "falls apart", "best", "worst"],
+    "emotion":      ["love", "hate", "frustrated", "disappointed", "angry",
+                     "happy", "satisfied", "obsessed", "annoyed", "disgusted"],
+    "comparison":   ["vs", "versus", "compared", "better than", "worse than",
+                     "beats", "unlike", "over", "instead of", "rather than"],
+    "service":      ["customer service", "support", "helpline", "waiting",
+                     "ignored", "no response", "useless", "helpful", "agent"],
+    "trust":        ["trust", "honest", "misleading", "fake", "lied",
+                     "transparent", "hiding", "greenwashing", "authentic"],
+    "innovation":   ["new", "feature", "update", "wish", "want", "need",
+                     "missing", "would be better", "should add", "idea"],
+    "crisis":       ["boycott", "cancel", "scandal", "outrageous", "unacceptable",
+                     "disgusting", "exposed", "shame", "never again"],
+    "context":      ["while", "during", "with", "alongside", "watching",
+                     "eating", "commute", "morning", "evening", "gym", "travel"],
+    "recommend":    ["recommend", "told", "shared", "showed", "convinced",
+                     "suggested", "mentioned to", "forwarded"],
+    "question":     ["which", "should i", "help me", "thinking of", "advice",
+                     "anyone used", "thoughts on", "is it worth", "deciding"],
+}
 
 
-def detect_patterns(results, query):
+def find_cooccurrences(results):
     # ── What this does ───────────────────────────────────────────────────────
-    # Scans all result titles against the 15 pattern signal groups.
-    # Each pattern has multiple signal groups — a group fires if ANY word
-    # in that group appears in the combined text of all results.
-    # Pattern fires if at least 2 groups fire.
-    # Returns up to 3 patterns, strongest first.
-    # No AI. No external calls. Pure Python string matching.
+    # Scans each individual result title for words from multiple concept groups.
+    # When a single title contains words from 2+ different groups,
+    # that title is a meaningful co-occurrence signal.
+    #
+    # Example:
+    # "Switched from Nokia to Samsung after price hike"
+    # → hits "switching" group AND "price" group in the SAME title
+    # → this is real signal: price drove a switching decision
+    #
+    # Compare to old approach:
+    # "switching" appears in title 4, "price" appears in title 12
+    # → old system would call this a pattern
+    # → this system would NOT because they are different results
     # ─────────────────────────────────────────────────────────────────────────
 
-    if not results:
-        return []
+    cooccurrences = []  # List of meaningful individual results with their concept labels
 
-    # Combine all result titles into one searchable text block
-    all_text = " ".join(r["title"].lower() for r in results)
+    for r in results:
+        text = r["title"].lower()
+        hit_groups = []
 
-    fired_patterns = []
+        for group_name, words in CONCEPT_GROUPS.items():
+            # Check if any word from this concept group appears in this title
+            if any(w in text for w in words):
+                hit_groups.append(group_name)
 
-    for pattern in PATTERN_LIBRARY:
-
-        groups_fired = 0
-        matched_words = []
-
-        for group in pattern["signal_groups"]:
-            # Check if any word in this group appears in all the results
-            for word in group:
-                if word.lower() in all_text:
-                    groups_fired += 1
-                    matched_words.append(word)
-                    break  # Only count this group once even if multiple words match
-
-        # Pattern fires if at least 2 signal groups matched
-        if groups_fired >= 2:
-            fired_patterns.append({
-                "pattern_name": pattern["name"],
-                "question":     pattern["question"],
-                "reason":       pattern["reason"],
-                "evidence":     f"Signals found: {', '.join(matched_words[:5])}",
-                "example":      pattern["example"],
-                "groups_fired": groups_fired  # More groups = stronger match
+        # Only flag results that hit 2 or more concept groups
+        # Single-concept results are not interesting
+        if len(hit_groups) >= 2:
+            cooccurrences.append({
+                "title":    r["title"],
+                "url":      r.get("url", ""),
+                "source":   r["source"],
+                "concepts": hit_groups,  # Which concept groups appeared together
+                "richness": len(hit_groups)  # More concepts = richer signal
             })
 
-    # Sort by strength — patterns with more signal groups firing first
-    fired_patterns.sort(key=lambda x: x["groups_fired"], reverse=True)
+    # Sort by richness — results with most concept groups first
+    cooccurrences.sort(key=lambda x: x["richness"], reverse=True)
+    return cooccurrences[:10]  # Top 10 richest results
 
-    # Return top 3
-    result = fired_patterns[:3]
-    print(f"Patterns detected: {len(result)} from {len(fired_patterns)} candidates")
-    return result
 
-# ─── INSIGHT GENERATION ───────────────────────────────────────────────────────
+def find_question_clusters(results):
+    # ── What this does ───────────────────────────────────────────────────────
+    # Finds results where customers are explicitly asking questions.
+    # These are the highest-value signals: real people, real confusion,
+    # real unmet needs — often unanswered by the brand.
+    #
+    # A brand that knows what questions its customers are asking
+    # and can answer them has an enormous advantage.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    question_signals = [
+        "which", "should i", "help me", "anyone know", "is it worth",
+        "thinking of", "advice", "recommend", "vs", "or", "difference between",
+        "why does", "how do i", "what is", "anyone used", "thoughts on",
+        "deciding between", "can't decide", "opinions on"
+    ]
+
+    questions_found = []
+    for r in results:
+        text = r["title"].lower()
+        if any(q in text for q in question_signals):
+            questions_found.append(r["title"])
+
+    return questions_found[:8]  # Top 8 question-type results
+
 
 def generate_insight(results, query):
-    # ── What this function does ──────────────────────────────────────────────
-    # Generates an intelligence briefing using two methods:
+    # ── What this does ───────────────────────────────────────────────────────
+    # Combines algorithm output with AI to produce specific, non-generic output.
     #
-    # Method 1 — Pattern detection (algorithm, no AI)
-    # Scans results against 15 documented brand intelligence patterns.
-    # Generates specific strategic questions based on what it finds.
-    # Works even when AI is down.
+    # Step 1: Algorithm finds co-occurrences and question clusters.
+    #         This gives AI something specific to work with.
     #
-    # Method 2 — AI briefing (uses OpenRouter)
-    # Sends top results to AI for a conversational 4-sentence briefing.
-    # Falls back gracefully if AI fails.
+    # Step 2: AI receives the algorithm output as structured context.
+    #         Instead of reading 200 titles, AI reads:
+    #         - the 10 richest co-occurrence results
+    #         - the 8 question-type results
+    #         - what concept groups co-occurred
+    #         This forces specific output rather than generic summaries.
     #
-    # Both methods are combined into one response.
+    # Step 3: AI writes briefing + generates questions from actual patterns found.
     # ─────────────────────────────────────────────────────────────────────────
 
     if not results:
         return {
-            "briefing":  "Nothing meaningful came up — try a broader search or a slightly different angle.",
+            "briefing":  "Nothing meaningful came up. Try a broader search.",
             "questions": [],
             "patterns":  []
         }
 
-    # Run pattern detection first — this never fails and never costs anything
-    detected_patterns = detect_patterns(results, query)
+    # Step 1 — Run algorithms
+    cooccurrences  = find_cooccurrences(results)
+    question_results = find_question_clusters(results)
 
-    today      = datetime.now().strftime("%d %B %Y")
-    titles     = [r["title"] for r in results[:20]]
-    titles_text = "\n".join(f"- {t}" for t in titles)
+    today = datetime.now().strftime("%d %B %Y")
     sources_used = list(set(r["source"] for r in results))
 
     timed = [r for r in results if r.get("created", 0) > 0]
-    time_context = ""
+    date_range = ""
     if timed:
-        newest      = max(timed, key=lambda x: x["created"])
-        oldest      = min(timed, key=lambda x: x["created"])
-        newest_date = datetime.fromtimestamp(newest["created"]).strftime("%d %b %Y")
-        oldest_date = datetime.fromtimestamp(oldest["created"]).strftime("%d %b %Y")
-        time_context = f"Mentions span {oldest_date} to {newest_date}."
+        newest = datetime.fromtimestamp(max(r["created"] for r in timed)).strftime("%d %b %Y")
+        oldest = datetime.fromtimestamp(min(r["created"] for r in timed)).strftime("%d %b %Y")
+        date_range = f"Data covers {oldest} to {newest}."
 
-    # Build the AI prompt
-    # If patterns fired, tell the AI what patterns were found
-    # so it can give a more specific briefing
-    pattern_context = ""
-    if detected_patterns:
-        pattern_names = [p["pattern_name"] for p in detected_patterns]
-        pattern_context = f"\nDetected patterns in the data: {', '.join(pattern_names)}."
+    # Step 2 — Build AI context from algorithm output
+    # AI gets the rich results, not all 200 titles
+    if cooccurrences:
+        rich_results_text = "\n".join(
+            f'- [{", ".join(c["concepts"])}] {c["title"]}'
+            for c in cooccurrences
+        )
+    else:
+        # Fallback: send top 15 results if no co-occurrences found
+        rich_results_text = "\n".join(f"- {r['title']}" for r in results[:15])
 
-    prompt = f"""Today is {today}. You have been handed signal data about "{query}" from {', '.join(sources_used)}.
+    question_text = ""
+    if question_results:
+        question_text = "\nCustomers asking questions:\n" + "\n".join(
+            f"- {q}" for q in question_results
+        )
 
-{time_context}
+    # Step 3 — AI prompt that uses algorithm output as input
+    prompt = f"""Today is {today}. Brand: "{query}". Sources: {', '.join(sources_used)}. {date_range}
 
-Signal data:
-{titles_text}
+Richest signal results (concept labels in brackets show what themes co-occur in each result):
+{rich_results_text}
+{question_text}
 
-Write exactly 4 sentences. Plain British English. Sharp, Conversational, and human. No jargon. No labels. No asterisks.
+Your job: use the concept co-occurrences above to write a specific briefing and 3 specific questions.
+The concept labels tell you what themes appeared TOGETHER in the same result — that co-occurrence is the signal.
 
-Sentence 1 — What is concretely happening with {query} right now. One specific observation from the signals, not a vague summary.
-Sentence 2 — What this means for the brand commercially. Not "it is important" — say what the actual consequence is.
-Sentence 3 — Whether this is getting bigger, staying flat, or dying down. Give a direction, not a hedge.
-Sentence 4 — The single most important thing to do in the next 48 hours. An action, not a suggestion to monitor.
+Write a JSON object with exactly two keys: "briefing" and "questions".
 
-Rules that cannot be broken:
-- Do not start any sentence with "The signals" or "The data"
-- Do not use the word "suggests" or "indicates" or "appears"
-- Do not hedge. Pick a direction and commit to it.
-- If the data is thin, say so in sentence 1 and still give a recommendation in sentence 4
-- Total length: under 100 words"""
+"briefing": 3 sentences. British English. Conversational. Direct. No labels, no asterisks, no hedging words like "suggests" or "appears" or "it seems". Start with a specific observation, not a vague summary. End with one concrete action.
+
+"questions": Array of 3 objects, each with "question" and "reason".
+Each question must be directly caused by a specific co-occurrence pattern you see in the data above.
+If you see price+switching together: ask about price as a switching driver.
+If you see emotion+service together: ask about the service experience causing emotional reactions.
+Do not generate generic questions. Each question must be traceable to something specific in the data.
+
+Return only valid JSON. No markdown."""
 
     ai_result = ai_call(prompt)
 
-    briefing = ai_result if ai_result else (
-        f"Found {len(results)} mentions for {query} across {len(sources_used)} sources. "
-        f"The briefing engine is under load — patterns and raw signals below tell the story."
-    )
+    # Parse AI response
+    briefing   = ""
+    questions  = []
 
-    # If patterns fired, use their questions
-    # If no patterns fired and AI worked, ask AI for questions
-    # If neither worked, return empty questions
-    questions = []
+    if ai_result:
+        try:
+            clean = ai_result.strip()
+            if clean.startswith("```"):
+                clean = re.sub(r'^```[a-z]*\n?', '', clean)
+                clean = re.sub(r'\n?```$', '', clean)
+            parsed    = json.loads(clean)
+            briefing  = parsed.get("briefing", "")
+            questions = parsed.get("questions", [])
+        except:
+            # If JSON parsing fails, use raw text as briefing
+            briefing = ai_result
 
-    if detected_patterns:
-        # Pattern questions are more reliable than AI questions
-        # They come from documented real-world cases
-        for p in detected_patterns:
-            questions.append({
-                "question": p["question"],
-                "reason":   f"{p['reason']} Evidence: {p['evidence']}",
-                "source":   "pattern",
-                "pattern":  p["pattern_name"],
-                "example":  p["example"]
-            })
-    elif ai_result:
-        # No patterns fired — ask AI for questions
-        q_prompt = f"""Based on this data about "{query}":
-{titles_text}
+    # Fallback briefing if AI failed
+    if not briefing:
+        n = len(results)
+        src = len(sources_used)
+        briefing = (
+            f"Found {n} mentions about {query} across {src} sources over the last 90 days. "
+            f"The strongest signals are in the ranked results below. "
+            f"Review the highest-scoring items for the clearest current picture."
+        )
 
-Generate exactly 3 strategic questions a senior brand manager should be asking right now.
-Return only a JSON array of objects with "question" and "reason" keys.
-No markdown. No extra text."""
-
-        q_result = ai_call(q_prompt)
-        if q_result:
-            try:
-                clean = q_result.strip()
-                if clean.startswith("```"):
-                    clean = re.sub(r'^```[a-z]*\n?', '', clean)
-                    clean = re.sub(r'\n?```$', '', clean)
-                parsed = json.loads(clean)
-                if isinstance(parsed, list):
-                    questions = parsed
-                elif isinstance(parsed, dict):
-                    questions = parsed.get("questions", [])
-            except:
-                pass
+    # Build pattern summary for display
+    if cooccurrences:
+        concept_pairs = []
+        for c in cooccurrences[:5]:
+            if len(c["concepts"]) >= 2:
+                concept_pairs.append(f"{c['concepts'][0]} + {c['concepts'][1]}")
+        patterns_display = list(set(concept_pairs))[:3]
+    else:
+        patterns_display = []
 
     return {
         "briefing":  briefing,
         "questions": questions,
-        "patterns":  [p["pattern_name"] for p in detected_patterns]
+        "patterns":  patterns_display,
+        "cooccurrences_found": len(cooccurrences),
+        "questions_found": len(question_results)
     }
 
 
