@@ -1280,26 +1280,30 @@ def generate_insight(results, query):
         )
 
     # Step 3 — AI prompt that uses algorithm output as input
-    prompt = f"""Today is {today}. Brand: "{query}". Sources: {', '.join(sources_used)}. {date_range}
+    prompt = f"""Today is {today}. You are analysing signal data about: {query}
 
-Richest signal results (concept labels in brackets show what themes co-occur in each result):
+Sources: {', '.join(sources_used)}. {date_range}
+
+Richest signal results (concept labels show themes that co-occur in each result):
 {rich_results_text}
 {question_text}
 
-Your job: use the concept co-occurrences above to write a specific briefing and 3 specific questions.
-The concept labels tell you what themes appeared TOGETHER in the same result — that co-occurrence is the signal.
+Return a JSON object with exactly two keys: "briefing" and "questions".
 
-Write a JSON object with exactly two keys: "briefing" and "questions".
+"briefing": Write 3 sentences in plain conversational British English. Rules that cannot be broken:
+- Do not put the brand name in quotes
+- Do not use dashes, hyphens, or em-dashes anywhere
+- Do not use bullet points or any markdown
+- Do not use the words suggests, indicates, appears, seems, it looks like
+- Do not start with "The signals" or "The data" or "Based on"
+- Write like a sharp colleague telling you what they found, not a report
+- Be specific about what the data shows, not vague
 
-"briefing": 3 sentences. British English. Conversational. Direct. No labels, no asterisks, no hedging words like "suggests" or "appears" or "it seems". Start with a specific observation, not a vague summary. End with one concrete action.
+"questions": Array of exactly 3 objects, each with "question" and "reason" keys.
+Each question must trace directly to a specific co-occurrence in the data above.
+No generic questions. If you cannot trace a question to specific data, do not include it.
 
-"questions": Array of 3 objects, each with "question" and "reason".
-Each question must be directly caused by a specific co-occurrence pattern you see in the data above.
-If you see price+switching together: ask about price as a switching driver.
-If you see emotion+service together: ask about the service experience causing emotional reactions.
-Do not generate generic questions. Each question must be traceable to something specific in the data.
-
-Return only valid JSON. No markdown."""
+Return only the raw JSON object. No markdown. No code fences. No backticks. No extra text."""
 
     ai_result = ai_call(prompt)
 
@@ -1310,15 +1314,22 @@ Return only valid JSON. No markdown."""
     if ai_result:
         try:
             clean = ai_result.strip()
-            if clean.startswith("```"):
-                clean = re.sub(r'^```[a-z]*\n?', '', clean)
-                clean = re.sub(r'\n?```$', '', clean)
+            # Strip markdown code fences from anywhere in the string
+            clean = re.sub(r'```[a-z]*\n?', '', clean)
+            clean = re.sub(r'```', '', clean)
+            clean = clean.strip()
             parsed    = json.loads(clean)
             briefing  = parsed.get("briefing", "")
             questions = parsed.get("questions", [])
+            # Clean any remaining markdown from briefing text
+            briefing = re.sub(r'\*\*([^*]+)\*\*', r'\1', briefing)
+            briefing = re.sub(r'\*([^*]+)\*', r'\1', briefing)
+            briefing = re.sub(r'`([^`]+)`', r'\1', briefing)
         except:
-            # If JSON parsing fails, use raw text as briefing
-            briefing = ai_result
+            # JSON parsing failed — clean the raw text and use as briefing
+            briefing = re.sub(r'```[a-z]*\n?', '', ai_result)
+            briefing = re.sub(r'```', '', briefing)
+            briefing = strip_markdown(briefing.strip())
 
     # Fallback briefing if AI failed
     if not briefing:
