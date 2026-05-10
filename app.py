@@ -1311,12 +1311,12 @@ def generate_insight(results, query):
 
     if not results:
         return {
-        "briefing":  briefing,
-        "questions": questions,
-        "patterns":  patterns_display,
-        "cooccurrences_found": len(cooccurrences),
-        "questions_found": len(question_results)
-    }
+            "briefing":  "Nothing meaningful came up. Try a broader search.",
+            "questions": [],
+            "patterns":  [],
+            "cooccurrences_found": 0,
+            "questions_found": 0
+        }
 
     # Step 1 — Run algorithms
     cooccurrences  = find_cooccurrences(results)
@@ -1389,6 +1389,23 @@ Return only the raw JSON object. No markdown. No code fences. No backticks. No e
             f"Found {len(results)} mentions about {query} across "
             f"{len(sources_used)} sources. Raw signals below tell the story."
         )
+
+    if cooccurrences:
+        concept_pairs = []
+        for c in cooccurrences[:5]:
+            if len(c["concepts"]) >= 2:
+                concept_pairs.append(f"{c['concepts'][0]} + {c['concepts'][1]}")
+        patterns_display = list(set(concept_pairs))[:3]
+    else:
+        patterns_display = []
+
+    return {
+        "briefing":  briefing,
+        "questions": questions,
+        "patterns":  patterns_display,
+        "cooccurrences_found": len(cooccurrences),
+        "questions_found":     len(question_results)
+    }
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
