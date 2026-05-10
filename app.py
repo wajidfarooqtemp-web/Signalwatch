@@ -15,6 +15,7 @@
 # These lines import tools we need
 # "from X import Y" means: from library X, get tool Y
 # "import X" means: get the entire library X
+from fastapi.responses import StreamingResponse  # tool for sending data back to browser in chunks (streaming)
 from fastapi import FastAPI, Request   # FastAPI builds our server and handles requests
 from fastapi.middleware.cors import CORSMiddleware  # CORS allows browser to talk to server
 from datetime import date, datetime, timedelta  # Tools for working with dates and times
@@ -1119,7 +1120,27 @@ def extract_briefing_and_questions(raw_text):
         try:
             parsed    = json.loads(json_match.group())
             briefing  = parsed.get("briefing",  "")
+            action    = parsed.get("action",    "")
             questions = parsed.get("questions", [])
+
+            # Clean internal algorithm labels from question reasons
+            # Users should see strategic language, not technical labels
+            cleaned_questions = []
+            for q in questions:
+                if isinstance(q, dict):
+                    reason = q.get("reason", "")
+                    # Remove co-occurrence labels like "[price, switching]"
+                    reason = re.sub(r'Co-occurrence of \[[^\]]+\]', '', reason)
+                    reason = re.sub(r'\[[^\]]+\]', '', reason)
+                    reason = re.sub(r'co-occur\w*', '', reason, flags=re.IGNORECASE)
+                    reason = re.sub(r'\s+', ' ', reason).strip()
+                    cleaned_questions.append({
+                        "question": q.get("question", ""),
+                        "reason": reason
+                    })
+                else:
+                    cleaned_questions.append(q)
+            questions = cleaned_questions
 
             # Clean the briefing of any remaining markdown
             briefing = re.sub(r'\*\*([^*]+)\*\*', r'\1', briefing)
@@ -1127,7 +1148,7 @@ def extract_briefing_and_questions(raw_text):
             briefing = re.sub(r'`([^`]+)`',       r'\1', briefing)
             briefing = briefing.strip()
 
-            return briefing, questions
+            return briefing, action, questions
         except json.JSONDecodeError:
             pass
 
@@ -1354,35 +1375,29 @@ def generate_insight(results, query):
 
 Sources: {', '.join(sources_used)}. {date_range}
 
-Richest signal results (concept labels show themes that co-occur in each result):
+Signal data (concept labels show what themes appear together in the same result):
 {rich_results_text}
 {question_text}
 
-Return a JSON object with exactly two keys: "briefing" and "questions".
+Return a JSON object with exactly THREE keys: "briefing", "action", and "questions".
 
-"briefing": Write 3 sentences in plain conversational British English. Rules that cannot be broken:
-- Do not put the brand name in quotes
-- Do not use dashes, hyphens, or em-dashes anywhere
-- Do not use bullet points or any markdown
-- Do not use the words suggests, indicates, appears, seems, it looks like
-- Do not start with "The signals" or "The data" or "Based on"
-- Write like a sharp colleague telling you what they found, not a report
-- Be specific about what the data shows, not vague
+"briefing": Exactly 2 sentences. Plain British English. Conversational. No labels, no asterisks, no dashes, no brand name in quotes. No hedging words like suggests, indicates, appears, seems. Start with a specific observation from the data. Second sentence says why it matters commercially.
 
-"questions": Array of exactly 3 objects, each with "question" and "reason" keys.
-Each question must trace directly to a specific co-occurrence in the data above.
-No generic questions. If you cannot trace a question to specific data, do not include it.
+"action": One sentence. The single most important thing a brand manager should do in the next 48 hours. Start with a verb. Be specific. Not "monitor" or "consider" — an actual action like "Contact the App Store reviewers complaining about refunds and offer direct resolution" or "Publish a clear comparison page addressing the three most common competitor questions in the data."
 
-Return only the raw JSON object. No markdown. No code fences. No backticks. No extra text."""
+"questions": Array of exactly 3 objects with "question" and "reason" keys. Each question must come directly from a specific pattern you see in the data. Strategic language only. No technical terms like co-occurrence or algorithm. The reason should explain the business implication, not the technical method.
+
+Return only raw JSON. No markdown. No backticks. No code fences."""
 
     ai_result = ai_call(prompt)
 
     # Parse AI response
     briefing   = ""
+    action     = ""
     questions  = []
 
     if ai_result:
-        briefing, questions = extract_briefing_and_questions(ai_result)
+        briefing, action, questions = extract_briefing_and_questions(ai_result)
 
     if not briefing:
         briefing = (
@@ -1401,6 +1416,7 @@ Return only the raw JSON object. No markdown. No code fences. No backticks. No e
 
     return {
         "briefing":  briefing,
+        "action":    action if 'action' in dir() else "",
         "questions": questions,
         "patterns":  patterns_display,
         "cooccurrences_found": len(cooccurrences),
@@ -1417,6 +1433,148 @@ def home():
     # Simple health check — tells us the server is running
     return {"status": "Signalwatch running — beta"}
 
+
+@app.get("/search-stream")
+async def search_stream(query: str, request: Request, token: str = ""):
+    # ── What this endpoint does ──────────────────────────────────────────────
+    # This is the SSE (Server-Sent Events) version of search.
+    # Instead of waiting for all sources to finish before responding,
+    # it sends progress updates as each source completes.
+    #
+    # SSE format: each message must start with "data: " and end with "\n\n"
+    # The browser's EventSource API reads these messages automatically.
+    #
+    # Example of what gets sent:
+    # data: {"type": "progress", "source": "youtube", "count": 192}
+    # data: {"type": "progress", "source": "newsapi", "count": 26}
+    # data: {"type": "complete", "results": [...], "insight": "..."}
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # Validate token first — same as regular search
+    if not token or not token.startswith("sw_"):
+        async def invalid():
+            yield f"data: {json.dumps({'type': 'error', 'message': 'invalid'})}\n\n"
+        return StreamingResponse(invalid(), media_type="text/event-stream")
+
+    current_count = get_count(token)
+    if current_count >= DAILY_LIMIT:
+        async def limited():
+            yield f"data: {json.dumps({'type': 'limit', 'limit_reached': True})}\n\n"
+        return StreamingResponse(limited(), media_type="text/event-stream")
+
+    new_count = increment_count(token)
+    remaining = max(0, DAILY_LIMIT - new_count)
+
+    async def generate():
+        # We use a generator function — yield sends each piece to the browser
+        # "yield" means: send this now and continue the function
+        # Unlike "return" which ends the function, yield keeps it running
+
+        all_posts = []
+        sources_counts = {}
+
+        # Send initial acknowledgement
+        yield f"data: {json.dumps({'type': 'start', 'query': query})}\n\n"
+
+        # Fetch each source and send progress after each one
+        # Each fetch is done synchronously but the user sees each result arrive
+
+        reddit = fetch_reddit(query)
+        all_posts += reddit
+        sources_counts["reddit"] = len(reddit)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'reddit', 'count': len(reddit), 'label': 'Reddit'})}\n\n"
+
+        hn = fetch_hackernews(query)
+        all_posts += hn
+        sources_counts["hackernews"] = len(hn)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'hackernews', 'count': len(hn), 'label': 'Tech Forums'})}\n\n"
+
+        newsapi = fetch_newsapi(query)
+        all_posts += newsapi
+        sources_counts["newsapi"] = len(newsapi)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'newsapi', 'count': len(newsapi), 'label': 'News'})}\n\n"
+
+        newsdata = fetch_newsdata(query)
+        all_posts += newsdata
+        sources_counts["newsdata"] = len(newsdata)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'newsdata', 'count': len(newsdata), 'label': 'Global News'})}\n\n"
+
+        rss = fetch_rss(query)
+        all_posts += rss
+        sources_counts["rss"] = len(rss)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'rss', 'count': len(rss), 'label': 'RSS'})}\n\n"
+
+        youtube = fetch_youtube(query)
+        all_posts += youtube
+        sources_counts["youtube"] = len(youtube)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'youtube', 'count': len(youtube), 'label': 'YouTube'})}\n\n"
+
+        trustpilot = fetch_trustpilot(query)
+        all_posts += trustpilot
+        sources_counts["trustpilot"] = len(trustpilot)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'trustpilot', 'count': len(trustpilot), 'label': 'Trustpilot'})}\n\n"
+
+        appstore = fetch_appstore(query)
+        all_posts += appstore
+        sources_counts["appstore"] = len(appstore)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'appstore', 'count': len(appstore), 'label': 'App Store'})}\n\n"
+
+        playstore = fetch_playstore(query)
+        all_posts += playstore
+        sources_counts["playstore"] = len(playstore)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'playstore', 'count': len(playstore), 'label': 'Play Store'})}\n\n"
+
+        mastodon = fetch_mastodon(query)
+        all_posts += mastodon
+        sources_counts["mastodon"] = len(mastodon)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'mastodon', 'count': len(mastodon), 'label': 'Mastodon'})}\n\n"
+
+        wikipedia = fetch_wikipedia(query)
+        all_posts += wikipedia
+        sources_counts["wikipedia"] = len(wikipedia)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'wikipedia', 'count': len(wikipedia), 'label': 'Wikipedia'})}\n\n"
+
+        googlenews = fetch_google_news(query)
+        all_posts += googlenews
+        sources_counts["googlenews"] = len(googlenews)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'googlenews', 'count': len(googlenews), 'label': 'Google News'})}\n\n"
+
+        # Tell the user we are now generating the intelligence briefing
+        yield f"data: {json.dumps({'type': 'analysing', 'message': 'Generating intelligence briefing'})}\n\n"
+
+        # Rank results and generate insight
+        ranked  = filter_and_rank(all_posts, query)
+        insight = generate_insight(ranked, query)
+
+        # Send the complete result
+        final = {
+            "type":                "complete",
+            "query":               query,
+            "total":               len(ranked),
+            "searches_remaining":  remaining,
+            "sources":             sources_counts,
+            "insight":             insight.get("briefing", "") if isinstance(insight, dict) else insight,
+            "action":              insight.get("action", "")   if isinstance(insight, dict) else "",
+            "questions":           insight.get("questions", []) if isinstance(insight, dict) else [],
+            "patterns":            insight.get("patterns", [])  if isinstance(insight, dict) else [],
+            "cooccurrences_found": insight.get("cooccurrences_found", 0) if isinstance(insight, dict) else 0,
+            "results":             ranked[:20],
+            "word_frequencies":    get_word_frequencies(ranked[:50])
+        }
+        yield f"data: {json.dumps(final)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            # These headers are required for SSE to work properly
+            # Cache-Control: no-cache means do not store these events
+            # Connection: keep-alive keeps the connection open while streaming
+            "Cache-Control": "no-cache",
+            "Connection":    "keep-alive",
+            "X-Accel-Buffering": "no"  # Tells nginx not to buffer — send immediately
+        }
+    )
 
 @app.get("/search")
 def search(query: str, request: Request, token: str = ""):
@@ -1491,6 +1649,7 @@ def search(query: str, request: Request, token: str = ""):
         },
         # insight is a dict — we extract briefing and questions separately
         "insight":           insight.get("briefing", "") if isinstance(insight, dict) else insight,
+        "action":   insight.get("action", "") if isinstance(insight, dict) else "",
         "questions":         insight.get("questions", []) if isinstance(insight, dict) else [],
         "patterns_detected": insight.get("patterns", []) if isinstance(insight, dict) else [],
         "results":           ranked[:20],

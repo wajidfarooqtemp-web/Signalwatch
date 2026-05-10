@@ -1451,11 +1451,11 @@
       <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
       <div class="brief-headline">${headline}</div>
       <div class="brief-body">${mainText}</div>
-      ${lastSentence ? `
-        <div class="action-strip">
-          <span class="action-flag">Do this</span>
-          <span class="action-text">${lastSentence}</span>
-        </div>` : ""}
+      ${data.action && data.action.length > 10 ? `
+  <div class="action-strip">
+    <span class="action-flag">Do this</span>
+    <span class="action-text">${data.action}</span>
+  </div>` : ""}
     </div>`;
 } else {
   html += `<div class="brief-card"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
