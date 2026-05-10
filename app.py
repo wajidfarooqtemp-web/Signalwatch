@@ -1088,6 +1088,73 @@ def get_word_frequencies(results):
     sorted_freq = sorted(freq.items(), key=lambda x: x[1], reverse=True)
     return [{"word": w, "count": c} for w, c in sorted_freq[:40]]
 
+def extract_briefing_and_questions(raw_text):
+    # ── What this does ───────────────────────────────────────────────────────
+    # Extracts briefing and questions from whatever the AI returned.
+    # The AI sometimes returns clean JSON, sometimes JSON with code fences,
+    # sometimes broken JSON. This function handles every case.
+    # Returns (briefing_string, questions_list) in all cases.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    briefing  = ""
+    questions = []
+
+    if not raw_text:
+        return briefing, questions
+
+    # Step 1: Aggressively remove all markdown formatting
+    clean = raw_text.strip()
+    clean = re.sub(r'```[a-zA-Z]*\n?', '', clean)  # Remove opening ```json or ```
+    clean = re.sub(r'```',             '', clean)   # Remove any remaining ```
+    clean = re.sub(r'^\s*`+\s*',      '', clean)   # Remove leading backticks
+    clean = re.sub(r'\s*`+\s*$',      '', clean)   # Remove trailing backticks
+    clean = clean.strip()
+
+    # Step 2: Try to find and parse a JSON object anywhere in the text
+    # Sometimes the AI puts text before or after the JSON
+    json_match = re.search(r'\{[\s\S]*\}', clean)
+
+    if json_match:
+        try:
+            parsed    = json.loads(json_match.group())
+            briefing  = parsed.get("briefing",  "")
+            questions = parsed.get("questions", [])
+
+            # Clean the briefing of any remaining markdown
+            briefing = re.sub(r'\*\*([^*]+)\*\*', r'\1', briefing)
+            briefing = re.sub(r'\*([^*]+)\*',     r'\1', briefing)
+            briefing = re.sub(r'`([^`]+)`',       r'\1', briefing)
+            briefing = briefing.strip()
+
+            return briefing, questions
+        except json.JSONDecodeError:
+            pass
+
+    # Step 3: JSON parsing failed — extract briefing text directly
+    # Look for text after "briefing": or just use the whole cleaned text
+    briefing_match = re.search(r'"briefing"\s*:\s*"(.*?)"(?:\s*,|\s*\})', clean, re.DOTALL)
+    if briefing_match:
+        briefing = briefing_match.group(1)
+        # Unescape JSON string escapes
+        briefing = briefing.replace('\\"', '"').replace('\\n', ' ').replace('\\\\', '\\')
+    else:
+        # Last resort: use the cleaned text as the briefing
+        # But only if it does not look like raw JSON
+        if not clean.startswith('{') and not clean.startswith('"briefing"'):
+            briefing = clean
+        else:
+            # Strip the JSON structure and take just the text content
+            briefing = re.sub(r'[{}":\[\]]', ' ', clean)
+            briefing = re.sub(r'briefing|questions|question|reason', '', briefing)
+            briefing = re.sub(r'\s+', ' ', briefing).strip()
+
+    # Clean any remaining markdown from briefing
+    briefing = re.sub(r'\*\*([^*]+)\*\*', r'\1', briefing)
+    briefing = re.sub(r'\*([^*]+)\*',     r'\1', briefing)
+    briefing = briefing.strip()
+
+    return briefing, questions
+
 # ─── PATTERN LIBRARY ─────────────────────────────────────────────────────────
 # 15 documented patterns from real brand intelligence cases.
 # Each pattern uses THEME-BASED detection — looking for groups of related
@@ -1243,10 +1310,12 @@ def generate_insight(results, query):
 
     if not results:
         return {
-            "briefing":  "Nothing meaningful came up. Try a broader search.",
-            "questions": [],
-            "patterns":  []
-        }
+        "briefing":  briefing,
+        "questions": questions,
+        "patterns":  patterns_display,
+        "cooccurrences_found": len(cooccurrences),
+        "questions_found": len(question_results)
+    }
 
     # Step 1 — Run algorithms
     cooccurrences  = find_cooccurrences(results)
@@ -1312,52 +1381,13 @@ Return only the raw JSON object. No markdown. No code fences. No backticks. No e
     questions  = []
 
     if ai_result:
-        try:
-            clean = ai_result.strip()
-            # Strip markdown code fences from anywhere in the string
-            clean = re.sub(r'```[a-z]*\n?', '', clean)
-            clean = re.sub(r'```', '', clean)
-            clean = clean.strip()
-            parsed    = json.loads(clean)
-            briefing  = parsed.get("briefing", "")
-            questions = parsed.get("questions", [])
-            # Clean any remaining markdown from briefing text
-            briefing = re.sub(r'\*\*([^*]+)\*\*', r'\1', briefing)
-            briefing = re.sub(r'\*([^*]+)\*', r'\1', briefing)
-            briefing = re.sub(r'`([^`]+)`', r'\1', briefing)
-        except:
-            # JSON parsing failed — clean the raw text and use as briefing
-            briefing = re.sub(r'```[a-z]*\n?', '', ai_result)
-            briefing = re.sub(r'```', '', briefing)
-            briefing = strip_markdown(briefing.strip())
+        briefing, questions = extract_briefing_and_questions(ai_result)
 
-    # Fallback briefing if AI failed
     if not briefing:
-        n = len(results)
-        src = len(sources_used)
         briefing = (
-            f"Found {n} mentions about {query} across {src} sources over the last 90 days. "
-            f"The strongest signals are in the ranked results below. "
-            f"Review the highest-scoring items for the clearest current picture."
+            f"Found {len(results)} mentions about {query} across "
+            f"{len(sources_used)} sources. Raw signals below tell the story."
         )
-
-    # Build pattern summary for display
-    if cooccurrences:
-        concept_pairs = []
-        for c in cooccurrences[:5]:
-            if len(c["concepts"]) >= 2:
-                concept_pairs.append(f"{c['concepts'][0]} + {c['concepts'][1]}")
-        patterns_display = list(set(concept_pairs))[:3]
-    else:
-        patterns_display = []
-
-    return {
-        "briefing":  briefing,
-        "questions": questions,
-        "patterns":  patterns_display,
-        "cooccurrences_found": len(cooccurrences),
-        "questions_found": len(question_results)
-    }
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────

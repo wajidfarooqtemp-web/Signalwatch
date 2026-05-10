@@ -1087,9 +1087,20 @@
   <!-- NAV -->
   <nav class="topnav">
     <a class="brand" href="#" onclick="showPage('search');return false;">
-      <span class="brand-name">Signal<em>watch</em></span>
-      <span class="brand-tag">Beta</span>
-    </a>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+    <circle cx="14" cy="14" r="14" fill="#0f172a"/>
+    <circle cx="14" cy="14" r="5" fill="none" stroke="#22d3ee" stroke-width="2"/>
+    <circle cx="14" cy="14" r="2" fill="#f59e0b"/>
+    <line x1="17.5" y1="17.5" x2="22" y2="22" stroke="#22d3ee" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="8" cy="8" r="1.5" fill="#a78bfa"/>
+    <circle cx="20" cy="8" r="1.5" fill="#34d399"/>
+    <circle cx="8" cy="20" r="1.5" fill="#f87171"/>
+  </svg>
+  <span style="font-size:19px;font-weight:800;letter-spacing:-0.5px;margin-left:8px;">
+    <span style="color:#22d3ee">S</span><span style="color:#a78bfa">i</span><span style="color:#34d399">g</span><span style="color:#f59e0b">n</span><span style="color:#f87171">a</span><span style="color:#22d3ee">l</span><span style="color:#0f172a">watch</span>
+  </span>
+  <span class="brand-tag">Beta</span>
+</a>
     <div class="nav-center">
       <button class="nav-btn active" id="navSearch" onclick="showPage('search')">Search</button>
       <button class="nav-btn" id="navAbout" onclick="showPage('about')">About</button>
@@ -1223,9 +1234,7 @@
     <div class="about-hero">
       <div class="about-inner">
         <div>
-          <img
-            class="about-avatar"
-            src="https://media.licdn.com/dms/image/v2/D5603AQGRKibacHmTfQ/profile-displayphoto-crop_800_800/B56ZmCakUSG0AI-/0/1758829628569?e=1778112000&v=beta&t=6JVnLV8AmEMgFDhFbFtwa5nfF1JaO9Tmy1JbQ2CwKQw"
+          <div class="about-initial" style="display:flex">W</div>
             alt="Wajid"
             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
           />
@@ -1419,32 +1428,46 @@
 
       // ── BRIEFING CARD ──
       if (data.insight && data.insight.length > 20) {
-        const sentences = data.insight.match(/[^.!?]+[.!?]+/g) || [data.insight];
-        const actionSentence = sentences.length >= 3 ? sentences[sentences.length - 1].trim() : "";
-        const mainText = sentences.length >= 3
-          ? sentences.slice(0, -1).join(" ").trim()
-          : data.insight;
+  // Remove any remaining JSON artifacts that leaked through
+  let cleanInsight = data.insight
+    .replace(/^[\s`{]*"briefing"\s*:\s*"?/i, '')
+    .replace(/"?\s*,?\s*"questions"[\s\S]*$/i, '')
+    .replace(/^`+json?/i, '')
+    .replace(/`+$/g, '')
+    .replace(/^\s*\{/, '')
+    .replace(/\}\s*$/, '')
+    .trim();
 
-        // Extract a headline from the first sentence
-        const firstSentence = sentences[0].trim();
-        const headline = firstSentence.length > 80
-          ? firstSentence.substring(0, 77) + "..."
-          : firstSentence;
+  // Remove surrounding quotes if the whole string is quoted
+  if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) {
+    cleanInsight = cleanInsight.slice(1, -1);
+  }
 
-        html += `
-          <div class="brief-card">
-            <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
-            <div class="brief-headline">${headline}</div>
-            <div class="brief-body">${mainText}</div>
-            ${actionSentence ? `
-              <div class="action-strip">
-                <span class="action-flag">Do this</span>
-                <span class="action-text">${actionSentence}</span>
-              </div>` : ""}
-          </div>`;
-      } else {
-        html += `<div class="brief-card"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
-      }
+  const sentences = cleanInsight.match(/[^.!?]+[.!?]+/g) || [cleanInsight];
+  const lastSentence = sentences.length >= 2 ? sentences[sentences.length - 1].trim() : "";
+  const mainText = sentences.length >= 2
+    ? sentences.slice(0, -1).join(" ").trim()
+    : cleanInsight;
+
+  const firstSentence = sentences[0] ? sentences[0].trim() : cleanInsight;
+  const headline = firstSentence.length > 90
+    ? firstSentence.substring(0, 87) + "..."
+    : firstSentence;
+
+  html += `
+    <div class="brief-card">
+      <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
+      <div class="brief-headline">${headline}</div>
+      <div class="brief-body">${mainText}</div>
+      ${lastSentence ? `
+        <div class="action-strip">
+          <span class="action-flag">Do this</span>
+          <span class="action-text">${lastSentence}</span>
+        </div>` : ""}
+    </div>`;
+} else {
+  html += `<div class="brief-card"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
+}
 
       // ── QUESTIONS CARD ──
       if (data.questions && data.questions.length > 0) {
