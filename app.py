@@ -1095,6 +1095,7 @@ def extract_briefing_and_questions(raw_text):
     # sometimes broken JSON. This function handles every case.
     # Returns (briefing_string, questions_list) in all cases.
     # ─────────────────────────────────────────────────────────────────────────
+    print(f"AI raw response (first 200 chars): {repr(raw_text[:200])}")
 
     briefing  = ""
     questions = []
