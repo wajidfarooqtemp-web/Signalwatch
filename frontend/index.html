@@ -49,8 +49,12 @@
     /* HERO */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
     .hero { max-width:1100px; margin:0 auto; padding:64px 40px 52px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
+
+    /* ── DASH FIX ──
+       The original had a ::before pseudo-element that drew a line before
+       "Brand Intelligence Platform". Removed entirely below. */
     .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:18px; display:flex; align-items:center; gap:8px; }
-    .hero-kicker::before { content:''; display:block; width:24px; height:1px; background:var(--teal); }
+
     .hero h1 { font-family:var(--serif); font-size:52px; font-weight:800; color:var(--ink); line-height:1.05; letter-spacing:-1.5px; margin-bottom:20px; }
     .hero h1 .accent { color:var(--teal); }
     .hero h1 .warm { color:var(--amber); }
@@ -117,8 +121,11 @@
 
     /* BRIEFING */
     .brief-card { background:var(--white); border:1px solid var(--border); border-top:3px solid var(--ink); border-radius:6px; padding:32px 36px; margin-bottom:16px; }
+
+    /* ── DASH FIX ──
+       .brief-eyebrow also had a ::before dash. Removed below. */
     .brief-eyebrow { font-family:var(--mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--text3); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
-    .brief-eyebrow::before { content:''; display:inline-block; width:16px; height:1px; background:var(--text3); }
+
     .brief-body { font-size:15px; line-height:1.8; color:var(--text2); font-weight:300; }
     .action-strip { margin-top:20px; display:flex; align-items:flex-start; gap:14px; background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:4px; padding:16px 18px; }
     .action-flag { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--white); background:var(--teal); padding:3px 8px; border-radius:2px; white-space:nowrap; flex-shrink:0; margin-top:2px; }
@@ -160,6 +167,7 @@
     .src-appstore   { background:#f0f4ff; color:#0066cc; border:1px solid #bfdbfe; }
     .src-playstore  { background:#f0fdf4; color:#1a7340; border:1px solid #86efac; }
     .src-googlenews { background:#fff8f0; color:#ea4335; border:1px solid #fca5a5; }
+    .src-bingnews   { background:#f0f4ff; color:#004488; border:1px solid #bfdbfe; }
     .src-mastodon   { background:#f3f0ff; color:#563acc; border:1px solid #d4bbff; }
 
     /* RESULTS LIST */
@@ -367,7 +375,7 @@
 
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
-      <span>11 sources · Signal intelligence · Last 90 days · More sources coming</span>
+      <span>12 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
   </div>
 
@@ -397,7 +405,7 @@
       <div class="about-card">
         <div class="about-card-icon">◎</div>
         <div class="about-card-title">Pattern intelligence</div>
-        <div class="about-card-text">The algorithm finds results where multiple themes appear together in the same mention. That co-occurrence is real signal. Word frequency across all results is noise.</div>
+        <div class="about-card-text">The algorithm finds results through patterns in the mentions themselves. Word frequency across all results is noise.</div>
       </div>
       <div class="about-card">
         <div class="about-card-icon">✦</div>
@@ -407,33 +415,27 @@
     </div>
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
-      <span>11 sources · Signal intelligence · Last 90 days · More sources coming</span>
+      <span>12 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
   </div>
 
   <script>
     // ── CONFIGURATION ──────────────────────────────────────────────────────
-    // API_BASE is the Railway backend URL. Every request goes here.
     const API_BASE = "https://signalwatch-production.up.railway.app";
 
-    // sourceLabels maps internal names to display names shown to users
     const sourceLabels = {
       reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
       newsdata:"Global News", youtube:"YouTube", rss:"RSS",
       wikipedia:"Wikipedia", mastodon:"Mastodon", trustpilot:"Trustpilot",
-      appstore:"App Store", playstore:"Play Store", googlenews:"Google News"
+      appstore:"App Store", playstore:"Play Store", googlenews:"Google News", bingnews:"Bing News"
     };
 
-    // signalChart holds the current chart so we can destroy it before creating a new one
     let signalChart = null;
 
     // ── TOKEN ─────────────────────────────────────────────────────────────
-    // Each browser gets a unique token stored in localStorage
-    // localStorage is like a small permanent notebook inside the browser
     function getToken() {
       let t = localStorage.getItem("sw_token");
       if (!t) {
-        // Math.random() creates a random decimal. toString(36) converts to letters+numbers
         t = "sw_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
         localStorage.setItem("sw_token", t);
       }
@@ -452,16 +454,12 @@
     }
 
     // ── CHECK LIMIT ON PAGE LOAD ──────────────────────────────────────────
-    // Runs immediately when the page opens
-    // Disables the search button if this browser already used 3 searches today
     function checkLocalLimit() {
       const today      = new Date().toDateString();
       const savedDate  = localStorage.getItem("sw_date");
       const savedCount = parseInt(localStorage.getItem("sw_count") || "0");
 
-      // toDateString() gives "Mon May 11 2026" — we compare with what we stored
       if (savedDate !== today) {
-        // New day — reset everything
         localStorage.setItem("sw_date", today);
         localStorage.setItem("sw_count", "0");
         return;
@@ -491,15 +489,16 @@
       window.scrollTo(0, 0);
     }
 
-    // Press Enter to search
     document.getElementById("queryInput").addEventListener("keydown", e => {
       if (e.key === "Enter") runSearch();
     });
 
-    // ── RUN SEARCH WITH SSE ───────────────────────────────────────────────
-    // SSE = Server-Sent Events. Instead of waiting for all results,
-    // the server sends updates as each source finishes.
-    // The user sees "YouTube: 192 signals" appear live as it happens.
+    // ── RUN SEARCH ────────────────────────────────────────────────────────
+    // Uses fetch() + ReadableStream instead of EventSource.
+    // Why: Railway buffers responses between chunks, which makes EventSource
+    // appear to hang. fetch() with streaming reads chunks as they arrive
+    // and gives us control over when to parse each line.
+    // This is more reliable on Railway than native EventSource.
     async function runSearch() {
       const query = document.getElementById("queryInput").value.trim();
       if (!query) return;
@@ -517,80 +516,136 @@
       document.getElementById("loadingText").textContent = "Scanning sources for " + query;
       if (signalChart) { signalChart.destroy(); signalChart = null; }
 
-      // Build the SSE URL with query and token
-      // encodeURIComponent makes the query URL-safe (spaces become %20 etc)
       const url = `${API_BASE}/search-stream?query=${encodeURIComponent(query)}&token=${encodeURIComponent(SW_TOKEN)}`;
 
-      // EventSource is the browser's built-in SSE client
-      // It opens a persistent connection and fires onmessage for each event
-      const es = new EventSource(url);
+      // ── WHY fetch() INSTEAD OF EventSource ──
+      // EventSource is great but browsers and proxies (including Railway's
+      // internal routing) sometimes buffer the stream before delivering it,
+      // which means you see nothing for 30+ seconds then everything at once.
+      //
+      // fetch() with a ReadableStream reader processes each chunk immediately
+      // as the TCP packet arrives. We manually split on "\n\n" (SSE format)
+      // and parse "data: {...}" lines ourselves. Same data, more reliable delivery.
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            // Tell the server we want a stream, not a buffered response
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache"
+          }
+        });
 
-      // onmessage fires every time the server sends "data: something\n\n"
-      es.onmessage = function(event) {
-        let msg;
-        try { msg = JSON.parse(event.data); }
-        catch(e) { return; } // Skip unparseable messages
-
-        if (msg.type === "progress") {
-          // One source finished — add a line to the progress display
-          const line = document.createElement("div");
-          line.style.cssText = [
-            "display:flex", "justify-content:space-between",
-            "font-family:var(--mono)", "font-size:11px",
-            "color:" + (msg.count > 0 ? "var(--teal)" : "var(--text3)"),
-            "padding:2px 0"
-          ].join(";");
-          line.innerHTML = `<span>${msg.label}</span><span>${msg.count > 0 ? msg.count+" signals" : "none"}</span>`;
-          progress.appendChild(line);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}`);
         }
 
-        else if (msg.type === "analysing") {
-          // All sources done, AI working on briefing
-          const line = document.createElement("div");
-          line.style.cssText = "font-family:var(--mono);font-size:11px;color:var(--amber);padding:8px 0 2px;";
-          line.textContent = "Generating intelligence briefing...";
-          progress.appendChild(line);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = ""; // Holds incomplete chunks between reads
+
+        while (true) {
+          // Read the next chunk from the stream
+          // done = true means the stream has ended
+          // value = the raw bytes of this chunk
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          // Convert bytes to text and add to our buffer
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE events are separated by double newline "\n\n"
+          // Split the buffer on that separator
+          const parts = buffer.split("\n\n");
+
+          // The last part may be incomplete (mid-chunk) — keep it in buffer
+          // All other parts are complete events ready to process
+          buffer = parts.pop();
+
+          for (const part of parts) {
+            // Each SSE event looks like: "data: {...json...}"
+            // Extract just the JSON part after "data: "
+            const line = part.trim();
+            if (!line.startsWith("data:")) continue;
+
+            const jsonStr = line.slice(5).trim(); // Remove "data:" prefix
+            if (!jsonStr) continue;
+
+            let msg;
+            try {
+              msg = JSON.parse(jsonStr);
+            } catch(e) {
+              continue; // Skip malformed JSON
+            }
+
+            // Handle each message type
+            if (msg.type === "progress") {
+              const lineEl = document.createElement("div");
+              lineEl.style.cssText = [
+                "display:flex", "justify-content:space-between",
+                "font-family:var(--mono)", "font-size:11px",
+                "color:" + (msg.count > 0 ? "var(--teal)" : "var(--text3)"),
+                "padding:2px 0"
+              ].join(";");
+              lineEl.innerHTML = `<span>${msg.label}</span><span>${msg.count > 0 ? msg.count+" signals" : "none"}</span>`;
+              progress.appendChild(lineEl);
+            }
+
+            else if (msg.type === "analysing") {
+              const lineEl = document.createElement("div");
+              lineEl.style.cssText = "font-family:var(--mono);font-size:11px;color:var(--amber);padding:8px 0 2px;";
+              lineEl.textContent = "Generating intelligence briefing...";
+              progress.appendChild(lineEl);
+            }
+
+            else if (msg.type === "limit") {
+              loading.style.display = "none";
+              btn.disabled = true;
+              btn.textContent = "Come back tomorrow";
+              localStorage.setItem("sw_count", "3");
+              localStorage.setItem("sw_date", new Date().toDateString());
+              showLimitMessage(container);
+              return; // Stop reading the stream
+            }
+
+            else if (msg.type === "error") {
+              loading.style.display = "none";
+              btn.disabled = false;
+              btn.textContent = "Analyse";
+              container.innerHTML = `<div class="error-msg">Something went wrong. Please try again.</div>`;
+              return;
+            }
+
+            else if (msg.type === "complete") {
+              loading.style.display = "none";
+              progress.innerHTML = "";
+              document.getElementById("loadingText").textContent = "Scanning sources and analysing patterns";
+              btn.disabled = false;
+              btn.textContent = "Analyse";
+              renderResults(msg, query);
+              return; // We got everything — stop reading
+            }
+          }
         }
 
-        else if (msg.type === "limit") {
-          // Rate limit reached
-          es.close(); // Always close when done to free resources
-          loading.style.display = "none";
-          btn.disabled = true;
-          btn.textContent = "Come back tomorrow";
-          localStorage.setItem("sw_count", "3");
-          localStorage.setItem("sw_date", new Date().toDateString());
-          showLimitMessage(container);
-        }
-
-        else if (msg.type === "error") {
-          es.close();
+        // Stream ended without a "complete" message — something went wrong
+        if (loading.style.display !== "none") {
           loading.style.display = "none";
           btn.disabled = false;
           btn.textContent = "Analyse";
-          container.innerHTML = `<div class="error-msg">Something went wrong. Please try again.</div>`;
+          if (!container.innerHTML) {
+            container.innerHTML = `<div class="error-msg">Stream ended unexpectedly. Please try again.</div>`;
+          }
         }
 
-        else if (msg.type === "complete") {
-          // Everything done — render the results
-          es.close(); // Close connection — important, prevents memory leaks
-          loading.style.display = "none";
-          progress.innerHTML = "";
-          document.getElementById("loadingText").textContent = "Scanning sources and analysing patterns";
-          btn.disabled = false;
-          btn.textContent = "Analyse";
-          renderResults(msg, query);
-        }
-      };
-
-      // onerror fires if connection breaks unexpectedly
-      es.onerror = function() {
-        es.close();
+      } catch(err) {
+        console.error("Stream error:", err);
         loading.style.display = "none";
         btn.disabled = false;
         btn.textContent = "Analyse";
         container.innerHTML = `<div class="error-msg">Could not reach the server. Please try again.</div>`;
-      };
+      }
     }
 
     // ── RENDER RESULTS ────────────────────────────────────────────────────
@@ -633,21 +688,18 @@
 
       // ── BRIEFING CARD ──
       if (data.insight && data.insight.length > 20) {
-        // Clean any JSON artifacts that leaked through
-        // Each replace() call removes a specific type of leak
         let cleanInsight = data.insight
-          .replace(/```[a-z]*\n?/gi, '')         // Remove ```json
-          .replace(/```/g, '')                   // Remove remaining ```
-          .replace(/^\s*\{\s*"briefing"\s*:\s*"?/, '') // Remove {"briefing":
-          .replace(/"?\s*,?\s*"[a-z]+"[\s\S]*$/, '')  // Remove trailing JSON
-          .replace(/^\s*\{/, '').replace(/\}\s*$/, '') // Remove { and }
+          .replace(/```[a-z]*\n?/gi, '')
+          .replace(/```/g, '')
+          .replace(/^\s*\{\s*"briefing"\s*:\s*"?/, '')
+          .replace(/"?\s*,?\s*"[a-z]+"[\s\S]*$/, '')
+          .replace(/^\s*\{/, '').replace(/\}\s*$/, '')
           .trim();
 
         if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) {
-          cleanInsight = cleanInsight.slice(1, -1); // Remove surrounding quotes
+          cleanInsight = cleanInsight.slice(1, -1);
         }
 
-        // action comes as its own field — not embedded in the briefing
         const actionText = data.action && data.action.length > 10 ? data.action : "";
 
         html += `
@@ -767,17 +819,15 @@
     }
 
     // ── ANIMATE COUNT ─────────────────────────────────────────────────────
-    // Makes stat numbers count up from 0 to target for visual effect
     function animateCount(id, target) {
       const el = document.getElementById(id);
       if (!el || !target) return;
       let start = 0;
       const steps = 30;
-      // setInterval calls the function repeatedly every (600/30) = 20ms
       const timer = setInterval(() => {
         start += target / steps;
         el.textContent = Math.min(Math.round(start), target);
-        if (start >= target) clearInterval(timer); // Stop when we reach the target
+        if (start >= target) clearInterval(timer);
       }, 600 / steps);
     }
 
@@ -800,7 +850,6 @@
         label: sourceLabels[source] || source,
         data: timed.filter(r => r.source === source).map((r, i) => ({
           x: new Date(r.created * 1000),
-          // Add tiny jitter so line is never perfectly flat
           y: r.score + Math.sin(i * 1.9 + source.charCodeAt(0) * 0.1) * 0.3,
           url: r.url, title: r.title, realScore: r.score
         })),

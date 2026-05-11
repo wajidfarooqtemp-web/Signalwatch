@@ -15,8 +15,9 @@
 # These lines import tools we need
 # "from X import Y" means: from library X, get tool Y
 # "import X" means: get the entire library X
-from fastapi.responses import StreamingResponse  # tool for sending data back to browser in chunks (streaming)
-from fastapi import FastAPI, Request   # FastAPI builds our server and handles requests
+from fastapi.responses import StreamingResponse # Tool for sending streaming responses (used for SSE)
+from fastapi import FastAPI, Request # tool for creating the web server and handling requests
+import asyncio  # NEW — needed for async SSE generator
 from fastapi.middleware.cors import CORSMiddleware  # CORS allows browser to talk to server
 from datetime import date, datetime, timedelta  # Tools for working with dates and times
 import requests   # Tool for making HTTP requests to other websites
@@ -163,47 +164,61 @@ setup_db()
 #            0 means we do not know the date
 
 def fetch_reddit(query):
-    # Uses Pullpush.io — the community-maintained Pushshift successor.
-    # Free, no API key, no approval, works from cloud servers.
-    # Returns Reddit posts from their archive database.
+    # Uses Reddit's own public JSON API — no API key needed.
+    # reddit.com/search.json is a public endpoint that works from any server.
+    # The only requirement is a custom User-Agent header — Reddit blocks
+    # requests that use the default "python-requests" user agent.
     results = []
 
     try:
-        cutoff_ts = int((datetime.now() - timedelta(days=90)).timestamp())
+        cutoff = datetime.now() - timedelta(days=90)
 
-        # Pullpush search endpoint — confirmed working as of 2026
+        # t=month means last month; we filter stricter below
         url = (
-            f"https://api.pullpush.io/reddit/search/submission/"
+            f"https://www.reddit.com/search.json"
             f"?q={requests.utils.quote(query)}"
-            f"&size=100"
-            f"&after={cutoff_ts}"
-            f"&sort_type=score"
-            f"&sort=desc"
+            f"&sort=relevance"
+            f"&t=month"
+            f"&limit=100"
+            f"&raw_json=1"
         )
 
-        res = requests.get(url, timeout=15, headers={"User-Agent": "signalwatch/1.0"})
+        res = requests.get(
+            url,
+            timeout=15,
+            headers={
+                # Reddit requires a descriptive User-Agent
+                # Format: AppName/Version (reason; contact)
+                "User-Agent": "signalwatch/1.0 (brand intelligence tool; contact wajidfarooq3@gmail.com)"
+            }
+        )
+
+        if res.status_code == 429:
+            print("Reddit: rate limited")
+            return []
 
         if res.status_code != 200:
-            print(f"Pullpush: status {res.status_code}")
+            print(f"Reddit JSON API: status {res.status_code}")
             return []
 
         data = res.json()
-        posts = data.get("data", [])
+        posts = data.get("data", {}).get("children", [])
 
         if not posts:
-            print(f"Pullpush: no results for '{query}'")
+            print(f"Reddit: no results for '{query}'")
             return []
 
         seen = set()
-        cutoff = datetime.now() - timedelta(days=90)
 
         for post in posts:
-            title = post.get("title", "")
+            d = post.get("data", {})
+            title = d.get("title", "")
+
             if not title or title in seen:
                 continue
             seen.add(title)
 
-            created = post.get("created_utc", 0)
+            created = d.get("created_utc", 0)
             try:
                 created = int(float(created))
             except:
@@ -212,8 +227,8 @@ def fetch_reddit(query):
             if created and datetime.fromtimestamp(created) < cutoff:
                 continue
 
-            subreddit = post.get("subreddit", "")
-            post_id   = post.get("id", "")
+            subreddit = d.get("subreddit", "")
+            post_id   = d.get("id", "")
             post_url  = f"https://reddit.com/r/{subreddit}/comments/{post_id}/" if post_id else ""
 
             results.append({
@@ -223,11 +238,11 @@ def fetch_reddit(query):
                 "created": created
             })
 
-        print(f"Reddit (Pullpush): {len(results)} posts")
+        print(f"Reddit (JSON API): {len(results)} posts")
         return results
 
     except Exception as e:
-        print(f"Pullpush error: {e}")
+        print(f"Reddit JSON API error: {e}")
         return []
 
 
@@ -813,6 +828,68 @@ def fetch_google_news(query):
 
     except Exception as e:
         print(f"Google News error: {e}")
+        return []
+    
+def fetch_bing_news(query):
+    # Bing News RSS feed — free, no API key needed.
+    # Different index than Google News so catches different articles.
+    # Format: news.bing.com/news/search?q=query&format=rss
+    results = []
+
+    try:
+        url = f"https://www.bing.com/news/search?q={requests.utils.quote(query)}&format=rss"
+
+        res = requests.get(
+            url,
+            timeout=10,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; signalwatch/1.0)"
+            }
+        )
+
+        if res.status_code != 200:
+            print(f"Bing News: status {res.status_code}")
+            return []
+
+        root = ET.fromstring(res.content)
+        cutoff = datetime.now() - timedelta(days=30)
+
+        for item in root.iter("item"):
+            title_el = item.find("title")
+            link_el  = item.find("link")
+            date_el  = item.find("pubDate")
+
+            if not title_el or not title_el.text:
+                continue
+
+            title = title_el.text.strip()
+
+            ts = 0
+            if date_el and date_el.text:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    dt = parsedate_to_datetime(date_el.text)
+                    dt_naive = dt.replace(tzinfo=None)
+                    if dt_naive < cutoff:
+                        continue
+                    ts = int(dt.timestamp())
+                except:
+                    pass
+
+            link = link_el.text.strip() if link_el and link_el.text else ""
+
+            results.append({
+                "title":   title,
+                "source":  "bingnews",
+                "url":     link,
+                "created": ts
+            })
+
+        print(f"Bing News: {len(results)} articles")
+        return results
+
+    except Exception as e:
+        print(f"Bing News error: {e}")
         return []
     
 def fetch_wikipedia(query):
@@ -1468,87 +1545,76 @@ async def search_stream(query: str, request: Request, token: str = ""):
     remaining = max(0, DAILY_LIMIT - new_count)
 
     async def generate():
-        # We use a generator function — yield sends each piece to the browser
-        # "yield" means: send this now and continue the function
-        # Unlike "return" which ends the function, yield keeps it running
+        # async generator — each source runs in a thread via asyncio.to_thread()
+        # asyncio.to_thread() takes a blocking function and runs it in a
+        # background thread, then gives control back to the event loop so
+        # FastAPI can actually flush the yield to the browser immediately.
+        # Without this, the sync requests calls block the event loop and
+        # Railway's proxy buffers everything until the function returns.
 
         all_posts = []
         sources_counts = {}
 
-        # Send initial acknowledgement
         yield f"data: {json.dumps({'type': 'start', 'query': query})}\n\n"
 
-        # Fetch each source and send progress after each one
-        # Each fetch is done synchronously but the user sees each result arrive
-
-        reddit = fetch_reddit(query)
-        all_posts += reddit
-        sources_counts["reddit"] = len(reddit)
+        # Each line: run the fetch in a thread, yield the progress immediately
+        reddit = await asyncio.to_thread(fetch_reddit, query)
+        all_posts += reddit; sources_counts["reddit"] = len(reddit)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'reddit', 'count': len(reddit), 'label': 'Reddit'})}\n\n"
 
-        hn = fetch_hackernews(query)
-        all_posts += hn
-        sources_counts["hackernews"] = len(hn)
+        hn = await asyncio.to_thread(fetch_hackernews, query)
+        all_posts += hn; sources_counts["hackernews"] = len(hn)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'hackernews', 'count': len(hn), 'label': 'Tech Forums'})}\n\n"
 
-        newsapi = fetch_newsapi(query)
-        all_posts += newsapi
-        sources_counts["newsapi"] = len(newsapi)
+        newsapi = await asyncio.to_thread(fetch_newsapi, query)
+        all_posts += newsapi; sources_counts["newsapi"] = len(newsapi)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'newsapi', 'count': len(newsapi), 'label': 'News'})}\n\n"
 
-        newsdata = fetch_newsdata(query)
-        all_posts += newsdata
-        sources_counts["newsdata"] = len(newsdata)
+        newsdata = await asyncio.to_thread(fetch_newsdata, query)
+        all_posts += newsdata; sources_counts["newsdata"] = len(newsdata)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'newsdata', 'count': len(newsdata), 'label': 'Global News'})}\n\n"
 
-        rss = fetch_rss(query)
-        all_posts += rss
-        sources_counts["rss"] = len(rss)
+        rss = await asyncio.to_thread(fetch_rss, query)
+        all_posts += rss; sources_counts["rss"] = len(rss)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'rss', 'count': len(rss), 'label': 'RSS'})}\n\n"
 
-        youtube = fetch_youtube(query)
-        all_posts += youtube
-        sources_counts["youtube"] = len(youtube)
+        youtube = await asyncio.to_thread(fetch_youtube, query)
+        all_posts += youtube; sources_counts["youtube"] = len(youtube)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'youtube', 'count': len(youtube), 'label': 'YouTube'})}\n\n"
 
-        trustpilot = fetch_trustpilot(query)
-        all_posts += trustpilot
-        sources_counts["trustpilot"] = len(trustpilot)
+        trustpilot = await asyncio.to_thread(fetch_trustpilot, query)
+        all_posts += trustpilot; sources_counts["trustpilot"] = len(trustpilot)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'trustpilot', 'count': len(trustpilot), 'label': 'Trustpilot'})}\n\n"
 
-        appstore = fetch_appstore(query)
-        all_posts += appstore
-        sources_counts["appstore"] = len(appstore)
+        appstore = await asyncio.to_thread(fetch_appstore, query)
+        all_posts += appstore; sources_counts["appstore"] = len(appstore)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'appstore', 'count': len(appstore), 'label': 'App Store'})}\n\n"
 
-        playstore = fetch_playstore(query)
-        all_posts += playstore
-        sources_counts["playstore"] = len(playstore)
+        playstore = await asyncio.to_thread(fetch_playstore, query)
+        all_posts += playstore; sources_counts["playstore"] = len(playstore)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'playstore', 'count': len(playstore), 'label': 'Play Store'})}\n\n"
 
-        mastodon = fetch_mastodon(query)
-        all_posts += mastodon
-        sources_counts["mastodon"] = len(mastodon)
+        mastodon = await asyncio.to_thread(fetch_mastodon, query)
+        all_posts += mastodon; sources_counts["mastodon"] = len(mastodon)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'mastodon', 'count': len(mastodon), 'label': 'Mastodon'})}\n\n"
 
-        wikipedia = fetch_wikipedia(query)
-        all_posts += wikipedia
-        sources_counts["wikipedia"] = len(wikipedia)
+        wikipedia = await asyncio.to_thread(fetch_wikipedia, query)
+        all_posts += wikipedia; sources_counts["wikipedia"] = len(wikipedia)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'wikipedia', 'count': len(wikipedia), 'label': 'Wikipedia'})}\n\n"
 
-        googlenews = fetch_google_news(query)
-        all_posts += googlenews
-        sources_counts["googlenews"] = len(googlenews)
+        googlenews = await asyncio.to_thread(fetch_google_news, query)
+        all_posts += googlenews; sources_counts["googlenews"] = len(googlenews)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'googlenews', 'count': len(googlenews), 'label': 'Google News'})}\n\n"
 
-        # Tell the user we are now generating the intelligence briefing
+        bingnews = await asyncio.to_thread(fetch_bing_news, query)
+        all_posts += bingnews; sources_counts["bingnews"] = len(bingnews)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'bingnews', 'count': len(bingnews), 'label': 'Bing News'})}\n\n"
+
         yield f"data: {json.dumps({'type': 'analysing', 'message': 'Generating intelligence briefing'})}\n\n"
 
-        # Rank results and generate insight
-        ranked  = filter_and_rank(all_posts, query)
-        insight = generate_insight(ranked, query)
+        ranked  = await asyncio.to_thread(filter_and_rank, all_posts, query)
+        insight = await asyncio.to_thread(generate_insight, ranked, query)
 
-        # Send the complete result
         final = {
             "type":                "complete",
             "query":               query,
@@ -1614,6 +1680,7 @@ def search(query: str, request: Request, token: str = ""):
     appstore   = fetch_appstore(query)
     playstore  = fetch_playstore(query)
     googlenews = fetch_google_news(query)
+    bingnews   = fetch_bing_news(query)
 
     # Combine all results into one big list
     # The + operator joins lists together
@@ -1647,7 +1714,8 @@ def search(query: str, request: Request, token: str = ""):
             "trustpilot": len(trustpilot),
             "appstore":   len(appstore),
             "playstore":  len(playstore),
-            "googlenews": len(googlenews)
+            "googlenews": len(googlenews),
+            "bingnews":   len(bingnews)
         },
         # insight is a dict — we extract briefing and questions separately
         "insight":           insight.get("briefing", "") if isinstance(insight, dict) else insight,
