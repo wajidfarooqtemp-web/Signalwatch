@@ -1178,10 +1178,11 @@ def extract_briefing_and_questions(raw_text):
     print(f"AI raw response (first 200 chars): {repr(raw_text[:200])}")
 
     briefing  = ""
+    action    = ""
     questions = []
 
     if not raw_text:
-        return briefing, questions
+        return briefing, action, questions
 
     # Step 1: Aggressively remove all markdown formatting
     clean = raw_text.strip()
@@ -1254,7 +1255,7 @@ def extract_briefing_and_questions(raw_text):
     briefing = re.sub(r'\*([^*]+)\*',     r'\1', briefing)
     briefing = briefing.strip()
 
-    return briefing, questions
+    return briefing, action, questions
 
 # ─── PATTERN LIBRARY ─────────────────────────────────────────────────────────
 # 15 documented patterns from real brand intelligence cases.
