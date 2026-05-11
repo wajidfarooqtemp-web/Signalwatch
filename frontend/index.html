@@ -9,6 +9,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script defer src="https://cloud.umami.is/script.js" data-website-id="750bf47c-83de-4c08-ac8b-f4deeb5dcae6"></script>
+  <!-- Google Identity Services — handles Sign In With Google -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     :root {
@@ -214,6 +216,33 @@
     .about-card-icon { font-size:20px; margin-bottom:14px; }
     .about-card-title { font-family:var(--serif); font-size:15px; font-weight:700; color:var(--ink); margin-bottom:8px; letter-spacing:-0.2px; }
     .about-card-text { font-size:13px; color:var(--text2); line-height:1.7; font-weight:300; }
+/* GOOGLE LOGIN MODAL */
+    .modal-overlay { position:fixed; inset:0; background:rgba(15,13,11,0.55); z-index:500; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+    .modal-overlay.open { opacity:1; pointer-events:all; }
+    .modal-box { background:var(--white); border:1px solid var(--border); border-top:3px solid var(--teal); border-radius:8px; padding:36px 40px; max-width:420px; width:90%; text-align:center; transform:translateY(12px); transition:transform 0.2s; }
+    .modal-overlay.open .modal-box { transform:translateY(0); }
+    .modal-icon { font-size:32px; margin-bottom:16px; }
+    .modal-title { font-family:var(--serif); font-size:22px; font-weight:700; color:var(--ink); letter-spacing:-0.3px; margin-bottom:10px; }
+    .modal-sub { font-size:14px; color:var(--text2); line-height:1.7; margin-bottom:28px; font-weight:300; }
+    .modal-sub strong { font-weight:600; color:var(--text); }
+    .google-btn { display:inline-flex; align-items:center; gap:10px; background:var(--white); border:1.5px solid var(--border2); border-radius:5px; padding:11px 22px; font-size:14px; font-weight:500; color:var(--text); cursor:pointer; transition:box-shadow 0.15s,border-color 0.15s; font-family:var(--sans); }
+    .google-btn:hover { border-color:var(--teal); box-shadow:0 2px 8px rgba(13,122,107,0.1); }
+    .google-btn svg { flex-shrink:0; }
+    .modal-skip { display:block; margin-top:16px; font-size:12px; color:var(--text3); cursor:pointer; font-family:var(--mono); text-decoration:underline; }
+    .modal-skip:hover { color:var(--text2); }
+    .modal-signed-in { display:flex; align-items:center; gap:10px; background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:5px; padding:10px 16px; font-size:13px; color:var(--teal); font-weight:500; }
+    .modal-avatar { width:28px; height:28px; border-radius:50%; background:var(--teal-mid); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-size:12px; font-weight:700; color:var(--teal); flex-shrink:0; }
+
+    /* SOURCE PULSE ANIMATION (loading state) */
+    @keyframes sw-travel { 0%{stroke-dashoffset:150;opacity:0} 15%{opacity:0.9} 85%{opacity:0.9} 100%{stroke-dashoffset:0;opacity:0} }
+    @keyframes sw-nodepop { 0%{opacity:0.18} 60%{opacity:1} 100%{opacity:0.55} }
+    @keyframes sw-centrepulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+    .sw-line { stroke-dasharray:150; stroke-dashoffset:150; opacity:0; }
+    .sw-line.active { animation:sw-travel 1s ease forwards; }
+    .sw-node { opacity:0.18; transition:opacity 0.35s; }
+    .sw-node.lit { opacity:1; animation:sw-nodepop 1.4s ease forwards; }
+    #sw-centre { transform-origin:340px 170px; }
+    #sw-centre.pulsing { animation:sw-centrepulse 1.2s ease-in-out infinite; }
 
     /* FOOTER */
     .site-footer { border-top:1px solid var(--border); background:var(--bg2); padding:20px 40px; display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:10px; color:var(--text3); letter-spacing:0.3px; flex-wrap:wrap; gap:8px; }
@@ -280,6 +309,21 @@
   <div class="mobile-menu" id="mobileMenu">
     <div class="mobile-btn active" id="mNavSearch" onclick="showPage('search');toggleMenu()">Search</div>
     <div class="mobile-btn" id="mNavAbout" onclick="showPage('about');toggleMenu()">About</div>
+  </div>
+<!-- GOOGLE LOGIN MODAL -->
+  <div class="modal-overlay" id="loginModal">
+    <div class="modal-box">
+      <div class="modal-icon">◎</div>
+      <div class="modal-title">One more search needs a login</div>
+      <p class="modal-sub">Your first search was free. To continue, sign in with Google. This lets Signalwatch give you <strong>3 searches per day</strong> reliably — and stops people gaming it by clearing their browser cache.</p>
+      <div id="modalContent">
+        <button class="google-btn" onclick="signInWithGoogle()">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+          Continue with Google
+        </button>
+      </div>
+      <span class="modal-skip" onclick="skipLogin()">Skip for now — use my 3 anyway</span>
+    </div>
   </div>
 
   <!-- SEARCH PAGE -->
@@ -362,8 +406,45 @@
     <div class="results-wrap">
       <div class="loading" id="loading">
         <div class="loading-text" id="loadingText">Scanning sources and analysing patterns</div>
-        <div class="loading-bar"><div class="loading-fill"></div></div>
-        <div id="liveProgress" style="margin:16px auto 0;max-width:300px;text-align:left;"></div>
+
+        <!-- Animated source map — lights up as each source returns -->
+        <svg id="sw-loading-anim" width="100%" viewBox="0 0 680 310" style="max-width:500px;margin:0 auto;display:block" role="presentation" aria-hidden="true">
+          <!-- Centre node -->
+          <circle id="sw-centre" cx="340" cy="155" r="20" fill="#e8f5f2" stroke="#b2ddd6" stroke-width="1.5"/>
+          <circle cx="340" cy="155" r="11" fill="#0d7a6b"/>
+          <text x="340" y="159" text-anchor="middle" style="font-size:8px;font-weight:600;fill:#fff;font-family:'DM Mono',monospace">SW</text>
+
+          <!-- Lines (drawn first, below nodes) -->
+          <line id="sw-l0"  class="sw-line" x1="100" y1="58"  x2="324" y2="143" stroke="#c2410c" stroke-width="1.2" marker-end="none"/>
+          <line id="sw-l1"  class="sw-line" x1="218" y1="28"  x2="330" y2="137" stroke="#92400e" stroke-width="1.2"/>
+          <line id="sw-l2"  class="sw-line" x1="365" y1="24"  x2="344" y2="134" stroke="#be123c" stroke-width="1.2"/>
+          <line id="sw-l3"  class="sw-line" x1="505" y1="38"  x2="357" y2="138" stroke="#0d7a6b" stroke-width="1.2"/>
+          <line id="sw-l4"  class="sw-line" x1="605" y1="108" x2="361" y2="150" stroke="#007b5e" stroke-width="1.2"/>
+          <line id="sw-l5"  class="sw-line" x1="608" y1="205" x2="361" y2="163" stroke="#0066cc" stroke-width="1.2"/>
+          <line id="sw-l6"  class="sw-line" x1="555" y1="282" x2="356" y2="174" stroke="#1a7340" stroke-width="1.2"/>
+          <line id="sw-l7"  class="sw-line" x1="388" y1="288" x2="347" y2="176" stroke="#ea4335" stroke-width="1.2"/>
+          <line id="sw-l8"  class="sw-line" x1="215" y1="282" x2="325" y2="174" stroke="#563acc" stroke-width="1.2"/>
+          <line id="sw-l9"  class="sw-line" x1="82"  y1="230" x2="320" y2="164" stroke="#15803d" stroke-width="1.2"/>
+          <line id="sw-l10" class="sw-line" x1="82"  y1="148" x2="319" y2="155" stroke="#6d28d9" stroke-width="1.2"/>
+
+          <!-- Source nodes -->
+          <g id="sw-n0" class="sw-node"><circle cx="100" cy="58" r="13" fill="#fff4ef" stroke="#c2410c" stroke-width="1"/><text x="100" y="62" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#c2410c;font-family:'DM Mono',monospace">Reddit</text></g>
+          <g id="sw-n1" class="sw-node"><circle cx="218" cy="28" r="13" fill="#fffbeb" stroke="#92400e" stroke-width="1"/><text x="218" y="32" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#92400e;font-family:'DM Mono',monospace">HN</text></g>
+          <g id="sw-n2" class="sw-node"><circle cx="365" cy="24" r="13" fill="#fff1f2" stroke="#be123c" stroke-width="1"/><text x="365" y="28" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#be123c;font-family:'DM Mono',monospace">YT</text></g>
+          <g id="sw-n3" class="sw-node"><circle cx="505" cy="38" r="13" fill="#e8f5f2" stroke="#0d7a6b" stroke-width="1"/><text x="505" y="42" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#0d7a6b;font-family:'DM Mono',monospace">News</text></g>
+          <g id="sw-n4" class="sw-node"><circle cx="605" cy="108" r="13" fill="#f0fdf4" stroke="#007b5e" stroke-width="1"/><text x="605" y="112" text-anchor="middle" style="font-size:6px;font-weight:600;fill:#007b5e;font-family:'DM Mono',monospace">Trust.</text></g>
+          <g id="sw-n5" class="sw-node"><circle cx="608" cy="205" r="13" fill="#f0f4ff" stroke="#0066cc" stroke-width="1"/><text x="608" y="209" text-anchor="middle" style="font-size:6px;font-weight:600;fill:#0066cc;font-family:'DM Mono',monospace">AppSt.</text></g>
+          <g id="sw-n6" class="sw-node"><circle cx="555" cy="282" r="13" fill="#f0fdf4" stroke="#1a7340" stroke-width="1"/><text x="555" y="286" text-anchor="middle" style="font-size:6.5px;font-weight:600;fill:#1a7340;font-family:'DM Mono',monospace">Play</text></g>
+          <g id="sw-n7" class="sw-node"><circle cx="388" cy="288" r="13" fill="#fff8f0" stroke="#ea4335" stroke-width="1"/><text x="388" y="292" text-anchor="middle" style="font-size:6px;font-weight:600;fill:#ea4335;font-family:'DM Mono',monospace">GNews</text></g>
+          <g id="sw-n8" class="sw-node"><circle cx="215" cy="282" r="13" fill="#f3f0ff" stroke="#563acc" stroke-width="1"/><text x="215" y="286" text-anchor="middle" style="font-size:6.5px;font-weight:600;fill:#563acc;font-family:'DM Mono',monospace">Mast.</text></g>
+          <g id="sw-n9" class="sw-node"><circle cx="82" cy="230" r="13" fill="#f0fdf4" stroke="#15803d" stroke-width="1"/><text x="82" y="234" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#15803d;font-family:'DM Mono',monospace">RSS</text></g>
+          <g id="sw-n10" class="sw-node"><circle cx="82" cy="148" r="13" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1"/><text x="82" y="152" text-anchor="middle" style="font-size:6.5px;font-weight:600;fill:#6d28d9;font-family:'DM Mono',monospace">Wiki</text></g>
+
+          <!-- Signal count label -->
+          <text id="sw-sigcount" x="340" y="198" text-anchor="middle" style="font-size:10px;fill:#0d7a6b;font-family:'DM Mono',monospace;opacity:0">0 signals</text>
+        </svg>
+
+        <div id="liveProgress" style="margin:4px auto 0;max-width:300px;text-align:left;"></div>
       </div>
       <div id="resultsContainer">
         <div class="empty-state">
@@ -423,17 +504,37 @@
     // ── CONFIGURATION ──────────────────────────────────────────────────────
     const API_BASE = "https://signalwatch-production.up.railway.app";
 
+    // YOUR Google Client ID — get from console.cloud.google.com
+    // Credentials → Create → OAuth 2.0 Client ID → Web application
+    // Add https://your-domain.com to Authorised JavaScript origins
+    const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+
     const sourceLabels = {
       reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
       newsdata:"Global News", youtube:"YouTube", rss:"RSS",
       wikipedia:"Wikipedia", mastodon:"Mastodon", trustpilot:"Trustpilot",
-      appstore:"App Store", playstore:"Play Store", googlenews:"Google News", bingnews:"Bing News"
+      appstore:"App Store", playstore:"Play Store", googlenews:"Google News",
+      bingnews:"Bing News"
+    };
+
+    // Maps source name → animation node index (matches SVG ids sw-n0..sw-n10)
+    const sourceAnimIndex = {
+      reddit:0, hackernews:1, youtube:2, newsapi:3, trustpilot:4,
+      appstore:5, playstore:6, googlenews:7, mastodon:8, rss:9, wikipedia:10,
+      newsdata:3  // share the News slot
     };
 
     let signalChart = null;
+    let googleIdToken = null;   // set after Google sign-in
+    let googleUserName = null;
+    let swAnimSigCount = 0;     // running signal total shown in animation
 
     // ── TOKEN ─────────────────────────────────────────────────────────────
     function getToken() {
+      // If user is signed in with Google, prefix the raw ID token
+      // Backend strips "google_" and verifies the rest against Google's servers
+      if (googleIdToken) return "google_" + googleIdToken;
+      // Fall back to legacy browser token
       let t = localStorage.getItem("sw_token");
       if (!t) {
         t = "sw_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -441,7 +542,60 @@
       }
       return t;
     }
-    const SW_TOKEN = getToken();
+
+    // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
+    function signInWithGoogle() {
+      // Google Identity Services — opens the account picker popup
+      // credential.credential is a JWT signed by Google
+      // We send it to the backend which calls Google's tokeninfo endpoint to verify
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+      google.accounts.id.prompt(); // shows the one-tap UI
+    }
+
+    function handleGoogleCredential(response) {
+      googleIdToken = response.credential;
+      // Decode name from the JWT payload (middle part, base64)
+      // We only use this for display — actual verification happens server-side
+      try {
+        const payload = JSON.parse(atob(googleIdToken.split('.')[1]));
+        googleUserName = payload.given_name || payload.name || "you";
+      } catch(e) {
+        googleUserName = "you";
+      }
+      // Update modal to show signed-in state
+      document.getElementById("modalContent").innerHTML = `
+        <div class="modal-signed-in">
+          <div class="modal-avatar">${googleUserName[0].toUpperCase()}</div>
+          <span>Signed in as ${googleUserName} — continuing search</span>
+        </div>`;
+      document.querySelector(".modal-skip").style.display = "none";
+      // Update localStorage to Google-based tracking
+      // Reset count because Google tokens are properly rate-limited server-side
+      localStorage.setItem("sw_authed", "google");
+      setTimeout(() => closeModal(true), 800);
+    }
+
+    function skipLogin() {
+      // User skips — they keep using browser token but count still increments
+      closeModal(false);
+    }
+
+    function openModal() {
+      document.getElementById("loginModal").classList.add("open");
+    }
+
+    function closeModal(continueSearch) {
+      document.getElementById("loginModal").classList.remove("open");
+      if (continueSearch) {
+        // Re-run the search with the Google token now available
+        runSearch();
+      }
+    }
 
     // ── LIMIT MESSAGE ─────────────────────────────────────────────────────
     function showLimitMessage(container) {
@@ -453,12 +607,13 @@
         </div>`;
     }
 
-    // ── CHECK LIMIT ON PAGE LOAD ──────────────────────────────────────────
+    // ── CHECK LIMIT ────────────────────────────────────────────────────────
     function checkLocalLimit() {
+      // Google-authed users are limited server-side, not client-side
+      if (localStorage.getItem("sw_authed") === "google") return;
       const today      = new Date().toDateString();
       const savedDate  = localStorage.getItem("sw_date");
       const savedCount = parseInt(localStorage.getItem("sw_count") || "0");
-
       if (savedDate !== today) {
         localStorage.setItem("sw_date", today);
         localStorage.setItem("sw_count", "0");
@@ -475,9 +630,7 @@
     checkLocalLimit();
 
     // ── NAVIGATION ────────────────────────────────────────────────────────
-    function toggleMenu() {
-      document.getElementById("mobileMenu").classList.toggle("open");
-    }
+    function toggleMenu() { document.getElementById("mobileMenu").classList.toggle("open"); }
 
     function showPage(page) {
       document.getElementById("searchPage").className  = page==="search" ? "search-page" : "search-page hidden";
@@ -493,15 +646,58 @@
       if (e.key === "Enter") runSearch();
     });
 
+    // ── ANIMATION HELPERS ─────────────────────────────────────────────────
+    function animLightSource(sourceKey, count) {
+      const idx = sourceAnimIndex[sourceKey];
+      if (idx === undefined) return;
+      const node = document.getElementById("sw-n" + idx);
+      const line = document.getElementById("sw-l" + idx);
+      if (!node || !line) return;
+      node.classList.add("lit");
+      line.classList.add("active");
+      swAnimSigCount += count;
+      const label = document.getElementById("sw-sigcount");
+      if (label) {
+        label.textContent = swAnimSigCount + " signals";
+        label.style.opacity = "1";
+      }
+      // Fade line after animation plays
+      setTimeout(() => line.classList.remove("active"), 1200);
+    }
+
+    function animSetPhase(phase) {
+      // phase: "scanning" | "analysing" | "done"
+      const centre = document.getElementById("sw-centre");
+      if (phase === "analysing") centre && centre.classList.add("pulsing");
+      if (phase === "done") centre && centre.classList.remove("pulsing");
+      document.getElementById("loadingText").textContent =
+        phase === "scanning"  ? "Scanning sources and analysing patterns" :
+        phase === "analysing" ? "Generating intelligence briefing..." : "Done";
+    }
+
+    function resetAnimation() {
+      swAnimSigCount = 0;
+      for (let i = 0; i <= 10; i++) {
+        document.getElementById("sw-n"+i)?.classList.remove("lit");
+        document.getElementById("sw-l"+i)?.classList.remove("active");
+      }
+      document.getElementById("sw-centre")?.classList.remove("pulsing");
+      const lbl = document.getElementById("sw-sigcount");
+      if (lbl) { lbl.textContent = "0 signals"; lbl.style.opacity = "0"; }
+    }
+
     // ── RUN SEARCH ────────────────────────────────────────────────────────
-    // Uses fetch() + ReadableStream instead of EventSource.
-    // Why: Railway buffers responses between chunks, which makes EventSource
-    // appear to hang. fetch() with streaming reads chunks as they arrive
-    // and gives us control over when to parse each line.
-    // This is more reliable on Railway than native EventSource.
     async function runSearch() {
       const query = document.getElementById("queryInput").value.trim();
       if (!query) return;
+
+      // After first search, if not Google-authed, show login modal
+      const searchCount = parseInt(localStorage.getItem("sw_count") || "0");
+      const isAuthed = localStorage.getItem("sw_authed") === "google";
+      if (searchCount >= 1 && !isAuthed && !googleIdToken) {
+        openModal();
+        return; // halt — modal will call runSearch() again after sign-in or skip
+      }
 
       const btn       = document.getElementById("searchBtn");
       const loading   = document.getElementById("loading");
@@ -513,74 +709,40 @@
       loading.style.display = "block";
       container.innerHTML = "";
       progress.innerHTML = "";
-      document.getElementById("loadingText").textContent = "Scanning sources for " + query;
+      resetAnimation();
+      animSetPhase("scanning");
       if (signalChart) { signalChart.destroy(); signalChart = null; }
 
-      const url = `${API_BASE}/search-stream?query=${encodeURIComponent(query)}&token=${encodeURIComponent(SW_TOKEN)}`;
+      const token = getToken();
+      const url = `${API_BASE}/search-stream?query=${encodeURIComponent(query)}&token=${encodeURIComponent(token)}`;
 
-      // ── WHY fetch() INSTEAD OF EventSource ──
-      // EventSource is great but browsers and proxies (including Railway's
-      // internal routing) sometimes buffer the stream before delivering it,
-      // which means you see nothing for 30+ seconds then everything at once.
-      //
-      // fetch() with a ReadableStream reader processes each chunk immediately
-      // as the TCP packet arrives. We manually split on "\n\n" (SSE format)
-      // and parse "data: {...}" lines ourselves. Same data, more reliable delivery.
       try {
         const response = await fetch(url, {
           method: "GET",
-          headers: {
-            // Tell the server we want a stream, not a buffered response
-            "Accept": "text/event-stream",
-            "Cache-Control": "no-cache"
-          }
+          headers: { "Accept": "text/event-stream", "Cache-Control": "no-cache" }
         });
 
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Server ${response.status}`);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let buffer = ""; // Holds incomplete chunks between reads
+        let buffer = "";
 
         while (true) {
-          // Read the next chunk from the stream
-          // done = true means the stream has ended
-          // value = the raw bytes of this chunk
           const { done, value } = await reader.read();
-
           if (done) break;
-
-          // Convert bytes to text and add to our buffer
           buffer += decoder.decode(value, { stream: true });
-
-          // SSE events are separated by double newline "\n\n"
-          // Split the buffer on that separator
           const parts = buffer.split("\n\n");
-
-          // The last part may be incomplete (mid-chunk) — keep it in buffer
-          // All other parts are complete events ready to process
           buffer = parts.pop();
 
           for (const part of parts) {
-            // Each SSE event looks like: "data: {...json...}"
-            // Extract just the JSON part after "data: "
             const line = part.trim();
             if (!line.startsWith("data:")) continue;
-
-            const jsonStr = line.slice(5).trim(); // Remove "data:" prefix
-            if (!jsonStr) continue;
-
             let msg;
-            try {
-              msg = JSON.parse(jsonStr);
-            } catch(e) {
-              continue; // Skip malformed JSON
-            }
+            try { msg = JSON.parse(line.slice(5).trim()); } catch(e) { continue; }
 
-            // Handle each message type
             if (msg.type === "progress") {
+              animLightSource(msg.source, msg.count || 0);
               const lineEl = document.createElement("div");
               lineEl.style.cssText = [
                 "display:flex", "justify-content:space-between",
@@ -593,6 +755,7 @@
             }
 
             else if (msg.type === "analysing") {
+              animSetPhase("analysing");
               const lineEl = document.createElement("div");
               lineEl.style.cssText = "font-family:var(--mono);font-size:11px;color:var(--amber);padding:8px 0 2px;";
               lineEl.textContent = "Generating intelligence briefing...";
@@ -606,37 +769,41 @@
               localStorage.setItem("sw_count", "3");
               localStorage.setItem("sw_date", new Date().toDateString());
               showLimitMessage(container);
-              return; // Stop reading the stream
+              return;
             }
 
             else if (msg.type === "error") {
-              loading.style.display = "none";
-              btn.disabled = false;
-              btn.textContent = "Analyse";
-              container.innerHTML = `<div class="error-msg">Something went wrong. Please try again.</div>`;
+              if (msg.message === "google_auth_failed") {
+                googleIdToken = null; // token expired, force re-login
+                loading.style.display = "none";
+                btn.disabled = false;
+                btn.textContent = "Analyse";
+                container.innerHTML = `<div class="error-msg" style="font-family:var(--mono)">Google sign-in expired. Please sign in again.</div>`;
+              } else {
+                loading.style.display = "none";
+                btn.disabled = false;
+                btn.textContent = "Analyse";
+                container.innerHTML = `<div class="error-msg" style="font-family:var(--mono)">Something went wrong. Please try again.</div>`;
+              }
               return;
             }
 
             else if (msg.type === "complete") {
+              animSetPhase("done");
               loading.style.display = "none";
               progress.innerHTML = "";
-              document.getElementById("loadingText").textContent = "Scanning sources and analysing patterns";
               btn.disabled = false;
               btn.textContent = "Analyse";
               renderResults(msg, query);
-              return; // We got everything — stop reading
+              return;
             }
           }
         }
 
-        // Stream ended without a "complete" message — something went wrong
         if (loading.style.display !== "none") {
           loading.style.display = "none";
           btn.disabled = false;
           btn.textContent = "Analyse";
-          if (!container.innerHTML) {
-            container.innerHTML = `<div class="error-msg">Stream ended unexpectedly. Please try again.</div>`;
-          }
         }
 
       } catch(err) {
@@ -644,7 +811,7 @@
         loading.style.display = "none";
         btn.disabled = false;
         btn.textContent = "Analyse";
-        container.innerHTML = `<div class="error-msg">Could not reach the server. Please try again.</div>`;
+        container.innerHTML = `<div class="error-msg" style="font-family:var(--mono)">Could not reach the server. Please try again.</div>`;
       }
     }
 
@@ -662,12 +829,15 @@
       }
 
       if (data.searches_remaining !== undefined) {
-        const used = 3 - data.searches_remaining;
-        localStorage.setItem("sw_count", used.toString());
-        localStorage.setItem("sw_date", new Date().toDateString());
+        const isAuthed = localStorage.getItem("sw_authed") === "google";
+        if (!isAuthed) {
+          const used = 3 - data.searches_remaining;
+          localStorage.setItem("sw_count", used.toString());
+          localStorage.setItem("sw_date", new Date().toDateString());
+        }
         document.getElementById("searchesLeft").style.display = "block";
         document.getElementById("searchesCount").textContent = data.searches_remaining;
-        if (data.searches_remaining <= 0) {
+        if (data.searches_remaining <= 0 && !isAuthed) {
           document.getElementById("searchBtn").disabled = true;
           document.getElementById("searchBtn").textContent = "Come back tomorrow";
         }
@@ -680,107 +850,58 @@
       }
 
       const activeSources = Object.values(data.sources || {}).filter(v => v > 0).length;
-      animateCount("statTotal",        data.total);
-      animateCount("statTopScore",     data.results[0]?.score || 0);
+      animateCount("statTotal", data.total);
+      animateCount("statTopScore", data.results[0]?.score || 0);
       animateCount("statActiveSources", activeSources);
 
       let html = "";
 
-      // ── BRIEFING CARD ──
       if (data.insight && data.insight.length > 20) {
         let cleanInsight = data.insight
-          .replace(/```[a-z]*\n?/gi, '')
-          .replace(/```/g, '')
+          .replace(/```[a-z]*\n?/gi, '').replace(/```/g, '')
           .replace(/^\s*\{\s*"briefing"\s*:\s*"?/, '')
           .replace(/"?\s*,?\s*"[a-z]+"[\s\S]*$/, '')
-          .replace(/^\s*\{/, '').replace(/\}\s*$/, '')
-          .trim();
-
-        if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) {
-          cleanInsight = cleanInsight.slice(1, -1);
-        }
-
+          .replace(/^\s*\{/, '').replace(/\}\s*$/, '').trim();
+        if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) cleanInsight = cleanInsight.slice(1,-1);
         const actionText = data.action && data.action.length > 10 ? data.action : "";
-
-        html += `
-          <div class="brief-card">
-            <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
-            <div class="brief-body">${cleanInsight}</div>
-            ${actionText ? `
-              <div class="action-strip">
-                <span class="action-flag">Do this</span>
-                <span class="action-text">${actionText}</span>
-              </div>` : ""}
-          </div>`;
+        html += `<div class="brief-card">
+          <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
+          <div class="brief-body">${cleanInsight}</div>
+          ${actionText ? `<div class="action-strip"><span class="action-flag">Do this</span><span class="action-text">${actionText}</span></div>` : ""}
+        </div>`;
       } else {
         html += `<div class="brief-card"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
       }
 
-      // ── QUESTIONS CARD ──
       if (data.questions && data.questions.length > 0) {
         const qSrc = data.cooccurrences_found > 0
-          ? `Pattern analysis · ${data.cooccurrences_found} signals examined`
-          : "AI pattern analysis";
-
-        html += `
-          <div class="questions-card">
-            <div class="card-eyebrow">
-              <span>Questions your team should be asking</span>
-              <span class="card-eyebrow-source">${qSrc}</span>
-            </div>`;
-
+          ? `Pattern analysis · ${data.cooccurrences_found} signals examined` : "AI pattern analysis";
+        html += `<div class="questions-card"><div class="card-eyebrow"><span>Questions your team should be asking</span><span class="card-eyebrow-source">${qSrc}</span></div>`;
         data.questions.forEach((q, i) => {
           const qText   = typeof q === "string" ? q : (q.question || "");
-          const qReason = typeof q === "object" ? (q.reason   || "") : "";
-          html += `
-            <div class="question-row">
-              <div class="q-num">0${i+1}</div>
-              <div>
-                <div class="q-text">${qText}</div>
-                ${qReason ? `<div class="q-reason">${qReason}</div>` : ""}
-              </div>
-            </div>`;
+          const qReason = typeof q === "object" ? (q.reason || "") : "";
+          html += `<div class="question-row"><div class="q-num">0${i+1}</div><div><div class="q-text">${qText}</div>${qReason ? `<div class="q-reason">${qReason}</div>` : ""}</div></div>`;
         });
-
         html += `</div>`;
       }
 
-      // ── CHART ──
-      html += `
-        <div class="chart-card">
-          <div class="chart-head">
-            <span class="chart-title">Signal timeline · last 90 days</span>
-            <span class="chart-sub">Click a dot to open the source</span>
-          </div>
-          <canvas id="signalChart" style="max-height:180px"></canvas>
-        </div>`;
+      html += `<div class="chart-card"><div class="chart-head"><span class="chart-title">Signal timeline · last 90 days</span><span class="chart-sub">Click a dot to open the source</span></div><canvas id="signalChart" style="max-height:180px"></canvas></div>`;
 
-      // ── WORD CLOUD ──
       if (data.word_frequencies && data.word_frequencies.length > 0) {
         const colors = ["#0d7a6b","#c4720a","#6d28d9","#c0392b","#059669","#2563eb","#c2410c","#0369a1","#15803d","#92400e"];
         const maxC = data.word_frequencies[0].count;
         const minC = data.word_frequencies[data.word_frequencies.length-1].count;
-
-        html += `
-          <div class="cloud-card">
-            <div class="card-eyebrow">
-              <span>Word patterns</span>
-              <span class="card-eyebrow-source">Frequency across all mentions</span>
-            </div>
-            <div class="cloud-wrap">`;
-
+        html += `<div class="cloud-card"><div class="card-eyebrow"><span>Word patterns</span><span class="card-eyebrow-source">Frequency across all mentions</span></div><div class="cloud-wrap">`;
         data.word_frequencies.forEach((item, i) => {
-          const norm  = (item.count - minC) / ((maxC - minC) || 1);
-          const size  = Math.round(10 + norm * 20);
+          const norm = (item.count - minC) / ((maxC - minC) || 1);
+          const size = Math.round(10 + norm * 20);
           const color = colors[i % colors.length];
           const opHex = Math.round((0.12 + norm * 0.22) * 255).toString(16).padStart(2,"0");
           html += `<span class="cloud-word" style="font-size:${size}px;color:${color};background:${color}${opHex}" title="${item.count} mentions">${item.word}</span>`;
         });
-
         html += `</div></div>`;
       }
 
-      // ── SOURCE BADGES ──
       if (data.sources) {
         html += `<div class="sources-strip">`;
         for (const [s, c] of Object.entries(data.sources)) {
@@ -789,34 +910,67 @@
         html += `</div>`;
       }
 
-      // ── RESULTS LIST ──
-      html += `
-        <div class="results-header">
-          <span class="results-title">All signals · ${data.total} results</span>
-          <span class="results-count">sorted by relevance · last 90 days</span>
-        </div>`;
-
+      html += `<div class="results-header"><span class="results-title">All signals · ${data.total} results</span><span class="results-count">sorted by relevance · last 90 days</span></div>`;
       data.results.forEach(r => {
-        const titleHtml = r.url
-          ? `<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>`
-          : r.title;
-        const dateStr = r.created && r.created > 0
-          ? new Date(r.created*1000).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})
-          : "";
+        const titleHtml = r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>` : r.title;
+        const dateStr = r.created && r.created > 0 ? new Date(r.created*1000).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
         const meta = [sourceLabels[r.source]||r.source, dateStr].filter(Boolean).join(" · ");
-        html += `
-          <div class="result-item">
-            <span class="result-score">${r.score}</span>
-            <div class="result-content">
-              <div class="result-title">${titleHtml}</div>
-              <div class="result-meta">${meta}</div>
-            </div>
-          </div>`;
+        html += `<div class="result-item"><span class="result-score">${r.score}</span><div class="result-content"><div class="result-title">${titleHtml}</div><div class="result-meta">${meta}</div></div></div>`;
       });
 
       container.innerHTML = html;
       if (data.sources && data.results) buildChart(data.sources, data.results);
     }
+
+    function animateCount(id, target) {
+      const el = document.getElementById(id);
+      if (!el || !target) return;
+      let start = 0; const steps = 30;
+      const timer = setInterval(() => {
+        start += target / steps;
+        el.textContent = Math.min(Math.round(start), target);
+        if (start >= target) clearInterval(timer);
+      }, 600 / steps);
+    }
+
+    function buildChart(sources, results) {
+      const colors = { reddit:"#c2410c",hackernews:"#92400e",newsapi:"#0d7a6b",newsdata:"#0369a1",youtube:"#be123c",rss:"#15803d",wikipedia:"#6d28d9",mastodon:"#563acc",trustpilot:"#007b5e",appstore:"#0066cc",playstore:"#1a7340",googlenews:"#ea4335",bingnews:"#004488" };
+      const timed = results.filter(r => r.created && r.created > 0);
+      if (timed.length < 2) { buildBarChart(sources, results, colors); return; }
+      timed.sort((a,b) => a.created - b.created);
+      const sourcesSeen = [...new Set(timed.map(r => r.source))];
+      const datasets = sourcesSeen.map(source => ({
+        label: sourceLabels[source]||source,
+        data: timed.filter(r => r.source===source).map((r,i) => ({
+          x: new Date(r.created*1000), y: r.score + Math.sin(i*1.9+source.charCodeAt(0)*0.1)*0.3,
+          url: r.url, title: r.title, realScore: r.score
+        })),
+        borderColor: colors[source]||"#888", backgroundColor: colors[source]||"#888",
+        pointRadius:5, pointHoverRadius:8, showLine:true, tension:0.4, borderWidth:1.5
+      }));
+      const ctx = document.getElementById("signalChart").getContext("2d");
+      signalChart = new Chart(ctx, {
+        type:"scatter", data:{datasets},
+        options:{
+          onClick:(evt,els) => { if(els.length>0){ const pt=signalChart.data.datasets[els[0].datasetIndex].data[els[0].index]; if(pt.url) window.open(pt.url,"_blank"); } },
+          plugins:{ legend:{labels:{color:"#9a9590",font:{size:10,family:"'DM Mono',monospace"},boxWidth:8}},
+            tooltip:{callbacks:{ title:items=>new Date(items[0].raw.x).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}), label:items=>{const d=items.raw;const t=d.title.length>50?d.title.substring(0,50)+"…":d.title;return[`Score: ${d.realScore}`,t,"Click to open"];} }} },
+          scales:{ x:{type:"time",ticks:{color:"#9a9590",font:{size:10},maxTicksLimit:6},grid:{color:"#e8e4da"}}, y:{ticks:{color:"#9a9590",font:{size:10}},grid:{color:"#e8e4da"}} }
+        }
+      });
+    }
+
+    function buildBarChart(sources, results, colors) {
+      const sbs={};
+      results.forEach(r => { if(!sbs[r.source]) sbs[r.source]=[]; sbs[r.source].push(r.score); });
+      const labels=[],avgScores=[],bgColors=[];
+      for(const [s,c] of Object.entries(sources)) {
+        if(c>0 && sbs[s]){ labels.push(sourceLabels[s]||s); avgScores.push(Math.round(sbs[s].reduce((a,b)=>a+b,0)/sbs[s].length*10)/10); bgColors.push(colors[s]||"#888"); }
+      }
+      const ctx=document.getElementById("signalChart").getContext("2d");
+      signalChart=new Chart(ctx,{type:"bar",data:{labels,datasets:[{label:"Avg score",data:avgScores,backgroundColor:bgColors,borderRadius:3,borderSkipped:false}]},options:{plugins:{legend:{labels:{color:"#9a9590",font:{size:10}}}},scales:{x:{ticks:{color:"#9a9590"},grid:{color:"#e8e4da"}},y:{ticks:{color:"#9a9590"},grid:{color:"#e8e4da"}}}}});
+    }
+
 
     // ── ANIMATE COUNT ─────────────────────────────────────────────────────
     function animateCount(id, target) {

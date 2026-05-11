@@ -56,6 +56,42 @@ DATABASE_URL       = os.getenv("DATABASE_URL", "")
 DAILY_LIMIT = 3
 
 
+# Google OAuth client ID — get this from console.cloud.google.com
+# Create a project → Credentials → OAuth 2.0 Client ID → Web application
+# Add your Vercel domain to "Authorised JavaScript origins"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
+def verify_google_token(id_token_str):
+    # Verifies a Google ID token and returns the stable user ID (sub)
+    # The sub field is a permanent unique string tied to the Google account
+    # It never changes even if the user changes their email or name
+    # We use this as the rate limit key instead of localStorage tokens
+    # which users can delete
+    #
+    # We verify by calling Google's tokeninfo endpoint — no library needed
+    # Google checks the signature and expiry for us
+    try:
+        res = requests.get(
+            f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token_str}",
+            timeout=8
+        )
+        if res.status_code != 200:
+            return None
+        data = res.json()
+        # aud must match our client ID — prevents tokens from other apps being used
+        if GOOGLE_CLIENT_ID and data.get("aud") != GOOGLE_CLIENT_ID:
+            print(f"Token aud mismatch: {data.get('aud')}")
+            return None
+        sub = data.get("sub")  # permanent unique Google user ID
+        if not sub:
+            return None
+        # Prefix so we can distinguish Google tokens from legacy sw_ tokens in DB
+        return f"g_{sub}"
+    except Exception as e:
+        print(f"Google token verify error: {e}")
+        return None
+
+
 # ─── DATABASE ────────────────────────────────────────────────────────────────
 # We use PostgreSQL (a database) to track how many searches each browser has done today
 # A database is like a spreadsheet that persists even when the server restarts
@@ -1531,10 +1567,31 @@ async def search_stream(query: str, request: Request, token: str = ""):
     # ─────────────────────────────────────────────────────────────────────────
 
     # Validate token first — same as regular search
-    if not token or not token.startswith("sw_"):
+    # Accept either legacy sw_ browser tokens OR new Google g_ tokens
+    # Google tokens are verified against Google's servers first
+    resolved_token = None
+
+    if token and token.startswith("sw_"):
+        # Legacy browser token — still works for backwards compat
+        resolved_token = token
+
+    elif token and token.startswith("google_"):
+        # Frontend sends "google_{id_token}" — we strip the prefix and verify
+        id_token_str = token[len("google_"):]
+        google_uid = verify_google_token(id_token_str)
+        if google_uid:
+            resolved_token = google_uid
+        else:
+            async def invalid_google():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'google_auth_failed'})}\n\n"
+            return StreamingResponse(invalid_google(), media_type="text/event-stream")
+
+    if not resolved_token:
         async def invalid():
             yield f"data: {json.dumps({'type': 'error', 'message': 'invalid'})}\n\n"
         return StreamingResponse(invalid(), media_type="text/event-stream")
+
+    token = resolved_token  # Use the resolved token for rate limiting below
 
     current_count = get_count(token)
     if current_count >= DAILY_LIMIT:
@@ -1653,8 +1710,19 @@ def search(query: str, request: Request, token: str = ""):
     # token: the browser's unique identifier (for rate limiting)
 
     # Validate the token — must start with "sw_"
-    if not token or not token.startswith("sw_"):
+    resolved_token = None
+    if token and token.startswith("sw_"):
+        resolved_token = token
+    elif token and token.startswith("google_"):
+        id_token_str = token[len("google_"):]
+        google_uid = verify_google_token(id_token_str)
+        if google_uid:
+            resolved_token = google_uid
+        else:
+            return {"error": "google_auth_failed", "limit_reached": False}
+    if not resolved_token:
         return {"error": "invalid", "limit_reached": True}
+    token = resolved_token
 
     # Check how many searches this token has done today
     current_count = get_count(token)
