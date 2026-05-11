@@ -742,17 +742,9 @@
             try { msg = JSON.parse(line.slice(5).trim()); } catch(e) { continue; }
 
             if (msg.type === "progress") {
-              animLightSource(msg.source, msg.count || 0);
-              const lineEl = document.createElement("div");
-              lineEl.style.cssText = [
-                "display:flex", "justify-content:space-between",
-                "font-family:var(--mono)", "font-size:11px",
-                "color:" + (msg.count > 0 ? "var(--teal)" : "var(--text3)"),
-                "padding:2px 0"
-              ].join(";");
-              lineEl.innerHTML = `<span>${msg.label}</span><span>${msg.count > 0 ? msg.count+" signals" : "none"}</span>`;
-              progress.appendChild(lineEl);
-            }
+  animLightSource(msg.source, msg.count || 0);
+  document.getElementById("loadingText").textContent = "Scanning " + msg.label + "...";
+}
 
             else if (msg.type === "analysing") {
               animSetPhase("analysing");
