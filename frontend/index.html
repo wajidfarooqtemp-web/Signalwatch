@@ -581,9 +581,15 @@
 
             // Handle each message type
             if (msg.type === "progress") {
-            
-              document.getElementById("loadingText").textContent = "Scanning " + msg.label + "...";
-              
+              const lineEl = document.createElement("div");
+              lineEl.style.cssText = [
+                "display:flex", "justify-content:space-between",
+                "font-family:var(--mono)", "font-size:11px",
+                "color:" + (msg.count > 0 ? "var(--teal)" : "var(--text3)"),
+                "padding:2px 0"
+              ].join(";");
+              lineEl.innerHTML = `<span>${msg.label}</span><span>${msg.count > 0 ? msg.count+" signals" : "none"}</span>`;
+              progress.appendChild(lineEl);
             }
 
             else if (msg.type === "analysing") {
