@@ -34,9 +34,11 @@ app = FastAPI()
 # This is called CORS — Cross-Origin Resource Sharing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],    # "*" means allow requests from any website
-    allow_methods=["*"],    # Allow any HTTP method (GET, POST, etc.)
-    allow_headers=["*"],    # Allow any HTTP headers
+    allow_origins=["*"], #* means allow all websites to talk to this server - we can lock this down later if needed 
+    allow_methods=["*"], #allow 
+    allow_headers=["*"], #allow all types of requests (Get, post)
+    allow_credentials=False, # allow 
+    expose_headers=["*"],
 )
 
 # ─── API KEYS ────────────────────────────────────────────────────────────────
