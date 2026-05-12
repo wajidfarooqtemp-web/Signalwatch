@@ -86,6 +86,9 @@ def verify_google_token(id_token_str):
         if not sub:
             return None
         # Prefix so we can distinguish Google tokens from legacy sw_ tokens in DB
+        email = data.get("email", "unknown")
+        print(f"Google login: {email} (sub: {sub[:8]}...)")
+
         return f"g_{sub}"
     except Exception as e:
         print(f"Google token verify error: {e}")

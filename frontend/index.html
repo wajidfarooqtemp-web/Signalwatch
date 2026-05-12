@@ -502,7 +502,9 @@
 
   <script>
     // ── CONFIGURATION ──────────────────────────────────────────────────────
-    const API_BASE = "https://signalwatch-production.up.railway.app";
+
+    // const API_BASE = "https://signalwatch-production.up.railway.app"; Use this in case render is down.
+    const API_BASE = "https://signalwatch-r6s8.onrender.com";
 
     // YOUR Google Client ID — get from console.cloud.google.com
     // Credentials → Create → OAuth 2.0 Client ID → Web application
@@ -855,7 +857,7 @@
           .replace(/"?\s*,?\s*"[a-z]+"[\s\S]*$/, '')
           .replace(/^\s*\{/, '').replace(/\}\s*$/, '').trim();
         if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) cleanInsight = cleanInsight.slice(1,-1);
-        const actionText = data.action && data.action.length > 10 ? data.action : "";
+        const actionText = (data.action || "").trim().length > 5 ? data.action.trim() : "";
         html += `<div class="brief-card">
           <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
           <div class="brief-body">${cleanInsight}</div>
