@@ -244,6 +244,21 @@
     #sw-centre { transform-origin:340px 170px; }
     #sw-centre.pulsing { animation:sw-centrepulse 1.2s ease-in-out infinite; }
 
+/* CHIEF OF STAFF AGENT CARD */
+    /* This card appears below all existing results and updates in real time */
+    .agent-card { background:var(--white); border:1px solid var(--border); border-top:3px solid var(--amber); border-radius:6px; padding:24px 28px; margin-bottom:16px; }
+    .agent-header { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    .agent-badge { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--white); background:var(--amber); padding:3px 8px; border-radius:2px; }
+    .agent-status { font-family:var(--mono); font-size:10px; color:var(--text3); }
+    .agent-dot { width:6px; height:6px; border-radius:50%; background:var(--amber); display:inline-block; margin-right:4px; animation:pulse 1.5s ease-in-out infinite; }
+    .agent-finding { border-left:2px solid var(--amber); padding:10px 14px; background:var(--amber-light); border-radius:0 4px 4px 0; font-size:13px; color:var(--text2); line-height:1.7; margin-bottom:10px; }
+    .agent-finding-meta { font-family:var(--mono); font-size:9px; color:var(--text3); margin-top:6px; letter-spacing:0.5px; text-transform:uppercase; }
+    .agent-signal { padding:8px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:4px; font-size:12px; color:var(--text2); margin-bottom:4px; }
+    .agent-signal a { color:var(--text2); text-decoration:none; }
+    .agent-signal a:hover { color:var(--amber); }
+    .agent-thinking { font-family:var(--mono); font-size:11px; color:var(--text3); padding:8px 0; display:flex; align-items:center; gap:8px; }
+    .agent-finished { font-family:var(--mono); font-size:10px; color:var(--teal); padding:8px 0; border-top:1px solid var(--border); margin-top:8px; }
+
     /* FOOTER */
     .site-footer { border-top:1px solid var(--border); background:var(--bg2); padding:20px 40px; display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:10px; color:var(--text3); letter-spacing:0.3px; flex-wrap:wrap; gap:8px; }
 
@@ -445,6 +460,21 @@
         </svg>
 
         <div id="liveProgress" style="margin:4px auto 0;max-width:300px;text-align:left;"></div>
+      </div>
+      <!-- CHIEF OF STAFF AGENT PANEL -->
+      <!-- Hidden until the agent starts working after main results load -->
+      <!-- Updates in real time as the agent investigates new angles -->
+      <div id="agentPanel" style="display:none;" class="results-wrap" style="padding-top:0;">
+        <div class="agent-card">
+          <div class="agent-header">
+            <span class="agent-badge">Chief of Staff Agent</span>
+            <span class="agent-status" id="agentStatus">
+              <span class="agent-dot"></span>Initialising...
+            </span>
+          </div>
+          <!-- Agent findings appear here, newest at top -->
+          <div id="agentFindings"></div>
+        </div>
       </div>
       <div id="resultsContainer">
         <div class="empty-state">
@@ -783,13 +813,21 @@
             }
 
             else if (msg.type === "complete") {
+              // Main results complete — render them as normal
               animSetPhase("done");
               loading.style.display = "none";
               progress.innerHTML = "";
               btn.disabled = false;
               btn.textContent = "Analyse";
               renderResults(msg, query);
-              return;
+              // Show the agent panel — agent starts working now
+              document.getElementById("agentPanel").style.display = "block";
+              // Do NOT return — keep the stream open for agent updates
+            }
+
+            else if (msg.type === "agent_update") {
+              // Agent sent a new finding — update the panel
+              handleAgentUpdate(msg);
             }
           }
         }
@@ -915,7 +953,85 @@
       container.innerHTML = html;
       if (data.sources && data.results) buildChart(data.sources, data.results);
     }
+// ── HANDLE AGENT UPDATES ──────────────────────────────────────────────
+    // Called every time the Chief of Staff agent streams a new event.
+    // Updates the agent panel in real time without touching any other UI.
 
+    function handleAgentUpdate(msg) {
+      const status   = document.getElementById("agentStatus");
+      const findings = document.getElementById("agentFindings");
+
+      if (!status || !findings) return;
+
+      const phase = msg.phase || "";
+
+      if (phase === "thinking" || phase === "waiting") {
+        // Agent is thinking — just update the status text
+        // We do not add a card for this — just show it is working
+        status.innerHTML = `<span class="agent-dot"></span>${msg.message || "Thinking..."}`;
+      }
+
+      else if (phase === "investigating") {
+        // Agent has decided what to investigate — show it
+        status.innerHTML = `<span class="agent-dot"></span>Loop ${msg.loop || "?"} — ${msg.message || "Investigating..."}`;
+      }
+
+      else if (phase === "complete") {
+        // Agent completed a loop — add a finding card at the top
+        // prepend so newest findings appear first
+        const card = document.createElement("div");
+        card.style.marginBottom = "12px";
+
+        // The main synthesis — 2 sentences from the Chief of Staff
+        let html = `<div class="agent-finding">
+          ${msg.message || ""}
+          <div class="agent-finding-meta">Loop ${msg.loop || "?"} · ${msg.total_found || 0} signals · ${msg.angle || ""}</div>
+        </div>`;
+
+        // The raw signals the agents found — shown as a collapsible list
+        const agentFindings = msg.findings || [];
+        if (agentFindings.length > 0) {
+          html += `<div style="margin-top:6px;">`;
+          agentFindings.slice(0, 3).forEach(f => {
+            const sourceLabel = {
+              scholar:    "Research",
+              regulatory: "Regulatory",
+              reddit:     "Reddit",
+              hackernews: "HN",
+              googlenews: "News"
+            }[f.source] || f.source || "";
+
+            const titleDisplay = f.url
+              ? `<a href="${f.url}" target="_blank" rel="noopener">${f.title}</a>`
+              : f.title;
+
+            html += `<div class="agent-signal">
+              <span style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-right:6px;">${sourceLabel}</span>
+              ${titleDisplay}
+            </div>`;
+          });
+          html += `</div>`;
+        }
+
+        card.innerHTML = html;
+
+        // Prepend — newest finding at top
+        findings.insertBefore(card, findings.firstChild);
+
+        // Update status
+        status.innerHTML = `<span class="agent-dot"></span>Cycle ${msg.loop || "?"} complete — next investigation starting...`;
+      }
+
+      else if (phase === "finished") {
+        // Agent has completed all loops
+        status.innerHTML = `✓ ${msg.message || "Agent finished"}`;
+        status.style.color = "var(--teal)";
+
+        // Remove the pulsing dot for the finished state
+        const dot = status.querySelector(".agent-dot");
+        if (dot) dot.style.animation = "none";
+      }
+    }
     function animateCount(id, target) {
       const el = document.getElementById(id);
       if (!el || !target) return;

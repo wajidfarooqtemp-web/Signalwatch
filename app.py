@@ -1542,6 +1542,489 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
         "questions_found":     len(question_results)
     }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SIGNALWATCH CHIEF OF STAFF AGENT SYSTEM
+#
+# What this is:
+# A multi-agent system that runs CONTINUOUSLY while the user is on the page.
+# It does not stop after one result. It thinks, evaluates, decides to go
+# deeper, and keeps streaming new findings until the user leaves.
+#
+# Why this is genuinely an agent and not a scraper:
+# A scraper fetches once and returns. This system:
+# 1. Reads what the existing sources found
+# 2. Decides what angles have not been covered
+# 3. Dispatches specialist agents to investigate those angles
+# 4. Evaluates what came back
+# 5. Decides whether to go deeper or conclude
+# 6. Loops up to 3 times, each time building on what it learned
+#
+# How it connects to existing code:
+# - Imports your existing fetch functions — zero duplication
+# - Yields through the same SSE connection as existing sources
+# - Adds one new message type: "agent_update"
+# - Does not touch any existing endpoint or function
+#
+# Cost:
+# - 3 LLM calls maximum per search (Chief of Staff only)
+# - Specialist agents use your existing fetch functions — free
+# - Total extra cost per search: effectively zero on free models
+# ─────────────────────────────────────────────────────────────────────────────
+
+import asyncio  # already imported above — this comment is just a reminder
+
+
+# ── SPECIALIST AGENT 1: SIGNAL AGENT ─────────────────────────────────────────
+# Uses your existing fetch functions to dig deeper on a specific angle
+# that the Chief of Staff identifies as underexplored.
+# It does NOT duplicate your existing sources — it runs them on a
+# MORE SPECIFIC query derived from what was already found.
+
+async def signal_agent(specific_query: str, original_query: str) -> dict:
+    """
+    Runs a deeper signal search on a specific angle.
+
+    Why a specific_query separate from original_query:
+    If user searched "Nike" and the Chief of Staff noticed complaints
+    about a specific product, specific_query might be "Nike Air Max defect".
+    This finds signals the original broad search missed.
+
+    Returns a dict with title, source, url for the most relevant findings.
+    """
+    try:
+        # Import only the fastest, most reliable sources for the agent loop
+        # We skip slow ones (YouTube, Play Store) to keep the loop responsive
+        results = []
+
+        reddit_results = await asyncio.to_thread(fetch_reddit, specific_query)
+        results += reddit_results[:5]  # Top 5 only — quality over quantity
+
+        hn_results = await asyncio.to_thread(fetch_hackernews, specific_query)
+        results += hn_results[:5]
+
+        news_results = await asyncio.to_thread(fetch_google_news, specific_query)
+        results += news_results[:5]
+
+        # Rank using your existing scoring function
+        ranked = await asyncio.to_thread(filter_and_rank, results, specific_query)
+
+        return {
+            "agent":    "signal",
+            "query":    specific_query,
+            "findings": ranked[:5],  # Return top 5 most relevant
+            "count":    len(ranked)
+        }
+
+    except Exception as e:
+        print(f"Signal agent error: {e}")
+        return {"agent": "signal", "query": specific_query, "findings": [], "count": 0}
+
+
+# ── SPECIALIST AGENT 2: CONTEXT AGENT ────────────────────────────────────────
+# Finds academic and encyclopaedic context for the query.
+# This is the agent that searches what Claude cannot — papers published
+# this week, Wikipedia sections that are newly updated.
+
+async def context_agent(query: str) -> dict:
+    """
+    Finds academic context and background knowledge for the query.
+
+    Sources used:
+    - Semantic Scholar: free academic search API, no key needed
+    - Wikipedia: your existing fetch_wikipedia function
+    - CrossRef: free academic metadata API, no key needed
+
+    Why these:
+    Semantic Scholar and CrossRef index millions of papers and return
+    structured JSON. No scraping. No blocks. Completely free.
+    """
+    findings = []
+
+    # ── Semantic Scholar ──────────────────────────────────────────────────────
+    # Free academic search API. No API key needed.
+    # Returns paper titles, abstracts, authors, citation counts, year.
+    # This is genuinely what Claude cannot do — find papers from this week.
+    try:
+        semantic_url = (
+            f"https://api.semanticscholar.org/graph/v1/paper/search"
+            f"?query={requests.utils.quote(query)}"
+            f"&limit=5"
+            f"&fields=title,abstract,year,citationCount,externalIds"
+        )
+        res = await asyncio.to_thread(
+            lambda: requests.get(
+                semantic_url,
+                timeout=10,
+                headers={"User-Agent": "signalwatch/1.0"}
+            )
+        )
+        if res.status_code == 200:
+            data = res.json()
+            for paper in data.get("data", [])[:5]:
+                title = paper.get("title", "")
+                year  = paper.get("year", "")
+                cites = paper.get("citationCount", 0)
+                if title:
+                    findings.append({
+                        "title":   f"[Research {year}] {title} — {cites} citations",
+                        "source":  "scholar",
+                        "url":     f"https://www.semanticscholar.org/paper/{paper.get('paperId', '')}",
+                        "created": 0
+                    })
+    except Exception as e:
+        print(f"Context agent — Semantic Scholar error: {e}")
+
+    # ── Wikipedia (your existing function) ───────────────────────────────────
+    try:
+        wiki_results = await asyncio.to_thread(fetch_wikipedia, query)
+        findings += wiki_results[:2]
+    except Exception as e:
+        print(f"Context agent — Wikipedia error: {e}")
+
+    # ── CrossRef — academic paper metadata ───────────────────────────────────
+    # Another free academic API. Different index from Semantic Scholar.
+    # Specialises in journal articles and conference papers.
+    try:
+        crossref_url = (
+            f"https://api.crossref.org/works"
+            f"?query={requests.utils.quote(query)}"
+            f"&rows=3"
+            f"&sort=relevance"
+        )
+        res = await asyncio.to_thread(
+            lambda: requests.get(
+                crossref_url,
+                timeout=10,
+                headers={"User-Agent": "signalwatch/1.0 (mailto:wajidfarooq3@gmail.com)"}
+            )
+        )
+        if res.status_code == 200:
+            data = res.json()
+            for item in data.get("message", {}).get("items", [])[:3]:
+                titles = item.get("title", [])
+                title  = titles[0] if titles else ""
+                year   = item.get("published", {}).get("date-parts", [[""]])[0][0]
+                doi    = item.get("DOI", "")
+                if title:
+                    findings.append({
+                        "title":   f"[Journal {year}] {title}",
+                        "source":  "scholar",
+                        "url":     f"https://doi.org/{doi}" if doi else "",
+                        "created": 0
+                    })
+    except Exception as e:
+        print(f"Context agent — CrossRef error: {e}")
+
+    return {
+        "agent":    "context",
+        "query":    query,
+        "findings": findings,
+        "count":    len(findings)
+    }
+
+
+# ── SPECIALIST AGENT 3: RISK AGENT ───────────────────────────────────────────
+# Looks for regulatory, legal, and financial risk signals.
+# Uses public APIs that nobody is reading systematically.
+
+async def risk_agent(query: str) -> dict:
+    """
+    Finds regulatory and risk signals from public sources.
+
+    Sources used:
+    - Companies House UK API: free, no key needed for basic search
+    - SEC EDGAR full-text search: free, no key needed
+    - FDA warning letters: public RSS feed, no key needed
+
+    Why these matter:
+    A regulatory warning against a brand appears here days before
+    any journalist covers it. This is the earliest possible signal.
+    """
+    findings = []
+
+    # ── Companies House UK ────────────────────────────────────────────────────
+    # Free public API. Returns company filings, insolvency notices,
+    # director changes. No API key for basic search.
+    try:
+        ch_url = (
+            f"https://api.company-information.service.gov.uk/search/companies"
+            f"?q={requests.utils.quote(query)}&items_per_page=3"
+        )
+        res = await asyncio.to_thread(
+            lambda: requests.get(
+                ch_url,
+                timeout=10,
+                headers={"User-Agent": "signalwatch/1.0"}
+            )
+        )
+        if res.status_code == 200:
+            data = res.json()
+            for company in data.get("items", [])[:3]:
+                name   = company.get("title", "")
+                status = company.get("company_status", "")
+                ctype  = company.get("company_type", "")
+                number = company.get("company_number", "")
+                if name:
+                    # Flag dissolved or liquidated companies — risk signal
+                    flag = "⚠ " if status in ["dissolved", "liquidation"] else ""
+                    findings.append({
+                        "title":   f"{flag}[Companies House] {name} — {status} ({ctype})",
+                        "source":  "regulatory",
+                        "url":     f"https://find-and-update.company-information.service.gov.uk/company/{number}",
+                        "created": 0
+                    })
+    except Exception as e:
+        print(f"Risk agent — Companies House error: {e}")
+
+    # ── SEC EDGAR full-text search ────────────────────────────────────────────
+    # The SEC is the US financial regulator. All public company filings
+    # are searchable for free via EDGAR. No key needed.
+    # This catches: earnings warnings, lawsuits, regulatory actions.
+    try:
+        edgar_url = (
+            f"https://efts.sec.gov/LATEST/search-index"
+            f"?q={requests.utils.quote(query)}"
+            f"&dateRange=custom"
+            f"&startdt={(datetime.now()-timedelta(days=90)).strftime('%Y-%m-%d')}"
+            f"&enddt={datetime.now().strftime('%Y-%m-%d')}"
+            f"&hits.hits._source=period_of_report,display_names,file_date,form_type"
+            f"&hits.hits.total=true"
+        )
+        res = await asyncio.to_thread(
+            lambda: requests.get(
+                edgar_url,
+                timeout=10,
+                headers={"User-Agent": "signalwatch/1.0 wajidfarooq3@gmail.com"}
+            )
+        )
+        if res.status_code == 200:
+            data = res.json()
+            hits = data.get("hits", {}).get("hits", [])
+            for hit in hits[:3]:
+                source = hit.get("_source", {})
+                names  = source.get("display_names", [])
+                ftype  = source.get("form_type", "")
+                fdate  = source.get("file_date", "")
+                name   = names[0].get("name", "") if names else query
+                if name:
+                    findings.append({
+                        "title":   f"[SEC Filing {fdate}] {name} — Form {ftype}",
+                        "source":  "regulatory",
+                        "url":     "https://efts.sec.gov/LATEST/search-index?q=" + requests.utils.quote(query),
+                        "created": 0
+                    })
+    except Exception as e:
+        print(f"Risk agent — SEC EDGAR error: {e}")
+
+    # ── FDA Warning Letters RSS ───────────────────────────────────────────────
+    # FDA publishes warning letters as a public RSS feed.
+    # If a brand received an FDA warning, it appears here first.
+    try:
+        fda_url = "https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/compliance-actions-and-activities/warning-letters-rss-feed"
+        res = await asyncio.to_thread(
+            lambda: requests.get(
+                fda_url,
+                timeout=8,
+                headers={"User-Agent": "signalwatch/1.0"}
+            )
+        )
+        if res.status_code == 200:
+            root = ET.fromstring(res.content)
+            keywords = query.lower().split()[:3]  # Use first 3 words
+            for item in root.iter("item"):
+                title_el = item.find("title")
+                link_el  = item.find("link")
+                if title_el and title_el.text:
+                    title = title_el.text.strip()
+                    # Only include if query keywords appear in the warning
+                    if any(k in title.lower() for k in keywords):
+                        findings.append({
+                            "title":   f"⚠ [FDA Warning] {title}",
+                            "source":  "regulatory",
+                            "url":     link_el.text if link_el else "",
+                            "created": 0
+                        })
+    except Exception as e:
+        print(f"Risk agent — FDA error: {e}")
+
+    return {
+        "agent":    "risk",
+        "query":    query,
+        "findings": findings,
+        "count":    len(findings)
+    }
+
+
+# ── CHIEF OF STAFF AGENT ──────────────────────────────────────────────────────
+# The orchestrator. Takes all existing results, decides what angles
+# have not been covered, dispatches specialist agents, evaluates
+# what came back, and loops if needed.
+# This is what makes it an agent — the loop with evaluation.
+
+async def chief_of_staff(query: str, existing_results: list, max_loops: int = 3):
+    """
+    The Chief of Staff agent. Runs continuously, yielding updates.
+    This is an async generator — it yields SSE events as it works.
+
+    Why an async generator:
+    It lets us stream updates to the browser while the agent is still
+    working. The user sees "Agent investigating pricing angle..." while
+    the agent is actually doing it.
+
+    max_loops: how many investigation cycles to run (default 3)
+    Each loop takes ~30-60 seconds. At 3 loops, the agent runs
+    for up to 3 minutes while the user reads the results.
+    """
+
+    # ── Loop state ────────────────────────────────────────────────────────────
+    # The agent keeps track of what it has investigated so far
+    # so it does not repeat itself across loops
+    investigated_angles = set()
+    all_agent_findings  = []
+    loop_count          = 0
+
+    while loop_count < max_loops:
+        loop_count += 1
+        print(f"Chief of Staff: Loop {loop_count}/{max_loops}")
+
+        # ── Step 1: Chief of Staff thinks about what to investigate ──────────
+        # It reads the existing results and decides what angles are missing.
+        # This is one LLM call — the thinking step.
+
+        # Build a summary of what we already know
+        existing_titles = [r["title"] for r in existing_results[:10]]
+        already_found   = [f["title"] for f in all_agent_findings[:5]]
+
+        think_prompt = f"""You are a chief of staff at a brand intelligence firm.
+
+Query: "{query}"
+
+What we already know from {len(existing_results)} signals:
+{chr(10).join(f"- {t}" for t in existing_titles[:8])}
+
+{"What agents already investigated: " + chr(10).join(f"- {t}" for t in already_found[:5]) if already_found else ""}
+
+Identify ONE specific angle that has NOT been covered yet.
+It must be something a brand intelligence team would genuinely want to know.
+It must be investigable by searching for a specific phrase or company name.
+
+Return JSON only:
+{{
+  "angle": "one sentence describing what to investigate",
+  "search_query": "3-5 word search query to find it",
+  "why": "one sentence on why this matters commercially"
+}}
+
+No markdown. No backticks. Raw JSON only."""
+
+        think_result = await asyncio.to_thread(ai_call, think_prompt)
+
+        if not think_result:
+            # AI failed — skip this loop
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'Evaluating signal patterns...'})}\n\n"
+            await asyncio.sleep(30)
+            continue
+
+        # Parse the investigation angle
+        try:
+            clean = re.sub(r'```[a-z]*\n?', '', think_result)
+            clean = re.sub(r'```', '', clean).strip()
+            investigation = json.loads(clean)
+        except Exception:
+            # If JSON parse fails, extract manually
+            investigation = {
+                "angle":        f"Loop {loop_count} investigation",
+                "search_query": query,
+                "why":          "Deeper signal analysis"
+            }
+
+        angle        = investigation.get("angle", "")
+        search_query = investigation.get("search_query", query)
+        why          = investigation.get("why", "")
+
+        # Skip if we already investigated this angle
+        if search_query in investigated_angles:
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'Scanning for new angles...'})}\n\n"
+            await asyncio.sleep(20)
+            continue
+
+        investigated_angles.add(search_query)
+
+        # Tell the frontend what the agent is doing right now
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Investigating: {angle}', 'why': why, 'loop': loop_count})}\n\n"
+
+        # ── Step 2: Run all three specialists simultaneously ──────────────────
+        # asyncio.gather runs all three at the same time
+        # Total wait = slowest agent, not sum of all three
+        signal_task  = signal_agent(search_query, query)
+        context_task = context_agent(search_query)
+        risk_task    = risk_agent(search_query)
+
+        signal_result, context_result, risk_result = await asyncio.gather(
+            signal_task,
+            context_task,
+            risk_task,
+            return_exceptions=True  # If one fails, others still complete
+        )
+
+        # Collect all findings from this loop
+        loop_findings = []
+
+        for result in [signal_result, context_result, risk_result]:
+            if isinstance(result, Exception):
+                continue  # Skip failed agents silently
+            if isinstance(result, dict):
+                loop_findings += result.get("findings", [])
+
+        all_agent_findings += loop_findings
+
+        if not loop_findings:
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'No new signals found on this angle. Trying another...'})}\n\n"
+            await asyncio.sleep(15)
+            continue
+
+        # ── Step 3: Chief of Staff synthesises what the agents found ─────────
+        # One more LLM call to turn raw findings into a conclusion.
+
+        findings_text = "\n".join(
+            f"- [{f.get('source','')}] {f.get('title','')}"
+            for f in loop_findings[:8]
+        )
+
+        synthesise_prompt = f"""You are a chief of staff writing a one-paragraph intelligence update.
+
+Original query: "{query}"
+Investigation angle: "{angle}"
+Why it matters: "{why}"
+
+What the agents found:
+{findings_text}
+
+Write exactly 2 sentences.
+Sentence 1: What this specific investigation found. Be specific, not generic.
+Sentence 2: What it means commercially for the brand or their competitors.
+
+Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
+
+        synthesis = await asyncio.to_thread(ai_call, synthesise_prompt)
+
+        if not synthesis:
+            synthesis = f"Agents found {len(loop_findings)} signals on {angle}."
+
+        # Stream the complete loop result to the frontend
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': synthesis, 'angle': angle, 'findings': loop_findings[:5], 'loop': loop_count, 'total_found': len(loop_findings)})}\n\n"
+
+        # ── Step 4: Wait before next loop ────────────────────────────────────
+        # We wait 45 seconds between loops.
+        # This gives the user time to read the finding before the next one arrives.
+        # It also means the agent runs for ~3 minutes total — enough to be
+        # genuinely useful without being annoying.
+        if loop_count < max_loops:
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent digesting findings. Next investigation in 45 seconds...', 'loop': loop_count})}\n\n"
+            await asyncio.sleep(45)
+
+    # Agent has completed all loops
+    yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'finished', 'message': f'Agent completed {loop_count} investigation cycles. {len(all_agent_findings)} additional signals found.', 'total_findings': len(all_agent_findings)})}\n\n"
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 # Endpoints are the URLs your frontend can call
@@ -1691,6 +2174,15 @@ async def search_stream(query: str, request: Request, token: str = ""):
             "word_frequencies":    get_word_frequencies(ranked[:50])
         }
         yield f"data: {json.dumps(final)}\n\n"
+
+        # ── CHIEF OF STAFF AGENT ──────────────────────────────────────────────
+        # Starts after the main results are delivered to the user.
+        # Runs continuously while the SSE connection stays open.
+        # The connection stays open as long as the user is on the page.
+        # When they leave, the browser closes the connection and this stops.
+        # max_loops=3 means up to 3 investigation cycles (~3 minutes total)
+        async for agent_event in chief_of_staff(query, ranked, max_loops=3):
+            yield agent_event
 
     return StreamingResponse(
         generate(),
