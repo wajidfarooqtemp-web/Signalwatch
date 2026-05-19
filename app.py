@@ -35,10 +35,22 @@ app = FastAPI()
 # This is called CORS — Cross-Origin Resource Sharing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], #* means allow all websites to talk to this server - we can lock this down later if needed 
-    allow_methods=["*"], #allow 
-    allow_headers=["*"], #allow all types of requests (Get, post)
-    allow_credentials=False, # allow 
+
+    # allow_origins lists every domain that is allowed to talk to this backend.
+    # The browser checks this automatically before sending your search request.
+    # If a domain is not on this list, the browser blocks the request entirely.
+    # "*" means everyone — we are replacing that with only our actual domains.
+    allow_origins=[
+        "https://signalwatch.vercel.app",   # Your Vercel frontend (production)
+        "https://www.signalwatch.in",       # Your custom domain when you get it
+        "https://signalwatch.in",           # Without www
+        "http://localhost:5500",             # VS Code Live Server (your local dev)
+        "http://127.0.0.1:5500",             # Same — different way to write localhost
+    ],
+
+    allow_methods=["GET", "POST", "OPTIONS"],  # Only the methods your app actually uses
+    allow_headers=["*"],                        # Headers are fine to leave open
+    allow_credentials=False,
     expose_headers=["*"],
 )
 
@@ -1334,6 +1346,57 @@ def extract_briefing_and_questions(raw_text):
 # When a single result contains words from TWO different groups,
 # that is a meaningful signal worth surfacing.
 
+# ─── QUERY SANITISATION ───────────────────────────────────────────────────────
+# This function runs on every search query before it touches any fetcher.
+# It removes characters that could be used to attack your scrapers or
+# inject content into responses.
+#
+# Think of it like a security guard at the door —
+# it checks what comes in before letting it through.
+
+def sanitise_query(query: str) -> str:
+    """
+    Cleans a search query by removing dangerous characters.
+
+    What we remove and why:
+    - Null bytes (\x00): used to confuse parsers, never in real searches
+    - HTML tags (<script>, <img> etc): prevent XSS if query appears in a response
+    - Shell characters (`, $, |, ;): prevent command injection if query reaches a shell
+    - Excess length: no real brand query needs more than 200 characters
+
+    What we keep:
+    - Letters, numbers, spaces — obviously
+    - Hyphens and apostrophes — brand names like "L'Oreal", "Coca-Cola"
+    - Quotes — your users use "exact phrase" syntax which is legitimate
+    - Question marks, exclamation marks — legitimate in queries
+    """
+
+    if not query:
+        return ""
+
+    # Step 1: Remove null bytes — these are never in legitimate queries
+    # A null byte is a special character (value zero) used to trick parsers
+    query = query.replace('\x00', '')
+
+    # Step 2: Remove HTML tags using regex
+    # re.sub replaces anything matching the pattern with ""
+    # The pattern <[^>]*> means: a < followed by anything, followed by >
+    query = re.sub(r'<[^>]*>', '', query)
+
+    # Step 3: Remove shell injection characters
+    # These characters have special meaning in command lines
+    # If your query ever reaches a shell command (it shouldn't but defence in depth),
+    # these prevent it being used maliciously
+    for char in ['`', '$', '|', ';', '\\']:
+        query = query.replace(char, '')
+
+    # Step 4: Limit length to 200 characters
+    # Slicing a string in Python: string[:200] means "first 200 characters"
+    query = query[:200]
+
+    # Step 5: Remove leading and trailing spaces
+    return query.strip()
+
 CONCEPT_GROUPS = {
     "switching":    ["switched", "switching", "left", "moved", "replaced",
                      "cancelled", "quit", "abandoned", "dropped", "chose instead"],
@@ -2057,6 +2120,14 @@ async def search_stream(query: str, request: Request, token: str = ""):
     # Google tokens are verified against Google's servers first
     resolved_token = None
 
+# Sanitise the query first — before rate limiting, before token checks,
+    # before anything else. If the query is empty after sanitisation, reject it.
+    query = sanitise_query(query)
+    if not query:
+        async def bad_query():
+            yield f"data: {json.dumps({'type': 'error', 'message': 'invalid query'})}\n\n"
+        return StreamingResponse(bad_query(), media_type="text/event-stream")
+    
     if token and token.startswith("sw_"):
         # Legacy browser token — still works for backwards compat
         resolved_token = token
@@ -2205,6 +2276,10 @@ def search(query: str, request: Request, token: str = ""):
     # token: the browser's unique identifier (for rate limiting)
 
     # Validate the token — must start with "sw_"
+    # Same sanitisation as the streaming endpoint — clean the query first
+    query = sanitise_query(query)
+    if not query:
+        return {"error": "invalid query"}
     resolved_token = None
     if token and token.startswith("sw_"):
         resolved_token = token

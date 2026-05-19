@@ -3,6 +3,45 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!--
+    Content Security Policy — tells the browser what is allowed to load.
+    Think of it as a whitelist. Anything not on the list is blocked,
+    even if an attacker manages to inject it into the page.
+
+    default-src 'self': by default only load from our own domain
+    script-src: these are the only JavaScript sources we allow
+    style-src: only these sources for CSS
+    connect-src: only these URLs our JavaScript can call (our API, Google auth)
+    frame-src: only Google's domain for the sign-in popup
+    frame-ancestors 'none': nobody can embed our site in an iframe (blocks clickjacking)
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="
+          default-src 'self';
+          script-src 'self' 'unsafe-inline'
+            https://cdnjs.cloudflare.com
+            https://cdn.jsdelivr.net
+            https://cloud.umami.is
+            https://accounts.google.com;
+          style-src 'self' 'unsafe-inline'
+            https://fonts.googleapis.com;
+          font-src
+            https://fonts.gstatic.com;
+          connect-src 'self'
+            https://signalwatch-r6s8.onrender.com
+            https://signalwatch-production.up.railway.app
+            https://accounts.google.com
+            https://oauth2.googleapis.com;
+          frame-src
+            https://accounts.google.com;
+          img-src 'self' data: https:;
+          frame-ancestors 'none';
+        ">
+
+  <!-- Referrer policy: when a user clicks a link from our site,
+       only our domain name is sent to the destination — not the full URL.
+       This stops your users' search queries leaking to other sites. -->
+  <meta name="referrer" content="strict-origin">
   <title>Signalwatch — Brand Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -50,7 +89,10 @@
 
     /* HERO */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
-    .hero { max-width:1100px; margin:0 auto; padding:64px 40px 52px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
+    /* Increased top and bottom padding from 64px/52px to 88px/72px.
+       This is the single biggest thing that makes a site feel premium —
+       generous space around content. Nothing else changes here. */
+    .hero { max-width:1100px; margin:0 auto; padding:88px 40px 72px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
 
     /* ── DASH FIX ──
        The original had a ::before pseudo-element that drew a line before
@@ -100,7 +142,9 @@
     .stat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
 
     /* SEARCH */
-    .search-wrap { max-width:1100px; margin:0 auto; padding:32px 40px 28px; }
+    /* More space above the search bar — separates it visually from the stats strip.
+       Increased top padding from 32px to 44px. */
+    .search-wrap { max-width:1100px; margin:0 auto; padding:44px 40px 28px; }
     .search-label { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
     .search-row { display:flex; gap:0; border:1.5px solid var(--border2); border-radius:6px; overflow:hidden; background:var(--white); transition:border-color 0.2s,box-shadow 0.2s; }
     .search-row:focus-within { border-color:var(--teal); box-shadow:0 0 0 3px rgba(13,122,107,0.08); }
@@ -404,6 +448,35 @@
     </div>
 
     <div class="search-wrap">
+
+      <!--
+        Section divider — a thin horizontal rule with a label on the left.
+        The label uses your existing mono font and teal colour.
+        The line uses CSS flexbox: label on left, line stretches to fill the rest.
+        This is how Cielara separates their sections — minimal but deliberate.
+      -->
+      <div style="
+        display: flex;           /* puts label and line side by side */
+        align-items: center;     /* vertically centres them */
+        gap: 16px;               /* space between label and line */
+        margin-bottom: 24px;     /* space below the divider */
+      ">
+        <span style="
+          font-family: var(--mono);
+          font-size: 9px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          color: var(--text3);   /* your existing light grey */
+          white-space: nowrap;   /* stops the label wrapping to two lines */
+        ">Signal search</span>
+
+        <div style="
+          flex: 1;               /* stretch to fill remaining width */
+          height: 1px;           /* thin line */
+          background: var(--border); /* your existing border colour */
+        "></div>
+      </div>
+
       <div class="search-label">Search any brand, topic or query</div>
       <div class="search-row">
         <input class="search-input" id="queryInput" type="text"
@@ -479,7 +552,7 @@
       <div id="resultsContainer">
         <div class="empty-state">
           <div class="empty-title">Enter a query above to begin</div>
-          <div class="empty-sub">Signal intelligence from the last 90 days · 11 sources</div>
+          <div class="empty-sub">Signal intelligence from the last 90 days · 12 sources</div>
         </div>
       </div>
     </div>
@@ -487,6 +560,26 @@
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
       <span>12 sources · Signal intelligence · Last 90 days · More sources coming</span>
+
+      <!--
+        Trust badge — a lock icon followed by three short trust signals.
+        The SVG lock is drawn inline so no image file is needed.
+        viewBox="0 0 10 12" means the icon is 10 units wide, 12 units tall.
+        The rect is the body of the lock. The path is the shackle (the curved top).
+        opacity:0.5 makes it subtle — present but not distracting.
+      -->
+      <span style="display:flex; align-items:center; gap:5px; opacity:0.6;">
+        <svg width="9" height="11" viewBox="0 0 10 12" fill="none"
+             aria-hidden="true">
+          <!-- Lock body — a rounded rectangle -->
+          <rect x="1" y="5" width="8" height="7" rx="1"
+                fill="currentColor"/>
+          <!-- Lock shackle — the curved part on top -->
+          <path d="M3 5V3.5a2 2 0 014 0V5"
+                stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+        Encrypted · No data stored · Searches reset daily
+      </span>
     </footer>
   </div>
 
@@ -527,6 +620,26 @@
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
       <span>12 sources · Signal intelligence · Last 90 days · More sources coming</span>
+
+      <!--
+        Trust badge — a lock icon followed by three short trust signals.
+        The SVG lock is drawn inline so no image file is needed.
+        viewBox="0 0 10 12" means the icon is 10 units wide, 12 units tall.
+        The rect is the body of the lock. The path is the shackle (the curved top).
+        opacity:0.5 makes it subtle — present but not distracting.
+      -->
+      <span style="display:flex; align-items:center; gap:5px; opacity:0.6;">
+        <svg width="9" height="11" viewBox="0 0 10 12" fill="none"
+             aria-hidden="true">
+          <!-- Lock body — a rounded rectangle -->
+          <rect x="1" y="5" width="8" height="7" rx="1"
+                fill="currentColor"/>
+          <!-- Lock shackle — the curved part on top -->
+          <path d="M3 5V3.5a2 2 0 014 0V5"
+                stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+        Encrypted · No data stored · Searches reset daily
+      </span>
     </footer>
   </div>
 
@@ -708,6 +821,25 @@
     }
 
     function resetAnimation() {
+
+      // Clear the agent panel every time a new search starts.
+      // Without this, findings from the previous search stay on screen
+      // while the new search runs — confusing for the user.
+      const agentPanel = document.getElementById("agentPanel");
+      if (agentPanel) {
+          agentPanel.style.display = "none"; // Hide the whole panel
+      }
+      const agentFindings = document.getElementById("agentFindings");
+      if (agentFindings) {
+          agentFindings.innerHTML = ""; // Empty all previous findings
+      }
+      const agentStatus = document.getElementById("agentStatus");
+      if (agentStatus) {
+          // Reset the status text to the initial state
+          agentStatus.innerHTML = '<span class="agent-dot"></span>Starting...';
+          agentStatus.style.color = ""; // Reset any colour changes (e.g. teal for "done")
+      }
+
       swAnimSigCount = 0;
       for (let i = 0; i <= 10; i++) {
         document.getElementById("sw-n"+i)?.classList.remove("lit");
@@ -985,7 +1117,11 @@
         // The main synthesis — 2 sentences from the Chief of Staff
         let html = `<div class="agent-finding">
           ${msg.message || ""}
-          <div class="agent-finding-meta">Loop ${msg.loop || "?"} · ${msg.total_found || 0} signals · ${msg.angle || ""}</div>
+          <!-- We show "Agent 1", "Agent 2" etc instead of "Loop 1", "Loop 2".
+               The user does not need to know it is a loop — they need to know
+               which agent found it. msg.loop is the loop number (1, 2, 3)
+               so we reuse it as the agent number. -->
+          <div class="agent-finding-meta">Agent ${msg.loop || "?"} · ${msg.total_found || 0} signals found · ${msg.angle || ""}</div>
         </div>`;
 
         // The raw signals the agents found — shown as a collapsible list
@@ -1019,12 +1155,15 @@
         findings.insertBefore(card, findings.firstChild);
 
         // Update status
-        status.innerHTML = `<span class="agent-dot"></span>Cycle ${msg.loop || "?"} complete — next investigation starting...`;
+        // "Agent N complete" is clearer than "Cycle N complete"
+        status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop || "?"} complete — next agent starting...`;
       }
 
       else if (phase === "finished") {
         // Agent has completed all loops
-        status.innerHTML = `✓ ${msg.message || "Agent finished"}`;
+        // When all agents are done, show a clean completion message
+        // msg.total_findings comes from the backend — total signals found across all agents
+        status.innerHTML = `✓ All agents complete — ${msg.total_findings || 0} additional signals found`;
         status.style.color = "var(--teal)";
 
         // Remove the pulsing dot for the finished state
