@@ -1996,9 +1996,9 @@ No markdown. No backticks. Raw JSON only."""
         except Exception:
             # If JSON parse fails, extract manually
             investigation = {
-                "angle":        f"Loop {loop_count} investigation",
+                "angle":        f"Deeper signal analysis",
                 "search_query": query,
-                "why":          "Deeper signal analysis"
+                "why":          "Finding signals across additional sources"
             }
 
         angle        = investigation.get("angle", "")
@@ -2014,7 +2014,7 @@ No markdown. No backticks. Raw JSON only."""
         investigated_angles.add(search_query)
 
         # Tell the frontend what the agent is doing right now
-        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Investigating: {angle}', 'why': why, 'loop': loop_count})}\n\n"
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Agent {loop_count} working — {angle}', 'why': why, 'loop': loop_count})}\n\n"
 
         # ── Step 2: Run all three specialists simultaneously ──────────────────
         # asyncio.gather runs all three at the same time
