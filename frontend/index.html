@@ -215,7 +215,8 @@
     .src-googlenews { background:#fff8f0; color:#ea4335; border:1px solid #fca5a5; }
     .src-bingnews   { background:#f0f4ff; color:#004488; border:1px solid #bfdbfe; }
     .src-mastodon   { background:#f3f0ff; color:#563acc; border:1px solid #d4bbff; }
-
+/* Competitive agent results — amber to distinguish from other sources */
+    .src-competitive { background:var(--amber-light); color:var(--amber); border:1px solid var(--amber-mid); }
     /* RESULTS LIST */
     .results-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; padding-top:4px; }
     .results-title { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); }
@@ -421,27 +422,79 @@
         </div>
       </div>
     </div>
+<!--
+      How it works strip — three steps that tell a visitor
+      what the product does before they scroll to the search bar.
+      Each step is numbered in your serif font (which you already have)
+      and has one sentence of explanation.
+      This is exactly what Cielara does with their 01/02/03 section.
+      No images. No backend. Pure HTML.
+    -->
+    <div style="background:var(--white);border-bottom:1px solid var(--border);">
+      <div style="max-width:1100px;margin:0 auto;padding:40px 40px;display:grid;grid-template-columns:repeat(3,1fr);gap:48px;">
 
+        <!-- Step 1 -->
+        <div>
+          <div style="font-family:var(--serif);font-size:28px;font-weight:700;color:var(--border2);line-height:1;margin-bottom:12px;">01</div>
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:8px;">Scan</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">
+            13 sources scanned simultaneously — Reddit, news, reviews, YouTube, forums, regulatory filings and more. Up to 400 mentions in 60 seconds.
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div>
+          <div style="font-family:var(--serif);font-size:28px;font-weight:700;color:var(--border2);line-height:1;margin-bottom:12px;">02</div>
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:8px;">Score</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">
+            Every mention is scored by a pattern detection algorithm that finds where multiple themes collide in the same signal. Volume is noise. Patterns are signal.
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div>
+          <div style="font-family:var(--serif);font-size:28px;font-weight:700;color:var(--border2);line-height:1;margin-bottom:12px;">03</div>
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:8px;">Decide</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">
+            One briefing. One action. What to do in the next 48 hours. Not a dashboard to interpret. A decision to act on.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- On mobile, stack the three steps vertically -->
+    <style>
+      @media(max-width:768px) {
+        .how-it-works-grid { grid-template-columns:1fr !important; gap:24px !important; padding:28px 16px !important; }
+      }
+    </style>
     <div class="stat-strip">
       <div class="stat-strip-inner">
         <div class="stat-item">
           <div class="stat-label">Sources</div>
-          <div class="stat-value teal">11</div>
+          <!-- Static — always 13. Updates if we add more sources. -->
+          <div class="stat-value teal">13</div>
           <div class="stat-sub">Live data sources</div>
         </div>
         <div class="stat-item">
           <div class="stat-label">Signals found</div>
-          <div class="stat-value" id="statTotal">—</div>
-          <div class="stat-sub">Last search</div>
+          <!-- Shows "400" before first search — real number from our crawl capacity.
+               After a search, animateCount() updates this with the actual result. -->
+          <div class="stat-value" id="statTotal">400</div>
+          <div class="stat-sub">Mentions per search</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">Top score</div>
-          <div class="stat-value amber" id="statTopScore">—</div>
-          <div class="stat-sub">Strongest signal</div>
+          <div class="stat-label">Scan depth</div>
+          <!-- Static — always 90 days. Communicates recency before any search. -->
+          <div class="stat-value amber">90</div>
+          <div class="stat-sub">Days of signal</div>
         </div>
         <div class="stat-item">
           <div class="stat-label">Active sources</div>
-          <div class="stat-value" id="statActiveSources">—</div>
+          <!-- Shows "13" before first search.
+               After a search, updates with how many sources returned results. -->
+          <div class="stat-value" id="statActiveSources">13</div>
           <div class="stat-sub">Returning results</div>
         </div>
       </div>
@@ -1015,7 +1068,6 @@
 
       const activeSources = Object.values(data.sources || {}).filter(v => v > 0).length;
       animateCount("statTotal", data.total);
-      animateCount("statTopScore", data.results[0]?.score || 0);
       animateCount("statActiveSources", activeSources);
 
       let html = "";
@@ -1121,7 +1173,12 @@
                The user does not need to know it is a loop — they need to know
                which agent found it. msg.loop is the loop number (1, 2, 3)
                so we reuse it as the agent number. -->
-          <div class="agent-finding-meta">Agent ${msg.loop || "?"} · ${msg.total_found || 0} signals found · ${msg.angle || ""}</div>
+          <!--
+            msg.loop is 1, 2, 3, or 4 — we use it as the agent number.
+            We show the angle in plain English, not technical terms.
+            We never show the word "loop" anywhere.
+          -->
+          <div class="agent-finding-meta">Agent ${msg.loop || "?"} · ${msg.total_found || 0} signals · ${msg.angle || "signal analysis"}</div>
         </div>`;
 
         // The raw signals the agents found — shown as a collapsible list
@@ -1155,8 +1212,9 @@
         findings.insertBefore(card, findings.firstChild);
 
         // Update status
-        // "Agent N complete" is clearer than "Cycle N complete"
-        status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop || "?"} complete — next agent starting...`;
+        // "Agent N complete" is clearer than "Cycle N complete"// Clean handoff language — no technical terms
+        const nextAgent = (msg.loop || 0) + 1;
+        status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop || "?"} complete${nextAgent <= 4 ? ' — Agent ' + nextAgent + ' starting' : ''}...`;status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop || "?"} complete — next agent starting...`;
       }
 
       else if (phase === "finished") {

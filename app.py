@@ -1009,14 +1009,22 @@ def get_free_models():
 
 
 def strip_markdown(text):
-    # Removes markdown formatting characters from AI responses
-    # Some models add **bold** or ## headers even when told not to
-    # This function cleans all of that out
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Remove **bold**
-    text = re.sub(r'\*([^*]+)\*',     r'\1', text)  # Remove *italic*
-    text = re.sub(r'#{1,6}\s',        '',    text)  # Remove ## headers
-    text = re.sub(r'`([^`]+)`',       r'\1', text)  # Remove `code`
-    text = re.sub(r'\n{3,}',         '\n\n', text)  # Collapse extra blank lines
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)   # Remove **bold**
+    text = re.sub(r'\*([^*]+)\*',     r'\1', text)   # Remove *italic*
+    text = re.sub(r'#{1,6}\s',        '',    text)   # Remove ## headers
+    text = re.sub(r'`([^`]+)`',       r'\1', text)   # Remove `code`
+    text = re.sub(r'\n{3,}',         '\n\n', text)   # Collapse blank lines
+
+    # Remove dashes used as list starters — these look AI-generated
+    # The pattern ^\s*[-–—]\s* means: start of line, optional space,
+    # a dash (hyphen, en dash, or em dash), optional space
+    # We replace with empty string — removing the dash entirely
+    text = re.sub(r'^\s*[-–—]\s+', '', text, flags=re.MULTILINE)
+
+    # Remove standalone em dashes used as separators mid-sentence
+    # Replace " — " with ": " which reads more naturally
+    text = re.sub(r'\s+[–—]\s+', ': ', text)
+
     return text.strip()
 
 
@@ -1581,11 +1589,48 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     if ai_result:
         briefing, action, questions = extract_briefing_and_questions(ai_result)
 
+    # If the first AI call returned no action or no briefing,
+    # retry once with a much simpler prompt.
+    # A simpler prompt is less likely to produce malformed JSON.
+    # We do not retry infinitely — once is enough.
+    # If the retry also fails, we accept empty and move on.
+    # Empty is honest. A fake action destroys trust.
+    if not action or not briefing:
+        print("generate_insight: retrying with simpler prompt")
+
+        # Build a minimal context — just the top 5 titles
+        top_titles = "\n".join(f"- {r['title']}" for r in results[:5])
+
+        simple_prompt = f"""Analyse these mentions about "{query}":
+{top_titles}
+
+Return JSON with two keys only:
+"briefing": one sentence stating the most important thing happening right now.
+"action": one sentence starting with a verb — the single most important thing to do in 48 hours.
+
+Raw JSON only. No markdown. No backticks. Example:
+{{"briefing": "Complaints about delivery speed are rising.", "action": "Publish a delivery update on your main channels within 24 hours."}}"""
+
+        retry_result = ai_call(simple_prompt)
+
+        if retry_result:
+            retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
+            # Only use retry values if the original was missing
+            if not briefing and retry_briefing:
+                briefing = retry_briefing
+            if not action and retry_action:
+                action = retry_action
+            # Do not overwrite questions if we already have them
+            if not questions and retry_questions:
+                questions = retry_questions
+
+    # Final fallback for briefing only — never force a fake action
     if not briefing:
         briefing = (
             f"Found {len(results)} mentions about {query} across "
             f"{len(sources_used)} sources. Raw signals below tell the story."
         )
+    # action stays empty if both calls failed — that is correct behaviour
 
     if cooccurrences:
         concept_pairs = []
@@ -1923,6 +1968,125 @@ async def risk_agent(query: str) -> dict:
 # have not been covered, dispatches specialist agents, evaluates
 # what came back, and loops if needed.
 # This is what makes it an agent — the loop with evaluation.
+async def competitive_agent(query: str, existing_results: list) -> dict:
+    """
+    Competitive Movement Agent — Agent 4.
+
+    What it does that the other three do not:
+    The first three agents investigate the queried brand itself.
+    This agent looks at what competitors are doing RIGHT NOW.
+
+    Why this matters for ROI and EBITDA:
+    A brand manager seeing complaints about their delivery speed
+    needs to know if a competitor just launched same-day delivery.
+    That context changes the urgency and the response entirely.
+
+    How it works:
+    Step 1 — Use AI to identify 2-3 competitors from the query
+    Step 2 — Search Google News and HackerNews for those competitors
+    Step 3 — Return the most significant competitor moves found
+
+    Cost: one AI call (free model) + two existing fetch functions
+    """
+    findings = []
+
+    try:
+        # Step 1: Ask AI who the competitors are
+        # We use the top result titles as context so the AI
+        # identifies relevant competitors not generic ones
+        top_titles = "\n".join(
+            f"- {r['title']}" for r in existing_results[:8]
+        )
+
+        competitor_prompt = f"""The brand or topic being researched is: "{query}"
+
+Context from recent mentions:
+{top_titles}
+
+Name exactly 2 competitors. Return JSON only:
+{{"competitors": ["Competitor One", "Competitor Two"]}}
+
+No markdown. No explanation. Raw JSON only."""
+
+        competitor_result = await asyncio.to_thread(ai_call, competitor_prompt)
+
+        competitors = []
+        if competitor_result:
+            try:
+                clean = re.sub(r'```[a-z]*\n?', '', competitor_result)
+                clean = re.sub(r'```', '', clean).strip()
+                parsed = json.loads(clean)
+                competitors = parsed.get("competitors", [])[:2]
+            except Exception:
+                # If JSON fails, extract any capitalised words as a fallback
+                # This is imperfect but better than nothing
+                words = re.findall(r'\b[A-Z][a-z]+\b', competitor_result)
+                competitors = words[:2]
+
+        if not competitors:
+            print("Competitive agent: could not identify competitors")
+            return {"agent": "competitive", "findings": [], "count": 0}
+
+        print(f"Competitive agent: tracking {competitors}")
+
+        # Step 2: Search for competitor news using existing functions
+        # We reuse fetch_google_news and fetch_hackernews — no new code
+        for competitor in competitors:
+            try:
+                # Google News for press and announcements
+                news = await asyncio.to_thread(
+                    fetch_google_news, competitor
+                )
+                # Take only the 3 most recent news items per competitor
+                for item in news[:3]:
+                    item["source"] = "competitive"  # relabel source
+                    findings.append(item)
+
+                # HackerNews for tech moves — important for B2B brands
+                hn = await asyncio.to_thread(
+                    fetch_hackernews, competitor
+                )
+                for item in hn[:2]:
+                    item["source"] = "competitive"
+                    findings.append(item)
+
+            except Exception as e:
+                print(f"Competitive agent: fetch failed for {competitor}: {e}")
+                continue
+
+        # Step 3: Synthesise what we found into one commercial insight
+        if findings:
+            findings_text = "\n".join(
+                f"- {f['title']}" for f in findings[:6]
+            )
+
+            synthesise_prompt = f"""You are a competitive intelligence analyst.
+
+Brand being researched: "{query}"
+Competitor activity found this month:
+{findings_text}
+
+Write exactly one sentence.
+State the most commercially significant thing a competitor is doing
+that the brand being researched needs to know about.
+Be specific. Name the competitor. State what they did.
+No hedging. No dashes. Plain English."""
+
+            synthesis = await asyncio.to_thread(ai_call, synthesise_prompt)
+        else:
+            synthesis = None
+
+        return {
+            "agent":     "competitive",
+            "findings":  findings[:5],
+            "synthesis": synthesis or "",
+            "count":     len(findings),
+            "competitors": competitors
+        }
+
+    except Exception as e:
+        print(f"Competitive agent error: {e}")
+        return {"agent": "competitive", "findings": [], "count": 0}
 
 async def chief_of_staff(query: str, existing_results: list, max_loops: int = 3):
     """
@@ -1995,8 +2159,10 @@ No markdown. No backticks. Raw JSON only."""
             investigation = json.loads(clean)
         except Exception:
             # If JSON parse fails, extract manually
+            # When AI returns malformed JSON, we fall back to a generic angle.
+            # We never use the word "loop" — the user sees "Agent N" not "Loop N".
             investigation = {
-                "angle":        f"Deeper signal analysis",
+                "angle":        "broader signal patterns",
                 "search_query": query,
                 "why":          "Finding signals across additional sources"
             }
@@ -2014,33 +2180,42 @@ No markdown. No backticks. Raw JSON only."""
         investigated_angles.add(search_query)
 
         # Tell the frontend what the agent is doing right now
-        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Agent {loop_count} working — {angle}', 'why': why, 'loop': loop_count})}\n\n"
+        # "Agent N" not "Loop N" — strategic language, not technical
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Agent {loop_count} — {angle}', 'why': why, 'loop': loop_count})}\n\n"
 
         # ── Step 2: Run all three specialists simultaneously ──────────────────
         # asyncio.gather runs all three at the same time
         # Total wait = slowest agent, not sum of all three
-        signal_task  = signal_agent(search_query, query)
-        context_task = context_agent(search_query)
-        risk_task    = risk_agent(search_query)
+        signal_task      = signal_agent(search_query, query)
+        context_task     = context_agent(search_query)
+        risk_task        = risk_agent(search_query)
+        # Agent 4 runs on every loop alongside the other three.
+        # It uses the original query and existing_results to find competitors.
+        # It does not use search_query because competitors relate to the
+        # original brand, not the specific angle being investigated.
+        competitive_task = competitive_agent(query, existing_results)
 
-        signal_result, context_result, risk_result = await asyncio.gather(
+        signal_result, context_result, risk_result, competitive_result = await asyncio.gather(
             signal_task,
             context_task,
             risk_task,
-            return_exceptions=True  # If one fails, others still complete
+            competitive_task,
+            return_exceptions=True
         )
 
-        # Collect all findings from this loop
         loop_findings = []
 
-        for result in [signal_result, context_result, risk_result]:
+        for result in [signal_result, context_result, risk_result, competitive_result]:
             if isinstance(result, Exception):
                 continue  # Skip failed agents silently
             if isinstance(result, dict):
                 loop_findings += result.get("findings", [])
 
         all_agent_findings += loop_findings
-
+        # Stream the competitive agent finding separately
+        # so the frontend can label it "Agent 4" distinctly
+        if isinstance(competitive_result, dict) and competitive_result.get("synthesis"):
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': competitive_result['synthesis'], 'angle': 'competitor activity', 'findings': competitive_result.get('findings', [])[:3], 'loop': 4, 'total_found': competitive_result.get('count', 0)})}\n\n"
         if not loop_findings:
             yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'No new signals found on this angle. Trying another...'})}\n\n"
             await asyncio.sleep(15)
