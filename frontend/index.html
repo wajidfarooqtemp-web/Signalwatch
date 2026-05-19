@@ -130,16 +130,89 @@
     .panel-insight { border-left:2px solid var(--teal); padding:10px 12px; background:var(--teal-light); border-radius:0 4px 4px 0; font-size:12px; color:var(--teal); line-height:1.6; margin-bottom:10px; }
     .panel-action { border-left:2px solid var(--amber); padding:10px 12px; background:var(--amber-light); border-radius:0 4px 4px 0; font-size:11px; font-weight:600; color:var(--amber); }
 
-    /* STATS */
-    .stat-strip { background:var(--bg2); border-bottom:1px solid var(--border); }
-    .stat-strip-inner { max-width:1100px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:repeat(4,1fr); }
-    .stat-item { padding:22px 32px 22px 0; border-right:1px solid var(--border); margin-right:32px; }
-    .stat-item:last-child { border-right:none; margin-right:0; padding-right:0; }
-    .stat-label { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:6px; }
-    .stat-value { font-family:var(--serif); font-size:30px; font-weight:700; color:var(--ink); line-height:1; letter-spacing:-1px; }
-    .stat-value.teal { color:var(--teal); }
-    .stat-value.amber { color:var(--amber); }
-    .stat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
+/* ── SIGNAL TICKER ───────────────────────────────────────────────────────
+       A Reuters-style scrolling strip showing example brand signals.
+       This replaces the stat strip entirely.
+
+       Why a ticker instead of stats:
+       Stats tell you numbers. The ticker shows you what the product actually
+       finds — real-sounding signal examples that communicate value instantly.
+       A visitor reads "Nike delivery complaints up" and immediately understands
+       what Signalwatch does. No explanation needed.
+
+       How the animation works:
+       The inner div contains the text duplicated twice side by side.
+       The @keyframes moves the inner div left by exactly 50% of its width.
+       Because the content is duplicated, at the 50% point it looks identical
+       to the start — creating a seamless infinite loop.
+       animation-duration controls speed — longer = slower scroll. */
+
+    .ticker-wrap {
+      background: var(--ink);      /* Dark background — contrasts with white hero */
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      overflow: hidden;            /* Hides content outside the visible area */
+      padding: 0;
+      height: 36px;
+      display: flex;
+      align-items: center;
+    }
+
+    .ticker-inner {
+      display: flex;
+      align-items: center;
+      /* width: max-content lets the div be as wide as its content needs */
+      width: max-content;
+      animation: ticker-scroll 40s linear infinite;
+      /* pause on hover — gives users time to read a signal they notice */
+    }
+
+    .ticker-wrap:hover .ticker-inner {
+      animation-play-state: paused;
+    }
+
+    @keyframes ticker-scroll {
+      /* Move left by 50% — because content is duplicated, this creates
+         a seamless loop. At 50% the position looks identical to 0%. */
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 32px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      color: rgba(255,255,255,0.55);
+      white-space: nowrap;         /* Prevents items from wrapping to a new line */
+    }
+
+    /* The coloured dot before each signal item */
+    .ticker-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Separator between signal items — a faint vertical line */
+    .ticker-sep {
+      width: 1px;
+      height: 12px;
+      background: rgba(255,255,255,0.12);
+      flex-shrink: 0;
+    }
+
+    /* Some signals are highlighted in teal or amber to draw the eye */
+    .ticker-item.hot {
+      color: rgba(61,230,200,0.8);  /* Teal — positive / notable signal */
+    }
+
+    .ticker-item.warn {
+      color: rgba(245,200,130,0.85); /* Amber — warning signal */
+    }
 
     /* SEARCH */
     /* More space above the search bar — separates it visually from the stats strip.
@@ -372,6 +445,36 @@
     .agent-thinking { font-family:var(--mono); font-size:11px; color:var(--text3); padding:8px 0; display:flex; align-items:center; gap:8px; }
     .agent-finished { font-family:var(--mono); font-size:10px; color:var(--teal); padding:8px 0; border-top:1px solid var(--border); margin-top:8px; }
 
+    /* ── SCROLL FADE-IN ──────────────────────────────────────────────────────
+       Sections fade in and rise slightly as the user scrolls to them.
+       This uses the Intersection Observer API (JavaScript) to add a class
+       when an element enters the viewport.
+       The CSS defines what "hidden" and "visible" look like.
+       The JS below triggers the transition at the right moment.
+
+       .fade-in-section: the initial hidden state
+         opacity 0 = invisible
+         transform translateY(20px) = 20px below its final position
+
+       .fade-in-section.is-visible: the final visible state
+         opacity 1 = fully visible
+         transform translateY(0) = at its natural position
+
+       transition: the animation between hidden and visible.
+       0.6s ease-out means it takes 0.6 seconds and decelerates
+       as it reaches the final position — natural, not mechanical. */
+
+    .fade-in-section {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    }
+
+    .fade-in-section.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     /* FOOTER */
     .site-footer { border-top:1px solid var(--border); background:var(--bg2); padding:20px 40px; display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:10px; color:var(--text3); letter-spacing:0.3px; flex-wrap:wrap; gap:8px; }
 
@@ -472,22 +575,169 @@
             <span class="source-pill"><span class="source-pill-dot"></span>RSS Feeds</span>
           </div>
         </div>
+        <!--
+          MOCK RESULT PANEL — sits in the hero on the right side.
+          Shows a realistic example of what a search produces.
+          Uses your existing CSS classes (.brief-card, .action-strip etc)
+          so it looks identical to a real result.
+
+          Why this works:
+          A visitor reads "delivery speed complaints" and "publish a
+          response within 24 hours" and immediately understands what
+          Signalwatch produces. No stat, no description, no pitch
+          communicates this as clearly as showing the actual output.
+
+          The panel-header stays dark as before — consistent with your
+          existing design language. The content below is a mock briefing.
+        -->
         <div class="hero-panel">
           <div class="panel-header">
-            <span class="panel-title">Live signal feed</span>
-            <span class="panel-status"><span class="panel-status-dot"></span>Active</span>
+            <span class="panel-title">Example · nike complaints</span>
+            <span class="panel-status">
+              <span class="panel-status-dot"></span>13 sources · 312 signals
+            </span>
           </div>
-          <div class="panel-body">
-            <div class="panel-bars">
-              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
-              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
-              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
-              <div class="panel-bar"></div>
+          <div class="panel-body" style="padding:16px;">
+
+            <!-- Mock briefing — styled like a real .brief-card but inline -->
+            <div style="
+              font-family:var(--mono);
+              font-size:8px;
+              letter-spacing:1.5px;
+              text-transform:uppercase;
+              color:var(--text3);
+              margin-bottom:8px;">
+              Intelligence briefing
             </div>
-            <div class="panel-insight">Momentum building across 4 sources. Consumer sentiment shifting toward product quality concerns.</div>
-            <div class="panel-action">→ Respond publicly within 24h before this reaches press</div>
+            <div style="
+              font-size:12px;
+              line-height:1.7;
+              color:var(--text2);
+              font-weight:300;
+              margin-bottom:14px;">
+              Delivery speed complaints have tripled on Reddit in the past 14 days,
+              concentrated in the UK and Germany. Three competitor brands have already
+              responded publicly — Nike has not.
+            </div>
+
+            <!-- Mock action — styled like a real .action-strip -->
+            <div style="
+              display:flex;
+              align-items:flex-start;
+              gap:10px;
+              background:var(--teal-light);
+              border:1px solid var(--teal-mid);
+              border-radius:4px;
+              padding:10px 12px;
+              margin-bottom:12px;">
+              <span style="
+                font-family:var(--mono);
+                font-size:8px;
+                letter-spacing:1px;
+                text-transform:uppercase;
+                color:var(--white);
+                background:var(--teal);
+                padding:2px 6px;
+                border-radius:2px;
+                white-space:nowrap;
+                flex-shrink:0;
+                margin-top:1px;">Do this</span>
+              <span style="font-size:11px;color:var(--teal);line-height:1.6;font-weight:500;">
+                Post a delivery update on your UK social channels today —
+                before this reaches press coverage tomorrow.
+              </span>
+            </div>
+
+            <!-- Mock source badges — shows which sources fired -->
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+              <span class="src-badge src-reddit">Reddit · 189</span>
+              <span class="src-badge src-googlenews">News · 67</span>
+              <span class="src-badge src-trustpilot">Trustpilot · 41</span>
+              <span class="src-badge src-youtube">YouTube · 15</span>
+            </div>
+
           </div>
         </div>
+      </div>
+    </div>
+    <!--
+      SIGNAL TICKER — sits immediately below the hero.
+      Shows example brand signals scrolling continuously.
+      The content is duplicated (copy A + copy B) inside .ticker-inner
+      so the CSS animation can loop seamlessly.
+      All signals are fictional examples — they show what the product finds,
+      not real brand data.
+    -->
+    <div class="ticker-wrap" aria-hidden="true">
+      <div class="ticker-inner">
+
+        <!-- COPY A — the original set of signal items -->
+        <span class="ticker-dot" style="background:#3de6c8;margin-left:32px;"></span>
+        <span class="ticker-item hot">Nike delivery complaints · Reddit · 847 mentions this week</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Samsung battery recall · HackerNews · accelerating</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#3de6c8;"></span>
+        <span class="ticker-item">Trustpilot · Groupon · sentiment shifting negative · 3-day trend</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Tesla service complaints · App Store · 1-star spike · 48h</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#3de6c8;"></span>
+        <span class="ticker-item hot">Adidas sustainability · news · positive momentum · 12 sources</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
+        <span class="ticker-item">Apple Vision Pro · Reddit · purchase intent questions rising</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Deliveroo · Trustpilot · refund complaints · unanswered · 6 days</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#3de6c8;"></span>
+        <span class="ticker-item hot">Monzo · HackerNews · feature request cluster · pricing + switching</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
+        <span class="ticker-item">Dyson · YouTube · quality comparison · 192 videos · last 30 days</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Boohoo · news · sustainability claims · regulatory scrutiny · rising</span>
+        <span class="ticker-sep"></span>
+
+        <!-- COPY B — identical to Copy A, placed immediately after.
+             The CSS animation moves the container left by 50% (= width of Copy A).
+             At that point, Copy B is in exactly the same position Copy A started.
+             This creates a seamless infinite loop with no visible jump. -->
+        <span class="ticker-dot" style="background:#3de6c8;margin-left:32px;"></span>
+        <span class="ticker-item hot">Nike delivery complaints · Reddit · 847 mentions this week</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Samsung battery recall · HackerNews · accelerating</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#3de6c8;"></span>
+        <span class="ticker-item">Trustpilot · Groupon · sentiment shifting negative · 3-day trend</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Tesla service complaints · App Store · 1-star spike · 48h</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#3de6c8;"></span>
+        <span class="ticker-item hot">Adidas sustainability · news · positive momentum · 12 sources</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
+        <span class="ticker-item">Apple Vision Pro · Reddit · purchase intent questions rising</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Deliveroo · Trustpilot · refund complaints · unanswered · 6 days</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#3de6c8;"></span>
+        <span class="ticker-item hot">Monzo · HackerNews · feature request cluster · pricing + switching</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
+        <span class="ticker-item">Dyson · YouTube · quality comparison · 192 videos · last 30 days</span>
+        <span class="ticker-sep"></span>
+        <span class="ticker-dot" style="background:#f5c882;"></span>
+        <span class="ticker-item warn">Boohoo · news · sustainability claims · regulatory scrutiny · rising</span>
+        <span class="ticker-sep"></span>
+
       </div>
     </div>
     <!-- ─────────────────────────────────────────────────────────────────────
@@ -691,36 +941,6 @@
 
       </svg>
     </div>
-    <div class="stat-strip">
-      <div class="stat-strip-inner">
-        <div class="stat-item">
-          <div class="stat-label">Sources</div>
-          <!-- Static — always 13. Updates if we add more sources. -->
-          <div class="stat-value teal">13</div>
-          <div class="stat-sub">Live data sources</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Signals found</div>
-          <!-- Shows "400" before first search — real number from our crawl capacity.
-               After a search, animateCount() updates this with the actual result. -->
-          <div class="stat-value" id="statTotal">400</div>
-          <div class="stat-sub">Mentions per search</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Scan depth</div>
-          <!-- Static — always 90 days. Communicates recency before any search. -->
-          <div class="stat-value amber">90</div>
-          <div class="stat-sub">Days of signal</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Active sources</div>
-          <!-- Shows "13" before first search.
-               After a search, updates with how many sources returned results. -->
-          <div class="stat-value" id="statActiveSources">13</div>
-          <div class="stat-sub">Returning results</div>
-        </div>
-      </div>
-    </div>
 
     <div class="search-wrap">
 
@@ -880,16 +1100,32 @@
         <div class="about-card-icon">⚡</div>
         <div class="about-card-title">Decision engine, not a dashboard</div>
         <div class="about-card-text">Every search returns a briefing with a specific recommended action. Not charts to interpret. Not data to export. A decision.</div>
+      <!--
+        About page cards — three cards explaining what makes Signalwatch different.
+        Each card now has one concrete commercial fact, not a generic description.
+        The icon stays. The title stays. Only the body text changes.
+      -->
+      <div class="about-card">
+        <div class="about-card-icon">⚡</div>
+        <div class="about-card-title">One action, not a dashboard</div>
+        <!-- Specific: mentions the "Do this" output and the 48-hour frame.
+             A visitor who manages a brand knows exactly what this means. -->
+        <div class="about-card-text">Every search ends with a "Do this" one specific action to take in the next 48 hours. Other charts give you a chart. Signalwatch gives you a decision.</div>
       </div>
       <div class="about-card">
         <div class="about-card-icon">◎</div>
-        <div class="about-card-title">Pattern intelligence</div>
-        <div class="about-card-text">The algorithm finds results through patterns in the mentions themselves. Word frequency across all results is noise.</div>
+        <div class="about-card-title">Co-occurrence, not word clouds</div>
+        <!-- Specific: names the actual technique and contrasts it with
+             what every other tool does (word frequency / word clouds).
+             Shows technical credibility without jargon. -->
+        <div class="about-card-text">The algorithm finds mentions where two themes collide in the same sentence — "price" and "switching" together means something. Separate word counts mean nothing. Most tools show you the latter.</div>
       </div>
       <div class="about-card">
         <div class="about-card-icon">✦</div>
-        <div class="about-card-title">Last 90 days only</div>
-        <div class="about-card-text">All signals are from the last 90 days. Recommendations are based on what is happening now, not historical content that no longer reflects reality.</div>
+        <div class="about-card-title">13 sources. 90 days. 60 seconds.</div>
+        <!-- Specific: three concrete numbers in the title itself.
+             Body explains what those numbers mean commercially. -->
+        <div class="about-card-text">Reddit, news, YouTube, App Store, Trustpilot, regulatory filings and seven more — scanned simultaneously. What would take a junior analyst two days takes Signalwatch 60 seconds.</div>
       </div>
     </div>
     <footer class="site-footer">
@@ -1300,8 +1536,6 @@
       }
 
       const activeSources = Object.values(data.sources || {}).filter(v => v > 0).length;
-      animateCount("statTotal", data.total);
-      animateCount("statActiveSources", activeSources);
 
       let html = "";
 
@@ -1313,19 +1547,19 @@
           .replace(/^\s*\{/, '').replace(/\}\s*$/, '').trim();
         if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) cleanInsight = cleanInsight.slice(1,-1);
         const actionText = (data.action || "").trim().length > 5 ? data.action.trim() : "";
-        html += `<div class="brief-card">
+        html += `<div class="brief-card fade-in-section">
           <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
           <div class="brief-body">${cleanInsight}</div>
           ${actionText ? `<div class="action-strip"><span class="action-flag">Do this</span><span class="action-text">${actionText}</span></div>` : ""}
         </div>`;
       } else {
-        html += `<div class="brief-card"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
+        html += `<div class="brief-card fade-in-section"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
       }
 
       if (data.questions && data.questions.length > 0) {
         const qSrc = data.cooccurrences_found > 0
           ? `Pattern analysis · ${data.cooccurrences_found} signals examined` : "AI pattern analysis";
-        html += `<div class="questions-card"><div class="card-eyebrow"><span>Questions your team should be asking</span><span class="card-eyebrow-source">${qSrc}</span></div>`;
+        html += `<div class="questions-card fade-in-section"><div class="card-eyebrow"><span>Questions your team should be asking</span><span class="card-eyebrow-source">${qSrc}</span></div>`;
         data.questions.forEach((q, i) => {
           const qText   = typeof q === "string" ? q : (q.question || "");
           const qReason = typeof q === "object" ? (q.reason || "") : "";
@@ -1334,13 +1568,13 @@
         html += `</div>`;
       }
 
-      html += `<div class="chart-card"><div class="chart-head"><span class="chart-title">Signal timeline · last 90 days</span><span class="chart-sub">Click a dot to open the source</span></div><canvas id="signalChart" style="max-height:180px"></canvas></div>`;
+      html += `<div class="chart-card fade-in-section"><div class="chart-head"><span class="chart-title">Signal timeline · last 90 days</span><span class="chart-sub">Click a dot to open the source</span></div><canvas id="signalChart" style="max-height:180px"></canvas></div>`;
 
       if (data.word_frequencies && data.word_frequencies.length > 0) {
         const colors = ["#0d7a6b","#c4720a","#6d28d9","#c0392b","#059669","#2563eb","#c2410c","#0369a1","#15803d","#92400e"];
         const maxC = data.word_frequencies[0].count;
         const minC = data.word_frequencies[data.word_frequencies.length-1].count;
-        html += `<div class="cloud-card"><div class="card-eyebrow"><span>Word patterns</span><span class="card-eyebrow-source">Frequency across all mentions</span></div><div class="cloud-wrap">`;
+        html += `<div class="cloud-card fade-in-section"><div class="card-eyebrow"><span>Word patterns</span><span class="card-eyebrow-source">Frequency across all mentions</span></div><div class="cloud-wrap">`;
         data.word_frequencies.forEach((item, i) => {
           const norm = (item.count - minC) / ((maxC - minC) || 1);
           const size = Math.round(10 + norm * 20);
@@ -1368,6 +1602,13 @@
       });
 
       container.innerHTML = html;
+      // Re-observe fade-in elements after results render
+      // We need to do this because the elements did not exist
+      // when the observer was first set up at page load.
+      // innerHTML replaces the DOM, so we observe the new elements.
+      document.querySelectorAll('.fade-in-section').forEach(el => {
+        fadeObserver.observe(el);
+      });
       if (data.sources && data.results) buildChart(data.sources, data.results);
     }
 // ── HANDLE AGENT UPDATES ──────────────────────────────────────────────
@@ -1606,6 +1847,37 @@
         }
       });
     }
+    // ── SCROLL FADE-IN OBSERVER ───────────────────────────────────────────
+    // Intersection Observer watches elements and fires a callback
+    // when they enter or leave the viewport.
+    //
+    // We use it to add the class "is-visible" to any element with
+    // class "fade-in-section" when it scrolls into view.
+    // The CSS transition above does the actual animation.
+    //
+    // threshold: 0.1 means the callback fires when 10% of the element
+    // is visible. At 0 it fires immediately on any pixel entering.
+    // At 1.0 it waits until the whole element is visible.
+    // 0.1 is the sweet spot — fires just as the element appears.
+
+    const fadeObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          // Element entered the viewport — make it visible
+          entry.target.classList.add('is-visible');
+          // Once visible, stop watching this element
+          // (we do not want it to fade out when scrolling back up)
+          fadeObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    // Watch all elements with class "fade-in-section"
+    // querySelectorAll returns all matching elements as a list
+    // forEach loops through each one and starts observing it
+    document.querySelectorAll('.fade-in-section').forEach(el => {
+      fadeObserver.observe(el);
+    });
   </script>
 </body>
 </html>
