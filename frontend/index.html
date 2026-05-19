@@ -278,6 +278,74 @@
     .modal-signed-in { display:flex; align-items:center; gap:10px; background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:5px; padding:10px 16px; font-size:13px; color:var(--teal); font-weight:500; }
     .modal-avatar { width:28px; height:28px; border-radius:50%; background:var(--teal-mid); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-size:12px; font-weight:700; color:var(--teal); flex-shrink:0; }
 
+    /* ── PRODUCT ANIMATION ──────────────────────────────────────────────────
+       Sits between hero and stat strip.
+       Shows the three-step process — Scan, Score, Decide — as animated
+       signals flowing into a central intelligence node.
+       Hidden on mobile — the page needs to breathe on small screens. */
+
+    .product-anim-wrap {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 0 0;
+      /* overflow:hidden clips any animation that strays outside the container */
+      overflow: hidden;
+    }
+
+    .product-anim-svg {
+      /* max-width keeps it from stretching too wide on large screens */
+      max-width: 700px;
+      /* auto margins centre it horizontally */
+      margin: 0 auto;
+      display: block;
+    }
+
+    /* The outer pulse ring on the centre node */
+    .centre-pulse-ring {
+      /* transform-origin centres the scale animation on the circle itself */
+      transform-origin: 362px 100px;
+      animation: centre-breathe 3s ease-in-out infinite;
+    }
+
+    @keyframes centre-breathe {
+      /* Scales from 1x to 1.4x and back — a slow heartbeat */
+      0%, 100% { transform: scale(1);   opacity: 0.3; }
+      50%       { transform: scale(1.4); opacity: 0;   }
+    }
+
+    /* Source nodes get a very subtle hover effect */
+    .source-node {
+      transition: opacity 0.3s;
+    }
+    .source-node:hover {
+      opacity: 0.8;
+    }
+
+    /* The travelling dash lines */
+    .anim-line {
+      /* stroke-dashoffset animation moves the dashes along the line
+         creating the illusion of signal travelling from source to centre */
+      animation: dash-travel 3s linear infinite;
+    }
+
+    /* Each line starts at a different point in the animation
+       so they do not all pulse at the same moment — staggered */
+    .anim-line--1 { animation-delay: 0s;    }
+    .anim-line--2 { animation-delay: 1s;    }
+    .anim-line--3 { animation-delay: 2s;    }
+
+    @keyframes dash-travel {
+      /* Moving dashoffset from 28 to 0 shifts the dashes forward
+         along the line — the number 28 = dasharray(8) + gap(6) + extra
+         chosen so the motion looks smooth at this line length */
+      from { stroke-dashoffset: 28; }
+      to   { stroke-dashoffset: 0;  }
+    }
+
+    /* Hide the animation on mobile — not needed when hero panel is hidden */
+    @media(max-width: 900px) {
+      .product-anim-wrap { display: none; }
+    }
     /* SOURCE PULSE ANIMATION (loading state) */
     @keyframes sw-travel { 0%{stroke-dashoffset:150;opacity:0} 15%{opacity:0.9} 85%{opacity:0.9} 100%{stroke-dashoffset:0;opacity:0} }
     @keyframes sw-nodepop { 0%{opacity:0.18} 60%{opacity:1} 100%{opacity:0.55} }
@@ -422,53 +490,207 @@
         </div>
       </div>
     </div>
-<!--
-      How it works strip — three steps that tell a visitor
-      what the product does before they scroll to the search bar.
-      Each step is numbered in your serif font (which you already have)
-      and has one sentence of explanation.
-      This is exactly what Cielara does with their 01/02/03 section.
-      No images. No backend. Pure HTML.
-    -->
-    <div style="background:var(--white);border-bottom:1px solid var(--border);">
-      <div style="max-width:1100px;margin:0 auto;padding:40px 40px;display:grid;grid-template-columns:repeat(3,1fr);gap:48px;">
+    <!-- ─────────────────────────────────────────────────────────────────────
+         PRODUCT ANIMATION — sits between hero and stat strip.
 
-        <!-- Step 1 -->
-        <div>
-          <div style="font-family:var(--serif);font-size:28px;font-weight:700;color:var(--border2);line-height:1;margin-bottom:12px;">01</div>
-          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:8px;">Scan</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">
-            13 sources scanned simultaneously — Reddit, news, reviews, YouTube, forums, regulatory filings and more. Up to 400 mentions in 60 seconds.
-          </div>
-        </div>
+         What it shows:
+         Three nodes (Scan, Score, Decide) continuously pulse signals
+         into a central intelligence node. The signals travel as animated
+         dashes along connecting lines — the same visual language as the
+         loading animation but slower and calmer.
 
-        <!-- Step 2 -->
-        <div>
-          <div style="font-family:var(--serif);font-size:28px;font-weight:700;color:var(--border2);line-height:1;margin-bottom:12px;">02</div>
-          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:8px;">Score</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">
-            Every mention is scored by a pattern detection algorithm that finds where multiple themes collide in the same signal. Volume is noise. Patterns are signal.
-          </div>
-        </div>
+         Why this works:
+         It communicates the three-step process without words.
+         It makes the page feel alive before anyone searches.
+         It disappears on mobile (hidden via CSS) since the hero
+         panel is already hidden there and the page needs to breathe.
 
-        <!-- Step 3 -->
-        <div>
-          <div style="font-family:var(--serif);font-size:28px;font-weight:700;color:var(--border2);line-height:1;margin-bottom:12px;">03</div>
-          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:8px;">Decide</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">
-            One briefing. One action. What to do in the next 48 hours. Not a dashboard to interpret. A decision to act on.
-          </div>
-        </div>
+         No JavaScript needed — pure CSS animation.
+         No images — pure SVG drawn inline.
+         ───────────────────────────────────────────────────────────────── -->
+    <div class="product-anim-wrap">
+      <svg class="product-anim-svg"
+           viewBox="0 0 700 200"
+           xmlns="http://www.w3.org/2000/svg"
+           aria-hidden="true"
+           role="presentation">
 
-      </div>
+        <!-- ── Connecting lines ──────────────────────────────────────────
+             Each line runs from a source node to the centre node.
+             stroke-dasharray and stroke-dashoffset create the travelling
+             dash effect. The animation shifts dashoffset over time,
+             making the dash appear to move along the line.
+             The three lines use different animation-delay values so they
+             fire at different times — staggered, not simultaneous.
+             This makes it feel like real signals arriving, not a loop. -->
+
+        <!-- Line: Scan → Centre -->
+        <line x1="120" y1="100" x2="350" y2="100"
+              stroke="#b2ddd6" stroke-width="1"
+              stroke-dasharray="8 6"
+              class="anim-line anim-line--1"/>
+
+        <!-- Line: Score → Centre (diagonal from top right) -->
+        <line x1="580" y1="52" x2="374" y2="88"
+              stroke="#b2ddd6" stroke-width="1"
+              stroke-dasharray="8 6"
+              class="anim-line anim-line--2"/>
+
+        <!-- Line: Decide → Centre (diagonal from bottom right) -->
+        <line x1="580" y1="148" x2="374" y2="112"
+              stroke="#b2ddd6" stroke-width="1"
+              stroke-dasharray="8 6"
+              class="anim-line anim-line--3"/>
+
+        <!-- ── Centre node — the intelligence core ──────────────────────
+             Two concentric circles. The outer one pulses slowly using
+             a CSS scale animation — like a heartbeat.
+             The inner circle holds the "SW" label. -->
+        <circle class="centre-pulse-ring"
+                cx="362" cy="100" r="28"
+                fill="none" stroke="#0d7a6b" stroke-width="1"
+                opacity="0.3"/>
+        <circle cx="362" cy="100" r="20"
+                fill="#e8f5f2" stroke="#0d7a6b" stroke-width="1.5"/>
+        <circle cx="362" cy="100" r="11"
+                fill="#0d7a6b"/>
+        <text x="362" y="104"
+              text-anchor="middle"
+              style="font-size:7px;font-weight:700;fill:#fff;
+                     font-family:'DM Mono',monospace;letter-spacing:0.5px;">
+          SW
+        </text>
+
+        <!-- ── Source node: SCAN (left) ─────────────────────────────────
+             A small circle with a label above and a descriptor below.
+             fill is a very light teal — matching your existing palette. -->
+        <circle cx="88" cy="100" r="22"
+                fill="#e8f5f2" stroke="#0d7a6b" stroke-width="1"
+                class="source-node"/>
+        <circle cx="88" cy="100" r="10"
+                fill="#0d7a6b" opacity="0.15"/>
+        <!-- Scan icon — a small magnifier drawn with SVG paths -->
+        <circle cx="86" cy="98" r="5"
+                fill="none" stroke="#0d7a6b" stroke-width="1.5"/>
+        <line x1="90" y1="102" x2="93" y2="105"
+              stroke="#0d7a6b" stroke-width="1.5"
+              stroke-linecap="round"/>
+        <!-- Label above node -->
+        <text x="88" y="68"
+              text-anchor="middle"
+              style="font-size:8px;font-weight:600;fill:#0d7a6b;
+                     font-family:'DM Mono',monospace;letter-spacing:1.5px;
+                     text-transform:uppercase;">
+          Scan
+        </text>
+        <!-- Descriptor below node — what scan means -->
+        <text x="88" y="132"
+              text-anchor="middle"
+              style="font-size:7px;fill:#9a9590;
+                     font-family:'DM Mono',monospace;">
+          13 sources
+        </text>
+
+        <!-- ── Source node: SCORE (top right) ───────────────────────────
+             Amber coloured — matches your amber accent colour.
+             Positioned top-right of centre. -->
+        <circle cx="612" cy="52" r="22"
+                fill="#fef7ee" stroke="#c4720a" stroke-width="1"
+                class="source-node"/>
+        <!-- Score icon — three horizontal bars of different widths
+             suggesting a bar chart / ranking -->
+        <rect x="604" y="46" width="10" height="2"
+              rx="1" fill="#c4720a"/>
+        <rect x="604" y="51" width="7"  height="2"
+              rx="1" fill="#c4720a" opacity="0.7"/>
+        <rect x="604" y="56" width="4"  height="2"
+              rx="1" fill="#c4720a" opacity="0.4"/>
+        <text x="612" y="22"
+              text-anchor="middle"
+              style="font-size:8px;font-weight:600;fill:#c4720a;
+                     font-family:'DM Mono',monospace;letter-spacing:1.5px;
+                     text-transform:uppercase;">
+          Score
+        </text>
+        <text x="612" y="84"
+              text-anchor="middle"
+              style="font-size:7px;fill:#9a9590;
+                     font-family:'DM Mono',monospace;">
+          pattern detection
+        </text>
+
+        <!-- ── Source node: DECIDE (bottom right) ───────────────────────
+             Dark ink coloured — matches your --ink variable.
+             Positioned bottom-right of centre. -->
+        <circle cx="612" cy="148" r="22"
+                fill="#f4f3ef" stroke="#0f0d0b" stroke-width="1"
+                class="source-node"/>
+        <!-- Decide icon — a checkmark suggesting action taken -->
+        <polyline points="604,148 609,154 620,142"
+                  fill="none" stroke="#0f0d0b"
+                  stroke-width="1.8" stroke-linecap="round"
+                  stroke-linejoin="round"/>
+        <text x="612" y="118"
+              text-anchor="middle"
+              style="font-size:8px;font-weight:600;fill:#0f0d0b;
+                     font-family:'DM Mono',monospace;letter-spacing:1.5px;
+                     text-transform:uppercase;">
+          Decide
+        </text>
+        <text x="612" y="180"
+              text-anchor="middle"
+              style="font-size:7px;fill:#9a9590;
+                     font-family:'DM Mono',monospace;">
+          one action
+        </text>
+
+        <!-- ── Signal dots ───────────────────────────────────────────────
+             Small filled circles that travel along each line.
+             They use animateMotion — an SVG animation that moves an
+             element along a path. Each dot has a different dur (duration)
+             so they travel at slightly different speeds.
+             repeatCount="indefinite" means they loop forever.
+             The path coordinates match the line coordinates above. -->
+
+        <!-- Dot on Scan → Centre line -->
+        <circle r="3" fill="#0d7a6b" opacity="0.8">
+          <animateMotion dur="2.8s" repeatCount="indefinite" begin="0s">
+            <mpath href="#path-scan"/>
+          </animateMotion>
+        </circle>
+
+        <!-- Dot on Score → Centre line -->
+        <circle r="3" fill="#c4720a" opacity="0.8">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.9s">
+            <mpath href="#path-score"/>
+          </animateMotion>
+        </circle>
+
+        <!-- Dot on Decide → Centre line -->
+        <circle r="3" fill="#0f0d0b" opacity="0.6">
+          <animateMotion dur="2.6s" repeatCount="indefinite" begin="1.7s">
+            <mpath href="#path-decide"/>
+          </animateMotion>
+        </circle>
+
+        <!-- ── Motion paths (invisible) ─────────────────────────────────
+             animateMotion needs a path to follow.
+             We define invisible paths that match our visible lines exactly.
+             display:none means they never render — they only guide the dots. -->
+        <defs>
+          <path id="path-scan"
+                d="M 120 100 L 350 100"
+                style="display:none"/>
+          <path id="path-score"
+                d="M 580 52 L 374 88"
+                style="display:none"/>
+          <path id="path-decide"
+                d="M 580 148 L 374 112"
+                style="display:none"/>
+        </defs>
+
+      </svg>
     </div>
-
-    <!-- On mobile, stack the three steps vertically -->
-    <style>
-      @media(max-width:768px) {
-        .how-it-works-grid { grid-template-columns:1fr !important; gap:24px !important; padding:28px 16px !important; }
-      }
-    </style>
     <div class="stat-strip">
       <div class="stat-strip-inner">
         <div class="stat-item">
@@ -1005,9 +1227,20 @@
               btn.disabled = false;
               btn.textContent = "Analyse";
               renderResults(msg, query);
-              // Show the agent panel — agent starts working now
+              // Show agent panel now so it is ready before agent events arrive
+              // Agent 4 fires almost immediately after complete
+              // so the panel must be visible before that event arrives
               document.getElementById("agentPanel").style.display = "block";
-              // Do NOT return — keep the stream open for agent updates
+              // Do NOT return — SSE connection stays open for all four agents
+            }
+
+            else if (msg.type === "agent_update") {
+              // An agent sent an update — show the panel immediately
+              // This catches the case where agent events arrive
+              // before the "complete" event has been processed
+              const panel = document.getElementById("agentPanel");
+              if (panel) panel.style.display = "block";
+              handleAgentUpdate(msg);
             }
 
             else if (msg.type === "agent_update") {
@@ -1142,12 +1375,21 @@
     // Updates the agent panel in real time without touching any other UI.
 
     function handleAgentUpdate(msg) {
+      // Make the agent panel visible as soon as any agent event arrives.
+      // This handles the race condition where Agent 4 fires before
+      // the "complete" message has been processed by the browser.
+      const panel = document.getElementById("agentPanel");
+      if (panel && panel.style.display === "none") {
+        panel.style.display = "block";
+      }
+
       const status   = document.getElementById("agentStatus");
       const findings = document.getElementById("agentFindings");
 
       if (!status || !findings) return;
 
       const phase = msg.phase || "";
+
 
       if (phase === "thinking" || phase === "waiting") {
         // Agent is thinking — just update the status text

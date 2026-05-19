@@ -2129,16 +2129,21 @@ Query: "{query}"
 What we already know from {len(existing_results)} signals:
 {chr(10).join(f"- {t}" for t in existing_titles[:8])}
 
-{"What agents already investigated: " + chr(10).join(f"- {t}" for t in already_found[:5]) if already_found else ""}
+{"What has already been investigated: " + chr(10).join(f"- {t}" for t in already_found[:5]) if already_found else ""}
 
 Identify ONE specific angle that has NOT been covered yet.
 It must be something a brand intelligence team would genuinely want to know.
 It must be investigable by searching for a specific phrase or company name.
 
+CRITICAL RULES:
+- Never use the words loop, cycle, iteration, agent, or investigation in your response
+- The angle must be a plain English description of what to find out
+- The search_query must be a real search phrase, not a description of a task
+
 Return JSON only:
 {{
-  "angle": "one sentence describing what to investigate",
-  "search_query": "3-5 word search query to find it",
+  "angle": "one plain English sentence describing what to find out",
+  "search_query": "3-5 word search phrase",
   "why": "one sentence on why this matters commercially"
 }}
 
@@ -2212,10 +2217,17 @@ No markdown. No backticks. Raw JSON only."""
                 loop_findings += result.get("findings", [])
 
         all_agent_findings += loop_findings
-        # Stream the competitive agent finding separately
-        # so the frontend can label it "Agent 4" distinctly
+        # Agent 4 — Competitive Movement Agent
+        # We send a "investigating" event first so the frontend
+        # knows Agent 4 is working, then "complete" with findings.
+        # This also ensures the agent panel is visible before results arrive.
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': 'Agent 4 — tracking competitor movements', 'why': 'Understanding what competitors are doing changes the urgency of your response', 'loop': 4})}\n\n"
+
         if isinstance(competitive_result, dict) and competitive_result.get("synthesis"):
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': competitive_result['synthesis'], 'angle': 'competitor activity', 'findings': competitive_result.get('findings', [])[:3], 'loop': 4, 'total_found': competitive_result.get('count', 0)})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': competitive_result['synthesis'], 'angle': 'competitor movements', 'findings': competitive_result.get('findings', [])[:3], 'loop': 4, 'total_found': competitive_result.get('count', 0)})}\n\n"
+        elif isinstance(competitive_result, dict) and competitive_result.get("count", 0) > 0:
+            # Found signals but synthesis failed — still show the signals
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': f'Found {competitive_result.get("count", 0)} competitor signals across {len(competitive_result.get("competitors", []))} companies.', 'angle': 'competitor movements', 'findings': competitive_result.get('findings', [])[:3], 'loop': 4, 'total_found': competitive_result.get('count', 0)})}\n\n"
         if not loop_findings:
             yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'No new signals found on this angle. Trying another...'})}\n\n"
             await asyncio.sleep(15)
