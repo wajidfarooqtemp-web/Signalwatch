@@ -3,53 +3,12 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <!--
-    Content Security Policy — tells the browser what is allowed to load.
-    Think of it as a whitelist. Anything not on the list is blocked,
-    even if an attacker manages to inject it into the page.
-
-    default-src 'self': by default only load from our own domain
-    script-src: these are the only JavaScript sources we allow
-    style-src: only these sources for CSS
-    connect-src: only these URLs our JavaScript can call (our API, Google auth)
-    frame-src: only Google's domain for the sign-in popup
-    frame-ancestors 'none': nobody can embed our site in an iframe (blocks clickjacking)
-  -->
-  <meta http-equiv="Content-Security-Policy"
-        content="
-          default-src 'self';
-          script-src 'self' 'unsafe-inline'
-            https://cdnjs.cloudflare.com
-            https://cdn.jsdelivr.net
-            https://cloud.umami.is
-            https://accounts.google.com;
-          style-src 'self' 'unsafe-inline'
-            https://fonts.googleapis.com;
-          font-src
-            https://fonts.gstatic.com;
-          connect-src 'self'
-            https://signalwatch-r6s8.onrender.com
-            https://signalwatch-production.up.railway.app
-            https://accounts.google.com
-            https://oauth2.googleapis.com;
-          frame-src
-            https://accounts.google.com;
-          img-src 'self' data: https:;
-          frame-ancestors 'none';
-        ">
-
-  <!-- Referrer policy: when a user clicks a link from our site,
-       only our domain name is sent to the destination — not the full URL.
-       This stops your users' search queries leaking to other sites. -->
-  <meta name="referrer" content="strict-origin">
   <title>Signalwatch — Brand Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script defer src="https://cloud.umami.is/script.js" data-website-id="750bf47c-83de-4c08-ac8b-f4deeb5dcae6"></script>
-  <!-- Google Identity Services — handles Sign In With Google -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     :root {
@@ -89,10 +48,7 @@
 
     /* HERO */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
-    /* Increased top and bottom padding from 64px/52px to 88px/72px.
-       This is the single biggest thing that makes a site feel premium —
-       generous space around content. Nothing else changes here. */
-    .hero { max-width:1100px; margin:0 auto; padding:88px 40px 72px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
+    .hero { max-width:1100px; margin:0 auto; padding:64px 40px 52px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
 
     /* ── DASH FIX ──
        The original had a ::before pseudo-element that drew a line before
@@ -130,94 +86,19 @@
     .panel-insight { border-left:2px solid var(--teal); padding:10px 12px; background:var(--teal-light); border-radius:0 4px 4px 0; font-size:12px; color:var(--teal); line-height:1.6; margin-bottom:10px; }
     .panel-action { border-left:2px solid var(--amber); padding:10px 12px; background:var(--amber-light); border-radius:0 4px 4px 0; font-size:11px; font-weight:600; color:var(--amber); }
 
-/* ── SIGNAL TICKER ───────────────────────────────────────────────────────
-       A Reuters-style scrolling strip showing example brand signals.
-       This replaces the stat strip entirely.
-
-       Why a ticker instead of stats:
-       Stats tell you numbers. The ticker shows you what the product actually
-       finds — real-sounding signal examples that communicate value instantly.
-       A visitor reads "Nike delivery complaints up" and immediately understands
-       what Signalwatch does. No explanation needed.
-
-       How the animation works:
-       The inner div contains the text duplicated twice side by side.
-       The @keyframes moves the inner div left by exactly 50% of its width.
-       Because the content is duplicated, at the 50% point it looks identical
-       to the start — creating a seamless infinite loop.
-       animation-duration controls speed — longer = slower scroll. */
-
-    .ticker-wrap {
-      background: var(--ink);      /* Dark background — contrasts with white hero */
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      overflow: hidden;            /* Hides content outside the visible area */
-      padding: 0;
-      height: 36px;
-      display: flex;
-      align-items: center;
-    }
-
-    .ticker-inner {
-      display: flex;
-      align-items: center;
-      /* width: max-content lets the div be as wide as its content needs */
-      width: max-content;
-      animation: ticker-scroll 40s linear infinite;
-      /* pause on hover — gives users time to read a signal they notice */
-    }
-
-    .ticker-wrap:hover .ticker-inner {
-      animation-play-state: paused;
-    }
-
-    @keyframes ticker-scroll {
-      /* Move left by 50% — because content is duplicated, this creates
-         a seamless loop. At 50% the position looks identical to 0%. */
-      0%   { transform: translateX(0); }
-      100% { transform: translateX(-50%); }
-    }
-
-    .ticker-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 32px;
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 0.5px;
-      color: rgba(255,255,255,0.55);
-      white-space: nowrap;         /* Prevents items from wrapping to a new line */
-    }
-
-    /* The coloured dot before each signal item */
-    .ticker-dot {
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    /* Separator between signal items — a faint vertical line */
-    .ticker-sep {
-      width: 1px;
-      height: 12px;
-      background: rgba(255,255,255,0.12);
-      flex-shrink: 0;
-    }
-
-    /* Some signals are highlighted in teal or amber to draw the eye */
-    .ticker-item.hot {
-      color: rgba(61,230,200,0.8);  /* Teal — positive / notable signal */
-    }
-
-    .ticker-item.warn {
-      color: rgba(245,200,130,0.85); /* Amber — warning signal */
-    }
+    /* STATS */
+    .stat-strip { background:var(--bg2); border-bottom:1px solid var(--border); }
+    .stat-strip-inner { max-width:1100px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:repeat(4,1fr); }
+    .stat-item { padding:22px 32px 22px 0; border-right:1px solid var(--border); margin-right:32px; }
+    .stat-item:last-child { border-right:none; margin-right:0; padding-right:0; }
+    .stat-label { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:6px; }
+    .stat-value { font-family:var(--serif); font-size:30px; font-weight:700; color:var(--ink); line-height:1; letter-spacing:-1px; }
+    .stat-value.teal { color:var(--teal); }
+    .stat-value.amber { color:var(--amber); }
+    .stat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
 
     /* SEARCH */
-    /* More space above the search bar — separates it visually from the stats strip.
-       Increased top padding from 32px to 44px. */
-    .search-wrap { max-width:1100px; margin:0 auto; padding:44px 40px 28px; }
+    .search-wrap { max-width:1100px; margin:0 auto; padding:32px 40px 28px; }
     .search-label { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
     .search-row { display:flex; gap:0; border:1.5px solid var(--border2); border-radius:6px; overflow:hidden; background:var(--white); transition:border-color 0.2s,box-shadow 0.2s; }
     .search-row:focus-within { border-color:var(--teal); box-shadow:0 0 0 3px rgba(13,122,107,0.08); }
@@ -286,10 +167,8 @@
     .src-appstore   { background:#f0f4ff; color:#0066cc; border:1px solid #bfdbfe; }
     .src-playstore  { background:#f0fdf4; color:#1a7340; border:1px solid #86efac; }
     .src-googlenews { background:#fff8f0; color:#ea4335; border:1px solid #fca5a5; }
-    .src-bingnews   { background:#f0f4ff; color:#004488; border:1px solid #bfdbfe; }
     .src-mastodon   { background:#f3f0ff; color:#563acc; border:1px solid #d4bbff; }
-/* Competitive agent results — amber to distinguish from other sources */
-    .src-competitive { background:var(--amber-light); color:var(--amber); border:1px solid var(--amber-mid); }
+
     /* RESULTS LIST */
     .results-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; padding-top:4px; }
     .results-title { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); }
@@ -334,145 +213,108 @@
     .about-card-icon { font-size:20px; margin-bottom:14px; }
     .about-card-title { font-family:var(--serif); font-size:15px; font-weight:700; color:var(--ink); margin-bottom:8px; letter-spacing:-0.2px; }
     .about-card-text { font-size:13px; color:var(--text2); line-height:1.7; font-weight:300; }
-/* GOOGLE LOGIN MODAL */
-    .modal-overlay { position:fixed; inset:0; background:rgba(15,13,11,0.55); z-index:500; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
-    .modal-overlay.open { opacity:1; pointer-events:all; }
-    .modal-box { background:var(--white); border:1px solid var(--border); border-top:3px solid var(--teal); border-radius:8px; padding:36px 40px; max-width:420px; width:90%; text-align:center; transform:translateY(12px); transition:transform 0.2s; }
-    .modal-overlay.open .modal-box { transform:translateY(0); }
-    .modal-icon { font-size:32px; margin-bottom:16px; }
-    .modal-title { font-family:var(--serif); font-size:22px; font-weight:700; color:var(--ink); letter-spacing:-0.3px; margin-bottom:10px; }
-    .modal-sub { font-size:14px; color:var(--text2); line-height:1.7; margin-bottom:28px; font-weight:300; }
-    .modal-sub strong { font-weight:600; color:var(--text); }
-    .google-btn { display:inline-flex; align-items:center; gap:10px; background:var(--white); border:1.5px solid var(--border2); border-radius:5px; padding:11px 22px; font-size:14px; font-weight:500; color:var(--text); cursor:pointer; transition:box-shadow 0.15s,border-color 0.15s; font-family:var(--sans); }
-    .google-btn:hover { border-color:var(--teal); box-shadow:0 2px 8px rgba(13,122,107,0.1); }
-    .google-btn svg { flex-shrink:0; }
-    .modal-skip { display:block; margin-top:16px; font-size:12px; color:var(--text3); cursor:pointer; font-family:var(--mono); text-decoration:underline; }
-    .modal-skip:hover { color:var(--text2); }
-    .modal-signed-in { display:flex; align-items:center; gap:10px; background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:5px; padding:10px 16px; font-size:13px; color:var(--teal); font-weight:500; }
-    .modal-avatar { width:28px; height:28px; border-radius:50%; background:var(--teal-mid); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-size:12px; font-weight:700; color:var(--teal); flex-shrink:0; }
 
-    /* ── PRODUCT ANIMATION ──────────────────────────────────────────────────
-       Sits between hero and stat strip.
-       Shows the three-step process — Scan, Score, Decide — as animated
-       signals flowing into a central intelligence node.
-       Hidden on mobile — the page needs to breathe on small screens. */
+/* ── AGENT PANEL ─────────────────────────────────────────────────────────
+       Sits below the results. Hidden until agents start sending updates.
+       Each agent finding appears as a card inside .agent-findings.
+       Agent 4 gets its own dedicated card at the bottom. */
 
-    .product-anim-wrap {
-      background: var(--white);
-      border-bottom: 1px solid var(--border);
-      padding: 8px 0 0;
-      /* overflow:hidden clips any animation that strays outside the container */
-      overflow: hidden;
+    .agent-card { 
+      background:var(--white); 
+      border:1px solid var(--border); 
+      border-top:3px solid var(--amber); 
+      border-radius:6px; 
+      padding:24px 28px; 
+      margin-bottom:16px; 
     }
-
-    .product-anim-svg {
-      /* max-width keeps it from stretching too wide on large screens */
-      max-width: 700px;
-      /* auto margins centre it horizontally */
-      margin: 0 auto;
-      display: block;
+    .agent-header { 
+      display:flex; 
+      align-items:center; 
+      gap:10px; 
+      margin-bottom:16px;
+      padding-bottom:12px;
+      border-bottom:1px solid var(--border);
     }
-
-    /* The outer pulse ring on the centre node */
-    .centre-pulse-ring {
-      /* transform-origin centres the scale animation on the circle itself */
-      transform-origin: 362px 100px;
-      animation: centre-breathe 3s ease-in-out infinite;
+    .agent-badge { 
+      font-family:var(--mono); 
+      font-size:9px; 
+      letter-spacing:1.5px; 
+      text-transform:uppercase; 
+      color:var(--white); 
+      background:var(--amber); 
+      padding:3px 8px; 
+      border-radius:2px; 
     }
-
-    @keyframes centre-breathe {
-      /* Scales from 1x to 1.4x and back — a slow heartbeat */
-      0%, 100% { transform: scale(1);   opacity: 0.3; }
-      50%       { transform: scale(1.4); opacity: 0;   }
+    .agent-status { 
+      font-family:var(--mono); 
+      font-size:10px; 
+      color:var(--text3); 
     }
-
-    /* Source nodes get a very subtle hover effect */
-    .source-node {
-      transition: opacity 0.3s;
+    /* The pulsing dot next to the status text */
+    .agent-dot { 
+      width:6px; 
+      height:6px; 
+      border-radius:50%; 
+      background:var(--amber); 
+      display:inline-block; 
+      margin-right:5px;
+      /* Uses the existing pulse animation already in your CSS */
+      animation:pulse 1.5s ease-in-out infinite; 
     }
-    .source-node:hover {
-      opacity: 0.8;
+    /* Each finding the agent streams back */
+    .agent-finding { 
+      border-left:2px solid var(--amber); 
+      padding:10px 14px; 
+      background:var(--amber-light); 
+      border-radius:0 4px 4px 0; 
+      font-size:13px; 
+      color:var(--text2); 
+      line-height:1.7; 
+      margin-bottom:10px; 
     }
-
-    /* The travelling dash lines */
-    .anim-line {
-      /* stroke-dashoffset animation moves the dashes along the line
-         creating the illusion of signal travelling from source to centre */
-      animation: dash-travel 3s linear infinite;
+    .agent-finding-meta { 
+      font-family:var(--mono); 
+      font-size:9px; 
+      color:var(--text3); 
+      margin-top:6px; 
+      letter-spacing:0.5px; 
+      text-transform:uppercase; 
     }
-
-    /* Each line starts at a different point in the animation
-       so they do not all pulse at the same moment — staggered */
-    .anim-line--1 { animation-delay: 0s;    }
-    .anim-line--2 { animation-delay: 1s;    }
-    .anim-line--3 { animation-delay: 2s;    }
-
-    @keyframes dash-travel {
-      /* Moving dashoffset from 28 to 0 shifts the dashes forward
-         along the line — the number 28 = dasharray(8) + gap(6) + extra
-         chosen so the motion looks smooth at this line length */
-      from { stroke-dashoffset: 28; }
-      to   { stroke-dashoffset: 0;  }
+    /* Individual signal links inside a finding */
+    .agent-signal { 
+      padding:7px 10px; 
+      background:var(--bg2); 
+      border:1px solid var(--border); 
+      border-radius:4px; 
+      font-size:12px; 
+      color:var(--text2); 
+      margin-bottom:4px; 
     }
-
-    /* Hide the animation on mobile — not needed when hero panel is hidden */
-    @media(max-width: 900px) {
-      .product-anim-wrap { display: none; }
+    .agent-signal a { 
+      color:var(--text2); 
+      text-decoration:none; 
     }
-    /* SOURCE PULSE ANIMATION (loading state) */
-    @keyframes sw-travel { 0%{stroke-dashoffset:150;opacity:0} 15%{opacity:0.9} 85%{opacity:0.9} 100%{stroke-dashoffset:0;opacity:0} }
-    @keyframes sw-nodepop { 0%{opacity:0.18} 60%{opacity:1} 100%{opacity:0.55} }
-    @keyframes sw-centrepulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
-    .sw-line { stroke-dasharray:150; stroke-dashoffset:150; opacity:0; }
-    .sw-line.active { animation:sw-travel 1s ease forwards; }
-    .sw-node { opacity:0.18; transition:opacity 0.35s; }
-    .sw-node.lit { opacity:1; animation:sw-nodepop 1.4s ease forwards; }
-    #sw-centre { transform-origin:340px 170px; }
-    #sw-centre.pulsing { animation:sw-centrepulse 1.2s ease-in-out infinite; }
-
-/* CHIEF OF STAFF AGENT CARD */
-    /* This card appears below all existing results and updates in real time */
-    .agent-card { background:var(--white); border:1px solid var(--border); border-top:3px solid var(--amber); border-radius:6px; padding:24px 28px; margin-bottom:16px; }
-    .agent-header { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
-    .agent-badge { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--white); background:var(--amber); padding:3px 8px; border-radius:2px; }
-    .agent-status { font-family:var(--mono); font-size:10px; color:var(--text3); }
-    .agent-dot { width:6px; height:6px; border-radius:50%; background:var(--amber); display:inline-block; margin-right:4px; animation:pulse 1.5s ease-in-out infinite; }
-    .agent-finding { border-left:2px solid var(--amber); padding:10px 14px; background:var(--amber-light); border-radius:0 4px 4px 0; font-size:13px; color:var(--text2); line-height:1.7; margin-bottom:10px; }
-    .agent-finding-meta { font-family:var(--mono); font-size:9px; color:var(--text3); margin-top:6px; letter-spacing:0.5px; text-transform:uppercase; }
-    .agent-signal { padding:8px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:4px; font-size:12px; color:var(--text2); margin-bottom:4px; }
-    .agent-signal a { color:var(--text2); text-decoration:none; }
-    .agent-signal a:hover { color:var(--amber); }
-    .agent-thinking { font-family:var(--mono); font-size:11px; color:var(--text3); padding:8px 0; display:flex; align-items:center; gap:8px; }
-    .agent-finished { font-family:var(--mono); font-size:10px; color:var(--teal); padding:8px 0; border-top:1px solid var(--border); margin-top:8px; }
-
-    /* ── SCROLL FADE-IN ──────────────────────────────────────────────────────
-       Sections fade in and rise slightly as the user scrolls to them.
-       This uses the Intersection Observer API (JavaScript) to add a class
-       when an element enters the viewport.
-       The CSS defines what "hidden" and "visible" look like.
-       The JS below triggers the transition at the right moment.
-
-       .fade-in-section: the initial hidden state
-         opacity 0 = invisible
-         transform translateY(20px) = 20px below its final position
-
-       .fade-in-section.is-visible: the final visible state
-         opacity 1 = fully visible
-         transform translateY(0) = at its natural position
-
-       transition: the animation between hidden and visible.
-       0.6s ease-out means it takes 0.6 seconds and decelerates
-       as it reaches the final position — natural, not mechanical. */
-
-    .fade-in-section {
-      opacity: 0;
-      transform: translateY(20px);
-      transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    .agent-signal a:hover { 
+      color:var(--amber); 
     }
-
-    .fade-in-section.is-visible {
-      opacity: 1;
-      transform: translateY(0);
+    /* Agent 4 gets teal instead of amber — visually distinct */
+    .agent-4-card {
+      background:var(--white);
+      border:1px solid var(--border);
+      border-top:3px solid var(--teal);
+      border-radius:6px;
+      padding:24px 28px;
+      margin-bottom:16px;
+    }
+    .agent-4-finding {
+      border-left:2px solid var(--teal);
+      padding:10px 14px;
+      background:var(--teal-light);
+      border-radius:0 4px 4px 0;
+      font-size:13px;
+      color:var(--text2);
+      line-height:1.7;
+      margin-bottom:10px;
     }
 
     /* FOOTER */
@@ -541,21 +383,6 @@
     <div class="mobile-btn active" id="mNavSearch" onclick="showPage('search');toggleMenu()">Search</div>
     <div class="mobile-btn" id="mNavAbout" onclick="showPage('about');toggleMenu()">About</div>
   </div>
-<!-- GOOGLE LOGIN MODAL -->
-  <div class="modal-overlay" id="loginModal">
-    <div class="modal-box">
-      <div class="modal-icon">◎</div>
-      <div class="modal-title">One more search needs a login</div>
-      <p class="modal-sub"> Your first three searches are free. Sign in with Google to continue. Built to help teams move from <strong>raw brand mentions</strong> to <strong>ROI</strong>.</p>
-      <div id="modalContent">
-        <button class="google-btn" onclick="signInWithGoogle()">
-          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
-          Continue with Google
-        </button>
-      </div>
-      <span class="modal-skip" onclick="skipLogin()">Skip for now — use my 3 anyway</span>
-    </div>
-  </div>
 
   <!-- SEARCH PAGE -->
   <div class="search-page" id="searchPage">
@@ -575,403 +402,51 @@
             <span class="source-pill"><span class="source-pill-dot"></span>RSS Feeds</span>
           </div>
         </div>
-        <!--
-          MOCK RESULT PANEL — sits in the hero on the right side.
-          Shows a realistic example of what a search produces.
-          Uses your existing CSS classes (.brief-card, .action-strip etc)
-          so it looks identical to a real result.
-
-          Why this works:
-          A visitor reads "delivery speed complaints" and "publish a
-          response within 24 hours" and immediately understands what
-          Signalwatch produces. No stat, no description, no pitch
-          communicates this as clearly as showing the actual output.
-
-          The panel-header stays dark as before — consistent with your
-          existing design language. The content below is a mock briefing.
-        -->
         <div class="hero-panel">
           <div class="panel-header">
-            <span class="panel-title">Example · nike complaints</span>
-            <span class="panel-status">
-              <span class="panel-status-dot"></span>13 sources · 312 signals
-            </span>
+            <span class="panel-title">Live signal feed</span>
+            <span class="panel-status"><span class="panel-status-dot"></span>Active</span>
           </div>
-          <div class="panel-body" style="padding:16px;">
-
-            <!-- Mock briefing — styled like a real .brief-card but inline -->
-            <div style="
-              font-family:var(--mono);
-              font-size:8px;
-              letter-spacing:1.5px;
-              text-transform:uppercase;
-              color:var(--text3);
-              margin-bottom:8px;">
-              Intelligence briefing
+          <div class="panel-body">
+            <div class="panel-bars">
+              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
+              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
+              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
+              <div class="panel-bar"></div>
             </div>
-            <div style="
-              font-size:12px;
-              line-height:1.7;
-              color:var(--text2);
-              font-weight:300;
-              margin-bottom:14px;">
-              Delivery speed complaints have tripled on Reddit in the past 14 days,
-              concentrated in the UK and Germany. Three competitor brands have already
-              responded publicly — Nike has not.
-            </div>
-
-            <!-- Mock action — styled like a real .action-strip -->
-            <div style="
-              display:flex;
-              align-items:flex-start;
-              gap:10px;
-              background:var(--teal-light);
-              border:1px solid var(--teal-mid);
-              border-radius:4px;
-              padding:10px 12px;
-              margin-bottom:12px;">
-              <span style="
-                font-family:var(--mono);
-                font-size:8px;
-                letter-spacing:1px;
-                text-transform:uppercase;
-                color:var(--white);
-                background:var(--teal);
-                padding:2px 6px;
-                border-radius:2px;
-                white-space:nowrap;
-                flex-shrink:0;
-                margin-top:1px;">Do this</span>
-              <span style="font-size:11px;color:var(--teal);line-height:1.6;font-weight:500;">
-                Post a delivery update on your UK social channels today —
-                before this reaches press coverage tomorrow.
-              </span>
-            </div>
-
-            <!-- Mock source badges — shows which sources fired -->
-            <div style="display:flex;flex-wrap:wrap;gap:4px;">
-              <span class="src-badge src-reddit">Reddit · 189</span>
-              <span class="src-badge src-googlenews">News · 67</span>
-              <span class="src-badge src-trustpilot">Trustpilot · 41</span>
-              <span class="src-badge src-youtube">YouTube · 15</span>
-            </div>
-
+            <div class="panel-insight">Momentum building across 4 sources. Consumer sentiment shifting toward product quality concerns.</div>
+            <div class="panel-action">→ Respond publicly within 24h before this reaches press</div>
           </div>
         </div>
       </div>
     </div>
-    <!--
-      SIGNAL TICKER — sits immediately below the hero.
-      Shows example brand signals scrolling continuously.
-      The content is duplicated (copy A + copy B) inside .ticker-inner
-      so the CSS animation can loop seamlessly.
-      All signals are fictional examples — they show what the product finds,
-      not real brand data.
-    -->
-    <div class="ticker-wrap" aria-hidden="true">
-      <div class="ticker-inner">
 
-        <!-- COPY A — the original set of signal items -->
-        <span class="ticker-dot" style="background:#3de6c8;margin-left:32px;"></span>
-        <span class="ticker-item hot">Nike delivery complaints · Reddit · 847 mentions this week</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Samsung battery recall · HackerNews · accelerating</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#3de6c8;"></span>
-        <span class="ticker-item">Trustpilot · Groupon · sentiment shifting negative · 3-day trend</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Tesla service complaints · App Store · 1-star spike · 48h</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#3de6c8;"></span>
-        <span class="ticker-item hot">Adidas sustainability · news · positive momentum · 12 sources</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
-        <span class="ticker-item">Apple Vision Pro · Reddit · purchase intent questions rising</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Deliveroo · Trustpilot · refund complaints · unanswered · 6 days</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#3de6c8;"></span>
-        <span class="ticker-item hot">Monzo · HackerNews · feature request cluster · pricing + switching</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
-        <span class="ticker-item">Dyson · YouTube · quality comparison · 192 videos · last 30 days</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Boohoo · news · sustainability claims · regulatory scrutiny · rising</span>
-        <span class="ticker-sep"></span>
-
-        <!-- COPY B — identical to Copy A, placed immediately after.
-             The CSS animation moves the container left by 50% (= width of Copy A).
-             At that point, Copy B is in exactly the same position Copy A started.
-             This creates a seamless infinite loop with no visible jump. -->
-        <span class="ticker-dot" style="background:#3de6c8;margin-left:32px;"></span>
-        <span class="ticker-item hot">Nike delivery complaints · Reddit · 847 mentions this week</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Samsung battery recall · HackerNews · accelerating</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#3de6c8;"></span>
-        <span class="ticker-item">Trustpilot · Groupon · sentiment shifting negative · 3-day trend</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Tesla service complaints · App Store · 1-star spike · 48h</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#3de6c8;"></span>
-        <span class="ticker-item hot">Adidas sustainability · news · positive momentum · 12 sources</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
-        <span class="ticker-item">Apple Vision Pro · Reddit · purchase intent questions rising</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Deliveroo · Trustpilot · refund complaints · unanswered · 6 days</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#3de6c8;"></span>
-        <span class="ticker-item hot">Monzo · HackerNews · feature request cluster · pricing + switching</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:rgba(255,255,255,0.3);"></span>
-        <span class="ticker-item">Dyson · YouTube · quality comparison · 192 videos · last 30 days</span>
-        <span class="ticker-sep"></span>
-        <span class="ticker-dot" style="background:#f5c882;"></span>
-        <span class="ticker-item warn">Boohoo · news · sustainability claims · regulatory scrutiny · rising</span>
-        <span class="ticker-sep"></span>
-
+    <div class="stat-strip">
+      <div class="stat-strip-inner">
+        <div class="stat-item">
+          <div class="stat-label">Sources</div>
+          <div class="stat-value teal">11</div>
+          <div class="stat-sub">Live data sources</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Signals found</div>
+          <div class="stat-value" id="statTotal">—</div>
+          <div class="stat-sub">Last search</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Top score</div>
+          <div class="stat-value amber" id="statTopScore">—</div>
+          <div class="stat-sub">Strongest signal</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Active sources</div>
+          <div class="stat-value" id="statActiveSources">—</div>
+          <div class="stat-sub">Returning results</div>
+        </div>
       </div>
-    </div>
-    <!-- ─────────────────────────────────────────────────────────────────────
-         PRODUCT ANIMATION — sits between hero and stat strip.
-
-         What it shows:
-         Three nodes (Scan, Score, Decide) continuously pulse signals
-         into a central intelligence node. The signals travel as animated
-         dashes along connecting lines — the same visual language as the
-         loading animation but slower and calmer.
-
-         Why this works:
-         It communicates the three-step process without words.
-         It makes the page feel alive before anyone searches.
-         It disappears on mobile (hidden via CSS) since the hero
-         panel is already hidden there and the page needs to breathe.
-
-         No JavaScript needed — pure CSS animation.
-         No images — pure SVG drawn inline.
-         ───────────────────────────────────────────────────────────────── -->
-    <div class="product-anim-wrap">
-      <svg class="product-anim-svg"
-           viewBox="0 0 700 200"
-           xmlns="http://www.w3.org/2000/svg"
-           aria-hidden="true"
-           role="presentation">
-
-        <!-- ── Connecting lines ──────────────────────────────────────────
-             Each line runs from a source node to the centre node.
-             stroke-dasharray and stroke-dashoffset create the travelling
-             dash effect. The animation shifts dashoffset over time,
-             making the dash appear to move along the line.
-             The three lines use different animation-delay values so they
-             fire at different times — staggered, not simultaneous.
-             This makes it feel like real signals arriving, not a loop. -->
-
-        <!-- Line: Scan → Centre -->
-        <line x1="120" y1="100" x2="350" y2="100"
-              stroke="#b2ddd6" stroke-width="1"
-              stroke-dasharray="8 6"
-              class="anim-line anim-line--1"/>
-
-        <!-- Line: Score → Centre (diagonal from top right) -->
-        <line x1="580" y1="52" x2="374" y2="88"
-              stroke="#b2ddd6" stroke-width="1"
-              stroke-dasharray="8 6"
-              class="anim-line anim-line--2"/>
-
-        <!-- Line: Decide → Centre (diagonal from bottom right) -->
-        <line x1="580" y1="148" x2="374" y2="112"
-              stroke="#b2ddd6" stroke-width="1"
-              stroke-dasharray="8 6"
-              class="anim-line anim-line--3"/>
-
-        <!-- ── Centre node — the intelligence core ──────────────────────
-             Two concentric circles. The outer one pulses slowly using
-             a CSS scale animation — like a heartbeat.
-             The inner circle holds the "SW" label. -->
-        <circle class="centre-pulse-ring"
-                cx="362" cy="100" r="28"
-                fill="none" stroke="#0d7a6b" stroke-width="1"
-                opacity="0.3"/>
-        <circle cx="362" cy="100" r="20"
-                fill="#e8f5f2" stroke="#0d7a6b" stroke-width="1.5"/>
-        <circle cx="362" cy="100" r="11"
-                fill="#0d7a6b"/>
-        <text x="362" y="104"
-              text-anchor="middle"
-              style="font-size:7px;font-weight:700;fill:#fff;
-                     font-family:'DM Mono',monospace;letter-spacing:0.5px;">
-          SW
-        </text>
-
-        <!-- ── Source node: SCAN (left) ─────────────────────────────────
-             A small circle with a label above and a descriptor below.
-             fill is a very light teal — matching your existing palette. -->
-        <circle cx="88" cy="100" r="22"
-                fill="#e8f5f2" stroke="#0d7a6b" stroke-width="1"
-                class="source-node"/>
-        <circle cx="88" cy="100" r="10"
-                fill="#0d7a6b" opacity="0.15"/>
-        <!-- Scan icon — a small magnifier drawn with SVG paths -->
-        <circle cx="86" cy="98" r="5"
-                fill="none" stroke="#0d7a6b" stroke-width="1.5"/>
-        <line x1="90" y1="102" x2="93" y2="105"
-              stroke="#0d7a6b" stroke-width="1.5"
-              stroke-linecap="round"/>
-        <!-- Label above node -->
-        <text x="88" y="68"
-              text-anchor="middle"
-              style="font-size:8px;font-weight:600;fill:#0d7a6b;
-                     font-family:'DM Mono',monospace;letter-spacing:1.5px;
-                     text-transform:uppercase;">
-          Scan
-        </text>
-        <!-- Descriptor below node — what scan means -->
-        <text x="88" y="132"
-              text-anchor="middle"
-              style="font-size:7px;fill:#9a9590;
-                     font-family:'DM Mono',monospace;">
-          13 sources
-        </text>
-
-        <!-- ── Source node: SCORE (top right) ───────────────────────────
-             Amber coloured — matches your amber accent colour.
-             Positioned top-right of centre. -->
-        <circle cx="612" cy="52" r="22"
-                fill="#fef7ee" stroke="#c4720a" stroke-width="1"
-                class="source-node"/>
-        <!-- Score icon — three horizontal bars of different widths
-             suggesting a bar chart / ranking -->
-        <rect x="604" y="46" width="10" height="2"
-              rx="1" fill="#c4720a"/>
-        <rect x="604" y="51" width="7"  height="2"
-              rx="1" fill="#c4720a" opacity="0.7"/>
-        <rect x="604" y="56" width="4"  height="2"
-              rx="1" fill="#c4720a" opacity="0.4"/>
-        <text x="612" y="22"
-              text-anchor="middle"
-              style="font-size:8px;font-weight:600;fill:#c4720a;
-                     font-family:'DM Mono',monospace;letter-spacing:1.5px;
-                     text-transform:uppercase;">
-          Score
-        </text>
-        <text x="612" y="84"
-              text-anchor="middle"
-              style="font-size:7px;fill:#9a9590;
-                     font-family:'DM Mono',monospace;">
-          pattern detection
-        </text>
-
-        <!-- ── Source node: DECIDE (bottom right) ───────────────────────
-             Dark ink coloured — matches your --ink variable.
-             Positioned bottom-right of centre. -->
-        <circle cx="612" cy="148" r="22"
-                fill="#f4f3ef" stroke="#0f0d0b" stroke-width="1"
-                class="source-node"/>
-        <!-- Decide icon — a checkmark suggesting action taken -->
-        <polyline points="604,148 609,154 620,142"
-                  fill="none" stroke="#0f0d0b"
-                  stroke-width="1.8" stroke-linecap="round"
-                  stroke-linejoin="round"/>
-        <text x="612" y="118"
-              text-anchor="middle"
-              style="font-size:8px;font-weight:600;fill:#0f0d0b;
-                     font-family:'DM Mono',monospace;letter-spacing:1.5px;
-                     text-transform:uppercase;">
-          Decide
-        </text>
-        <text x="612" y="180"
-              text-anchor="middle"
-              style="font-size:7px;fill:#9a9590;
-                     font-family:'DM Mono',monospace;">
-          one action
-        </text>
-
-        <!-- ── Signal dots ───────────────────────────────────────────────
-             Small filled circles that travel along each line.
-             They use animateMotion — an SVG animation that moves an
-             element along a path. Each dot has a different dur (duration)
-             so they travel at slightly different speeds.
-             repeatCount="indefinite" means they loop forever.
-             The path coordinates match the line coordinates above. -->
-
-        <!-- Dot on Scan → Centre line -->
-        <circle r="3" fill="#0d7a6b" opacity="0.8">
-          <animateMotion dur="2.8s" repeatCount="indefinite" begin="0s">
-            <mpath href="#path-scan"/>
-          </animateMotion>
-        </circle>
-
-        <!-- Dot on Score → Centre line -->
-        <circle r="3" fill="#c4720a" opacity="0.8">
-          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.9s">
-            <mpath href="#path-score"/>
-          </animateMotion>
-        </circle>
-
-        <!-- Dot on Decide → Centre line -->
-        <circle r="3" fill="#0f0d0b" opacity="0.6">
-          <animateMotion dur="2.6s" repeatCount="indefinite" begin="1.7s">
-            <mpath href="#path-decide"/>
-          </animateMotion>
-        </circle>
-
-        <!-- ── Motion paths (invisible) ─────────────────────────────────
-             animateMotion needs a path to follow.
-             We define invisible paths that match our visible lines exactly.
-             display:none means they never render — they only guide the dots. -->
-        <defs>
-          <path id="path-scan"
-                d="M 120 100 L 350 100"
-                style="display:none"/>
-          <path id="path-score"
-                d="M 580 52 L 374 88"
-                style="display:none"/>
-          <path id="path-decide"
-                d="M 580 148 L 374 112"
-                style="display:none"/>
-        </defs>
-
-      </svg>
     </div>
 
     <div class="search-wrap">
-
-      <!--
-        Section divider — a thin horizontal rule with a label on the left.
-        The label uses your existing mono font and teal colour.
-        The line uses CSS flexbox: label on left, line stretches to fill the rest.
-        This is how Cielara separates their sections — minimal but deliberate.
-      -->
-      <div style="
-        display: flex;           /* puts label and line side by side */
-        align-items: center;     /* vertically centres them */
-        gap: 16px;               /* space between label and line */
-        margin-bottom: 24px;     /* space below the divider */
-      ">
-        <span style="
-          font-family: var(--mono);
-          font-size: 9px;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-          color: var(--text3);   /* your existing light grey */
-          white-space: nowrap;   /* stops the label wrapping to two lines */
-        ">Signal search</span>
-
-        <div style="
-          flex: 1;               /* stretch to fill remaining width */
-          height: 1px;           /* thin line */
-          background: var(--border); /* your existing border colour */
-        "></div>
-      </div>
-
       <div class="search-label">Search any brand, topic or query</div>
       <div class="search-row">
         <input class="search-input" id="queryInput" type="text"
@@ -989,92 +464,57 @@
     <div class="results-wrap">
       <div class="loading" id="loading">
         <div class="loading-text" id="loadingText">Scanning sources and analysing patterns</div>
-
-        <!-- Animated source map — lights up as each source returns -->
-        <svg id="sw-loading-anim" width="100%" viewBox="0 0 680 310" style="max-width:500px;margin:0 auto;display:block" role="presentation" aria-hidden="true">
-          <!-- Centre node -->
-          <circle id="sw-centre" cx="340" cy="155" r="20" fill="#e8f5f2" stroke="#b2ddd6" stroke-width="1.5"/>
-          <circle cx="340" cy="155" r="11" fill="#0d7a6b"/>
-          <text x="340" y="159" text-anchor="middle" style="font-size:8px;font-weight:600;fill:#fff;font-family:'DM Mono',monospace">SW</text>
-
-          <!-- Lines (drawn first, below nodes) -->
-          <line id="sw-l0"  class="sw-line" x1="100" y1="58"  x2="324" y2="143" stroke="#c2410c" stroke-width="1.2" marker-end="none"/>
-          <line id="sw-l1"  class="sw-line" x1="218" y1="28"  x2="330" y2="137" stroke="#92400e" stroke-width="1.2"/>
-          <line id="sw-l2"  class="sw-line" x1="365" y1="24"  x2="344" y2="134" stroke="#be123c" stroke-width="1.2"/>
-          <line id="sw-l3"  class="sw-line" x1="505" y1="38"  x2="357" y2="138" stroke="#0d7a6b" stroke-width="1.2"/>
-          <line id="sw-l4"  class="sw-line" x1="605" y1="108" x2="361" y2="150" stroke="#007b5e" stroke-width="1.2"/>
-          <line id="sw-l5"  class="sw-line" x1="608" y1="205" x2="361" y2="163" stroke="#0066cc" stroke-width="1.2"/>
-          <line id="sw-l6"  class="sw-line" x1="555" y1="282" x2="356" y2="174" stroke="#1a7340" stroke-width="1.2"/>
-          <line id="sw-l7"  class="sw-line" x1="388" y1="288" x2="347" y2="176" stroke="#ea4335" stroke-width="1.2"/>
-          <line id="sw-l8"  class="sw-line" x1="215" y1="282" x2="325" y2="174" stroke="#563acc" stroke-width="1.2"/>
-          <line id="sw-l9"  class="sw-line" x1="82"  y1="230" x2="320" y2="164" stroke="#15803d" stroke-width="1.2"/>
-          <line id="sw-l10" class="sw-line" x1="82"  y1="148" x2="319" y2="155" stroke="#6d28d9" stroke-width="1.2"/>
-
-          <!-- Source nodes -->
-          <g id="sw-n0" class="sw-node"><circle cx="100" cy="58" r="13" fill="#fff4ef" stroke="#c2410c" stroke-width="1"/><text x="100" y="62" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#c2410c;font-family:'DM Mono',monospace">Reddit</text></g>
-          <g id="sw-n1" class="sw-node"><circle cx="218" cy="28" r="13" fill="#fffbeb" stroke="#92400e" stroke-width="1"/><text x="218" y="32" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#92400e;font-family:'DM Mono',monospace">HN</text></g>
-          <g id="sw-n2" class="sw-node"><circle cx="365" cy="24" r="13" fill="#fff1f2" stroke="#be123c" stroke-width="1"/><text x="365" y="28" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#be123c;font-family:'DM Mono',monospace">YT</text></g>
-          <g id="sw-n3" class="sw-node"><circle cx="505" cy="38" r="13" fill="#e8f5f2" stroke="#0d7a6b" stroke-width="1"/><text x="505" y="42" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#0d7a6b;font-family:'DM Mono',monospace">News</text></g>
-          <g id="sw-n4" class="sw-node"><circle cx="605" cy="108" r="13" fill="#f0fdf4" stroke="#007b5e" stroke-width="1"/><text x="605" y="112" text-anchor="middle" style="font-size:6px;font-weight:600;fill:#007b5e;font-family:'DM Mono',monospace">Trust.</text></g>
-          <g id="sw-n5" class="sw-node"><circle cx="608" cy="205" r="13" fill="#f0f4ff" stroke="#0066cc" stroke-width="1"/><text x="608" y="209" text-anchor="middle" style="font-size:6px;font-weight:600;fill:#0066cc;font-family:'DM Mono',monospace">AppSt.</text></g>
-          <g id="sw-n6" class="sw-node"><circle cx="555" cy="282" r="13" fill="#f0fdf4" stroke="#1a7340" stroke-width="1"/><text x="555" y="286" text-anchor="middle" style="font-size:6.5px;font-weight:600;fill:#1a7340;font-family:'DM Mono',monospace">Play</text></g>
-          <g id="sw-n7" class="sw-node"><circle cx="388" cy="288" r="13" fill="#fff8f0" stroke="#ea4335" stroke-width="1"/><text x="388" y="292" text-anchor="middle" style="font-size:6px;font-weight:600;fill:#ea4335;font-family:'DM Mono',monospace">GNews</text></g>
-          <g id="sw-n8" class="sw-node"><circle cx="215" cy="282" r="13" fill="#f3f0ff" stroke="#563acc" stroke-width="1"/><text x="215" y="286" text-anchor="middle" style="font-size:6.5px;font-weight:600;fill:#563acc;font-family:'DM Mono',monospace">Mast.</text></g>
-          <g id="sw-n9" class="sw-node"><circle cx="82" cy="230" r="13" fill="#f0fdf4" stroke="#15803d" stroke-width="1"/><text x="82" y="234" text-anchor="middle" style="font-size:7px;font-weight:600;fill:#15803d;font-family:'DM Mono',monospace">RSS</text></g>
-          <g id="sw-n10" class="sw-node"><circle cx="82" cy="148" r="13" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1"/><text x="82" y="152" text-anchor="middle" style="font-size:6.5px;font-weight:600;fill:#6d28d9;font-family:'DM Mono',monospace">Wiki</text></g>
-
-          <!-- Signal count label -->
-          <text id="sw-sigcount" x="340" y="198" text-anchor="middle" style="font-size:10px;fill:#0d7a6b;font-family:'DM Mono',monospace;opacity:0">0 signals</text>
-        </svg>
-
-        <div id="liveProgress" style="margin:4px auto 0;max-width:300px;text-align:left;"></div>
+        <div class="loading-bar"><div class="loading-fill"></div></div>
+        <div id="liveProgress" style="margin:16px auto 0;max-width:300px;text-align:left;"></div>
       </div>
-      <!-- CHIEF OF STAFF AGENT PANEL -->
-      <!-- Hidden until the agent starts working after main results load -->
-      <!-- Updates in real time as the agent investigates new angles -->
-      <div id="agentPanel" style="display:none;" class="results-wrap" style="padding-top:0;">
-        <div class="agent-card">
+      <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
+         Hidden on page load. Becomes visible when the first agent event arrives.
+         Agents 1-3 findings go into #agentFindings.
+         Agent 4 (competitive) goes into #agent4Container — separate and distinct.
+         
+         Why separated:
+         Agent 4 runs after Agents 1-3 complete and has different visual
+         styling (teal instead of amber). Keeping it separate means it
+         never gets confused with or overwritten by the other agents. -->
+    <div id="agentPanel" style="display:none;">
+      <div class="agent-card">
+        <div class="agent-header">
+          <span class="agent-badge">Intelligence Agents</span>
+          <span class="agent-status" id="agentStatus">
+            <span class="agent-dot"></span>Starting...
+          </span>
+        </div>
+        <!-- Agent 1-3 findings appear here, newest first -->
+        <div id="agentFindings"></div>
+      </div>
+
+      <!-- Agent 4 sits in its own separate container below -->
+      <!-- It is hidden until Agent 4 sends its first event -->
+      <div id="agent4Container" style="display:none;">
+        <div class="agent-4-card">
           <div class="agent-header">
-            <span class="agent-badge">Chief of Staff Agent</span>
-            <span class="agent-status" id="agentStatus">
-              <span class="agent-dot"></span>Initialising...
+            <span class="agent-badge" 
+                  style="background:var(--teal);">Competitor Intelligence</span>
+            <span class="agent-status" id="agent4Status">
+              <span class="agent-dot" 
+                    style="background:var(--teal);"></span>Scanning competitors...
             </span>
           </div>
-          <!-- Agent findings appear here, newest at top -->
-          <div id="agentFindings"></div>
+          <div id="agent4Findings"></div>
         </div>
       </div>
+    </div>
       <div id="resultsContainer">
         <div class="empty-state">
           <div class="empty-title">Enter a query above to begin</div>
-          <div class="empty-sub">Signal intelligence from the last 90 days · 12 sources</div>
+          <div class="empty-sub">Signal intelligence from the last 90 days · 11 sources</div>
         </div>
       </div>
     </div>
 
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
-      <span>12 sources · Signal intelligence · Last 90 days · More sources coming</span>
-
-      <!--
-        Trust badge — a lock icon followed by three short trust signals.
-        The SVG lock is drawn inline so no image file is needed.
-        viewBox="0 0 10 12" means the icon is 10 units wide, 12 units tall.
-        The rect is the body of the lock. The path is the shackle (the curved top).
-        opacity:0.5 makes it subtle — present but not distracting.
-      -->
-      <span style="display:flex; align-items:center; gap:5px; opacity:0.6;">
-        <svg width="9" height="11" viewBox="0 0 10 12" fill="none"
-             aria-hidden="true">
-          <!-- Lock body — a rounded rectangle -->
-          <rect x="1" y="5" width="8" height="7" rx="1"
-                fill="currentColor"/>
-          <!-- Lock shackle — the curved part on top -->
-          <path d="M3 5V3.5a2 2 0 014 0V5"
-                stroke="currentColor" stroke-width="1.5" fill="none"/>
-        </svg>
-        Encrypted · No data stored · Searches reset daily
-      </span>
+      <span>11 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
   </div>
 
@@ -1100,97 +540,39 @@
         <div class="about-card-icon">⚡</div>
         <div class="about-card-title">Decision engine, not a dashboard</div>
         <div class="about-card-text">Every search returns a briefing with a specific recommended action. Not charts to interpret. Not data to export. A decision.</div>
-      <!--
-        About page cards — three cards explaining what makes Signalwatch different.
-        Each card now has one concrete commercial fact, not a generic description.
-        The icon stays. The title stays. Only the body text changes.
-      -->
-      <div class="about-card">
-        <div class="about-card-icon">⚡</div>
-        <div class="about-card-title">One action, not a dashboard</div>
-        <!-- Specific: mentions the "Do this" output and the 48-hour frame.
-             A visitor who manages a brand knows exactly what this means. -->
-        <div class="about-card-text">Every search ends with a "Do this" one specific action to take in the next 48 hours. Other charts give you a chart. Signalwatch gives you a decision.</div>
       </div>
       <div class="about-card">
         <div class="about-card-icon">◎</div>
-        <div class="about-card-title">Co-occurrence, not word clouds</div>
-        <!-- Specific: names the actual technique and contrasts it with
-             what every other tool does (word frequency / word clouds).
-             Shows technical credibility without jargon. -->
-        <div class="about-card-text">The algorithm finds mentions where two themes collide in the same sentence — "price" and "switching" together means something. Separate word counts mean nothing. Most tools show you the latter.</div>
+        <div class="about-card-title">Pattern intelligence</div>
+        <div class="about-card-text">The algorithm finds results through patterns in the mentions themselves. Word frequency across all results is noise.</div>
       </div>
       <div class="about-card">
         <div class="about-card-icon">✦</div>
-        <div class="about-card-title">13 sources. 90 days. 60 seconds.</div>
-        <!-- Specific: three concrete numbers in the title itself.
-             Body explains what those numbers mean commercially. -->
-        <div class="about-card-text">Reddit, news, YouTube, App Store, Trustpilot, regulatory filings and seven more — scanned simultaneously. What would take a junior analyst two days takes Signalwatch 60 seconds.</div>
+        <div class="about-card-title">Last 90 days only</div>
+        <div class="about-card-text">All signals are from the last 90 days. Recommendations are based on what is happening now, not historical content that no longer reflects reality.</div>
       </div>
     </div>
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
-      <span>12 sources · Signal intelligence · Last 90 days · More sources coming</span>
-
-      <!--
-        Trust badge — a lock icon followed by three short trust signals.
-        The SVG lock is drawn inline so no image file is needed.
-        viewBox="0 0 10 12" means the icon is 10 units wide, 12 units tall.
-        The rect is the body of the lock. The path is the shackle (the curved top).
-        opacity:0.5 makes it subtle — present but not distracting.
-      -->
-      <span style="display:flex; align-items:center; gap:5px; opacity:0.6;">
-        <svg width="9" height="11" viewBox="0 0 10 12" fill="none"
-             aria-hidden="true">
-          <!-- Lock body — a rounded rectangle -->
-          <rect x="1" y="5" width="8" height="7" rx="1"
-                fill="currentColor"/>
-          <!-- Lock shackle — the curved part on top -->
-          <path d="M3 5V3.5a2 2 0 014 0V5"
-                stroke="currentColor" stroke-width="1.5" fill="none"/>
-        </svg>
-        Encrypted · No data stored · Searches reset daily
-      </span>
+      <span>11 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
   </div>
 
   <script>
     // ── CONFIGURATION ──────────────────────────────────────────────────────
-
-    // const API_BASE = "https://signalwatch-production.up.railway.app"; Use this in case render is down.
-    const API_BASE = "https://signalwatch-r6s8.onrender.com";
-
-    // YOUR Google Client ID — get from console.cloud.google.com
-    // Credentials → Create → OAuth 2.0 Client ID → Web application
-    // Add https://your-domain.com to Authorised JavaScript origins
-    const GOOGLE_CLIENT_ID = "710302750053-57riraefjqe9o03rpvutf0t0bqouplqb.apps.googleusercontent.com";
+    const API_BASE = "https://signalwatch-production.up.railway.app";
 
     const sourceLabels = {
       reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
       newsdata:"Global News", youtube:"YouTube", rss:"RSS",
       wikipedia:"Wikipedia", mastodon:"Mastodon", trustpilot:"Trustpilot",
-      appstore:"App Store", playstore:"Play Store", googlenews:"Google News",
-      bingnews:"Bing News"
-    };
-
-    // Maps source name → animation node index (matches SVG ids sw-n0..sw-n10)
-    const sourceAnimIndex = {
-      reddit:0, hackernews:1, youtube:2, newsapi:3, trustpilot:4,
-      appstore:5, playstore:6, googlenews:7, mastodon:8, rss:9, wikipedia:10,
-      newsdata:3  // share the News slot
+      appstore:"App Store", playstore:"Play Store", googlenews:"Google News"
     };
 
     let signalChart = null;
-    let googleIdToken = null;   // set after Google sign-in
-    let googleUserName = null;
-    let swAnimSigCount = 0;     // running signal total shown in animation
 
     // ── TOKEN ─────────────────────────────────────────────────────────────
     function getToken() {
-      // If user is signed in with Google, prefix the raw ID token
-      // Backend strips "google_" and verifies the rest against Google's servers
-      if (googleIdToken) return "google_" + googleIdToken;
-      // Fall back to legacy browser token
       let t = localStorage.getItem("sw_token");
       if (!t) {
         t = "sw_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -1198,60 +580,7 @@
       }
       return t;
     }
-
-    // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
-    function signInWithGoogle() {
-      // Google Identity Services — opens the account picker popup
-      // credential.credential is a JWT signed by Google
-      // We send it to the backend which calls Google's tokeninfo endpoint to verify
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCredential,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
-      google.accounts.id.prompt(); // shows the one-tap UI
-    }
-
-    function handleGoogleCredential(response) {
-      googleIdToken = response.credential;
-      // Decode name from the JWT payload (middle part, base64)
-      // We only use this for display — actual verification happens server-side
-      try {
-        const payload = JSON.parse(atob(googleIdToken.split('.')[1]));
-        googleUserName = payload.given_name || payload.name || "you";
-      } catch(e) {
-        googleUserName = "you";
-      }
-      // Update modal to show signed-in state
-      document.getElementById("modalContent").innerHTML = `
-        <div class="modal-signed-in">
-          <div class="modal-avatar">${googleUserName[0].toUpperCase()}</div>
-          <span>Signed in as ${googleUserName} — continuing search</span>
-        </div>`;
-      document.querySelector(".modal-skip").style.display = "none";
-      // Update localStorage to Google-based tracking
-      // Reset count because Google tokens are properly rate-limited server-side
-      localStorage.setItem("sw_authed", "google");
-      setTimeout(() => closeModal(true), 800);
-    }
-
-    function skipLogin() {
-      // User skips — they keep using browser token but count still increments
-      closeModal(false);
-    }
-
-    function openModal() {
-      document.getElementById("loginModal").classList.add("open");
-    }
-
-    function closeModal(continueSearch) {
-      document.getElementById("loginModal").classList.remove("open");
-      if (continueSearch) {
-        // Re-run the search with the Google token now available
-        runSearch();
-      }
-    }
+    const SW_TOKEN = getToken();
 
     // ── LIMIT MESSAGE ─────────────────────────────────────────────────────
     function showLimitMessage(container) {
@@ -1263,13 +592,12 @@
         </div>`;
     }
 
-    // ── CHECK LIMIT ────────────────────────────────────────────────────────
+    // ── CHECK LIMIT ON PAGE LOAD ──────────────────────────────────────────
     function checkLocalLimit() {
-      // Google-authed users are limited server-side, not client-side
-      if (localStorage.getItem("sw_authed") === "google") return;
       const today      = new Date().toDateString();
       const savedDate  = localStorage.getItem("sw_date");
       const savedCount = parseInt(localStorage.getItem("sw_count") || "0");
+
       if (savedDate !== today) {
         localStorage.setItem("sw_date", today);
         localStorage.setItem("sw_count", "0");
@@ -1286,7 +614,9 @@
     checkLocalLimit();
 
     // ── NAVIGATION ────────────────────────────────────────────────────────
-    function toggleMenu() { document.getElementById("mobileMenu").classList.toggle("open"); }
+    function toggleMenu() {
+      document.getElementById("mobileMenu").classList.toggle("open");
+    }
 
     function showPage(page) {
       document.getElementById("searchPage").className  = page==="search" ? "search-page" : "search-page hidden";
@@ -1302,77 +632,15 @@
       if (e.key === "Enter") runSearch();
     });
 
-    // ── ANIMATION HELPERS ─────────────────────────────────────────────────
-    function animLightSource(sourceKey, count) {
-      const idx = sourceAnimIndex[sourceKey];
-      if (idx === undefined) return;
-      const node = document.getElementById("sw-n" + idx);
-      const line = document.getElementById("sw-l" + idx);
-      if (!node || !line) return;
-      node.classList.add("lit");
-      line.classList.add("active");
-      swAnimSigCount += count;
-      const label = document.getElementById("sw-sigcount");
-      if (label) {
-        label.textContent = swAnimSigCount + " signals";
-        label.style.opacity = "1";
-      }
-      // Fade line after animation plays
-      setTimeout(() => line.classList.remove("active"), 1200);
-    }
-
-    function animSetPhase(phase) {
-      // phase: "scanning" | "analysing" | "done"
-      const centre = document.getElementById("sw-centre");
-      if (phase === "analysing") centre && centre.classList.add("pulsing");
-      if (phase === "done") centre && centre.classList.remove("pulsing");
-      document.getElementById("loadingText").textContent =
-        phase === "scanning"  ? "Scanning sources and analysing patterns" :
-        phase === "analysing" ? "Generating intelligence briefing..." : "Done";
-    }
-
-    function resetAnimation() {
-
-      // Clear the agent panel every time a new search starts.
-      // Without this, findings from the previous search stay on screen
-      // while the new search runs — confusing for the user.
-      const agentPanel = document.getElementById("agentPanel");
-      if (agentPanel) {
-          agentPanel.style.display = "none"; // Hide the whole panel
-      }
-      const agentFindings = document.getElementById("agentFindings");
-      if (agentFindings) {
-          agentFindings.innerHTML = ""; // Empty all previous findings
-      }
-      const agentStatus = document.getElementById("agentStatus");
-      if (agentStatus) {
-          // Reset the status text to the initial state
-          agentStatus.innerHTML = '<span class="agent-dot"></span>Starting...';
-          agentStatus.style.color = ""; // Reset any colour changes (e.g. teal for "done")
-      }
-
-      swAnimSigCount = 0;
-      for (let i = 0; i <= 10; i++) {
-        document.getElementById("sw-n"+i)?.classList.remove("lit");
-        document.getElementById("sw-l"+i)?.classList.remove("active");
-      }
-      document.getElementById("sw-centre")?.classList.remove("pulsing");
-      const lbl = document.getElementById("sw-sigcount");
-      if (lbl) { lbl.textContent = "0 signals"; lbl.style.opacity = "0"; }
-    }
-
     // ── RUN SEARCH ────────────────────────────────────────────────────────
+    // Uses fetch() + ReadableStream instead of EventSource.
+    // Why: Railway buffers responses between chunks, which makes EventSource
+    // appear to hang. fetch() with streaming reads chunks as they arrive
+    // and gives us control over when to parse each line.
+    // This is more reliable on Railway than native EventSource.
     async function runSearch() {
       const query = document.getElementById("queryInput").value.trim();
       if (!query) return;
-
-      // After first search, if not Google-authed, show login modal
-      const searchCount = parseInt(localStorage.getItem("sw_count") || "0");
-      const isAuthed = localStorage.getItem("sw_authed") === "google";
-      if (searchCount >= 1 && !isAuthed && !googleIdToken) {
-        openModal();
-        return; // halt — modal will call runSearch() again after sign-in or skip
-      }
 
       const btn       = document.getElementById("searchBtn");
       const loading   = document.getElementById("loading");
@@ -1384,51 +652,100 @@
       loading.style.display = "block";
       container.innerHTML = "";
       progress.innerHTML = "";
-      resetAnimation();
-      animSetPhase("scanning");
+      document.getElementById("loadingText").textContent = "Scanning sources for " + query;
       if (signalChart) { signalChart.destroy(); signalChart = null; }
 
-      const token = getToken();
-      const url = `${API_BASE}/search-stream?query=${encodeURIComponent(query)}&token=${encodeURIComponent(token)}`;
+      const url = `${API_BASE}/search-stream?query=${encodeURIComponent(query)}&token=${encodeURIComponent(SW_TOKEN)}`;
 
+      // ── WHY fetch() INSTEAD OF EventSource ──
+      // EventSource is great but browsers and proxies (including Railway's
+      // internal routing) sometimes buffer the stream before delivering it,
+      // which means you see nothing for 30+ seconds then everything at once.
+      //
+      // fetch() with a ReadableStream reader processes each chunk immediately
+      // as the TCP packet arrives. We manually split on "\n\n" (SSE format)
+      // and parse "data: {...}" lines ourselves. Same data, more reliable delivery.
       try {
         const response = await fetch(url, {
           method: "GET",
-          headers: { "Accept": "text/event-stream", "Cache-Control": "no-cache" }
+          headers: {
+            // Tell the server we want a stream, not a buffered response
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache"
+          }
         });
 
-        if (!response.ok) throw new Error(`Server ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}`);
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let buffer = "";
+        let buffer = ""; // Holds incomplete chunks between reads
 
         while (true) {
+          // Read the next chunk from the stream
+          // done = true means the stream has ended
+          // value = the raw bytes of this chunk
           const { done, value } = await reader.read();
+
           if (done) break;
+
+          // Convert bytes to text and add to our buffer
           buffer += decoder.decode(value, { stream: true });
+
+          // SSE events are separated by double newline "\n\n"
+          // Split the buffer on that separator
           const parts = buffer.split("\n\n");
+
+          // The last part may be incomplete (mid-chunk) — keep it in buffer
+          // All other parts are complete events ready to process
           buffer = parts.pop();
 
           for (const part of parts) {
+            // Each SSE event looks like: "data: {...json...}"
+            // Extract just the JSON part after "data: "
             const line = part.trim();
             if (!line.startsWith("data:")) continue;
-            let msg;
-            try { msg = JSON.parse(line.slice(5).trim()); } catch(e) { continue; }
 
+            const jsonStr = line.slice(5).trim(); // Remove "data:" prefix
+            if (!jsonStr) continue;
+
+            let msg;
+            try {
+              msg = JSON.parse(jsonStr);
+            } catch(e) {
+              continue; // Skip malformed JSON
+            }
+
+            // Handle each message type
             if (msg.type === "progress") {
-  animLightSource(msg.source, msg.count || 0);
-  document.getElementById("loadingText").textContent = "Scanning " + msg.label + "...";
-}
+              const lineEl = document.createElement("div");
+              lineEl.style.cssText = [
+                "display:flex", "justify-content:space-between",
+                "font-family:var(--mono)", "font-size:11px",
+                "color:" + (msg.count > 0 ? "var(--teal)" : "var(--text3)"),
+                "padding:2px 0"
+              ].join(";");
+              lineEl.innerHTML = `<span>${msg.label}</span><span>${msg.count > 0 ? msg.count+" signals" : "none"}</span>`;
+              progress.appendChild(lineEl);
+            }
 
             else if (msg.type === "analysing") {
-              animSetPhase("analysing");
               const lineEl = document.createElement("div");
               lineEl.style.cssText = "font-family:var(--mono);font-size:11px;color:var(--amber);padding:8px 0 2px;";
               lineEl.textContent = "Generating intelligence briefing...";
               progress.appendChild(lineEl);
             }
+            else if (msg.type === "agent_update") {
+              // Agents 1-3 events
+              handleAgentUpdate(msg);
+            }
 
+            else if (msg.type === "agent_4") {
+              // Agent 4 (competitive) has its own handler and container
+              handleAgent4Update(msg);
+            }
             else if (msg.type === "limit") {
               loading.style.display = "none";
               btn.disabled = true;
@@ -1436,60 +753,37 @@
               localStorage.setItem("sw_count", "3");
               localStorage.setItem("sw_date", new Date().toDateString());
               showLimitMessage(container);
-              return;
+              return; // Stop reading the stream
             }
 
             else if (msg.type === "error") {
-              if (msg.message === "google_auth_failed") {
-                googleIdToken = null; // token expired, force re-login
-                loading.style.display = "none";
-                btn.disabled = false;
-                btn.textContent = "Analyse";
-                container.innerHTML = `<div class="error-msg" style="font-family:var(--mono)">Google sign-in expired. Please sign in again.</div>`;
-              } else {
-                loading.style.display = "none";
-                btn.disabled = false;
-                btn.textContent = "Analyse";
-                container.innerHTML = `<div class="error-msg" style="font-family:var(--mono)">Something went wrong. Please try again.</div>`;
-              }
+              loading.style.display = "none";
+              btn.disabled = false;
+              btn.textContent = "Analyse";
+              container.innerHTML = `<div class="error-msg">Something went wrong. Please try again.</div>`;
               return;
             }
 
             else if (msg.type === "complete") {
-              // Main results complete — render them as normal
-              animSetPhase("done");
               loading.style.display = "none";
               progress.innerHTML = "";
+              document.getElementById("loadingText").textContent = "Scanning sources and analysing patterns";
               btn.disabled = false;
               btn.textContent = "Analyse";
               renderResults(msg, query);
-              // Show agent panel now so it is ready before agent events arrive
-              // Agent 4 fires almost immediately after complete
-              // so the panel must be visible before that event arrives
-              document.getElementById("agentPanel").style.display = "block";
-              // Do NOT return — SSE connection stays open for all four agents
-            }
-
-            else if (msg.type === "agent_update") {
-              // An agent sent an update — show the panel immediately
-              // This catches the case where agent events arrive
-              // before the "complete" event has been processed
-              const panel = document.getElementById("agentPanel");
-              if (panel) panel.style.display = "block";
-              handleAgentUpdate(msg);
-            }
-
-            else if (msg.type === "agent_update") {
-              // Agent sent a new finding — update the panel
-              handleAgentUpdate(msg);
+              return; // We got everything — stop reading
             }
           }
         }
 
+        // Stream ended without a "complete" message — something went wrong
         if (loading.style.display !== "none") {
           loading.style.display = "none";
           btn.disabled = false;
           btn.textContent = "Analyse";
+          if (!container.innerHTML) {
+            container.innerHTML = `<div class="error-msg">Stream ended unexpectedly. Please try again.</div>`;
+          }
         }
 
       } catch(err) {
@@ -1497,7 +791,7 @@
         loading.style.display = "none";
         btn.disabled = false;
         btn.textContent = "Analyse";
-        container.innerHTML = `<div class="error-msg" style="font-family:var(--mono)">Could not reach the server. Please try again.</div>`;
+        container.innerHTML = `<div class="error-msg">Could not reach the server. Please try again.</div>`;
       }
     }
 
@@ -1515,15 +809,12 @@
       }
 
       if (data.searches_remaining !== undefined) {
-        const isAuthed = localStorage.getItem("sw_authed") === "google";
-        if (!isAuthed) {
-          const used = 3 - data.searches_remaining;
-          localStorage.setItem("sw_count", used.toString());
-          localStorage.setItem("sw_date", new Date().toDateString());
-        }
+        const used = 3 - data.searches_remaining;
+        localStorage.setItem("sw_count", used.toString());
+        localStorage.setItem("sw_date", new Date().toDateString());
         document.getElementById("searchesLeft").style.display = "block";
         document.getElementById("searchesCount").textContent = data.searches_remaining;
-        if (data.searches_remaining <= 0 && !isAuthed) {
+        if (data.searches_remaining <= 0) {
           document.getElementById("searchBtn").disabled = true;
           document.getElementById("searchBtn").textContent = "Come back tomorrow";
         }
@@ -1536,55 +827,107 @@
       }
 
       const activeSources = Object.values(data.sources || {}).filter(v => v > 0).length;
+      animateCount("statTotal",        data.total);
+      animateCount("statTopScore",     data.results[0]?.score || 0);
+      animateCount("statActiveSources", activeSources);
 
       let html = "";
 
+      // ── BRIEFING CARD ──
       if (data.insight && data.insight.length > 20) {
         let cleanInsight = data.insight
-          .replace(/```[a-z]*\n?/gi, '').replace(/```/g, '')
+          .replace(/```[a-z]*\n?/gi, '')
+          .replace(/```/g, '')
           .replace(/^\s*\{\s*"briefing"\s*:\s*"?/, '')
           .replace(/"?\s*,?\s*"[a-z]+"[\s\S]*$/, '')
-          .replace(/^\s*\{/, '').replace(/\}\s*$/, '').trim();
-        if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) cleanInsight = cleanInsight.slice(1,-1);
-        const actionText = (data.action || "").trim().length > 5 ? data.action.trim() : "";
-        html += `<div class="brief-card fade-in-section">
-          <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
-          <div class="brief-body">${cleanInsight}</div>
-          ${actionText ? `<div class="action-strip"><span class="action-flag">Do this</span><span class="action-text">${actionText}</span></div>` : ""}
-        </div>`;
+          .replace(/^\s*\{/, '').replace(/\}\s*$/, '')
+          .trim();
+
+        if (cleanInsight.startsWith('"') && cleanInsight.endsWith('"')) {
+          cleanInsight = cleanInsight.slice(1, -1);
+        }
+
+        const actionText = data.action && data.action.length > 10 ? data.action : "";
+
+        html += `
+          <div class="brief-card">
+            <div class="brief-eyebrow">Intelligence briefing · ${query}</div>
+            <div class="brief-body">${cleanInsight}</div>
+            ${actionText ? `
+              <div class="action-strip">
+                <span class="action-flag">Do this</span>
+                <span class="action-text">${actionText}</span>
+              </div>` : ""}
+          </div>`;
       } else {
-        html += `<div class="brief-card fade-in-section"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
+        html += `<div class="brief-card"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
       }
 
+      // ── QUESTIONS CARD ──
       if (data.questions && data.questions.length > 0) {
         const qSrc = data.cooccurrences_found > 0
-          ? `Pattern analysis · ${data.cooccurrences_found} signals examined` : "AI pattern analysis";
-        html += `<div class="questions-card fade-in-section"><div class="card-eyebrow"><span>Questions your team should be asking</span><span class="card-eyebrow-source">${qSrc}</span></div>`;
+          ? `Pattern analysis · ${data.cooccurrences_found} signals examined`
+          : "AI pattern analysis";
+
+        html += `
+          <div class="questions-card">
+            <div class="card-eyebrow">
+              <span>Questions your team should be asking</span>
+              <span class="card-eyebrow-source">${qSrc}</span>
+            </div>`;
+
         data.questions.forEach((q, i) => {
           const qText   = typeof q === "string" ? q : (q.question || "");
-          const qReason = typeof q === "object" ? (q.reason || "") : "";
-          html += `<div class="question-row"><div class="q-num">0${i+1}</div><div><div class="q-text">${qText}</div>${qReason ? `<div class="q-reason">${qReason}</div>` : ""}</div></div>`;
+          const qReason = typeof q === "object" ? (q.reason   || "") : "";
+          html += `
+            <div class="question-row">
+              <div class="q-num">0${i+1}</div>
+              <div>
+                <div class="q-text">${qText}</div>
+                ${qReason ? `<div class="q-reason">${qReason}</div>` : ""}
+              </div>
+            </div>`;
         });
+
         html += `</div>`;
       }
 
-      html += `<div class="chart-card fade-in-section"><div class="chart-head"><span class="chart-title">Signal timeline · last 90 days</span><span class="chart-sub">Click a dot to open the source</span></div><canvas id="signalChart" style="max-height:180px"></canvas></div>`;
+      // ── CHART ──
+      html += `
+        <div class="chart-card">
+          <div class="chart-head">
+            <span class="chart-title">Signal timeline · last 90 days</span>
+            <span class="chart-sub">Click a dot to open the source</span>
+          </div>
+          <canvas id="signalChart" style="max-height:180px"></canvas>
+        </div>`;
 
+      // ── WORD CLOUD ──
       if (data.word_frequencies && data.word_frequencies.length > 0) {
         const colors = ["#0d7a6b","#c4720a","#6d28d9","#c0392b","#059669","#2563eb","#c2410c","#0369a1","#15803d","#92400e"];
         const maxC = data.word_frequencies[0].count;
         const minC = data.word_frequencies[data.word_frequencies.length-1].count;
-        html += `<div class="cloud-card fade-in-section"><div class="card-eyebrow"><span>Word patterns</span><span class="card-eyebrow-source">Frequency across all mentions</span></div><div class="cloud-wrap">`;
+
+        html += `
+          <div class="cloud-card">
+            <div class="card-eyebrow">
+              <span>Word patterns</span>
+              <span class="card-eyebrow-source">Frequency across all mentions</span>
+            </div>
+            <div class="cloud-wrap">`;
+
         data.word_frequencies.forEach((item, i) => {
-          const norm = (item.count - minC) / ((maxC - minC) || 1);
-          const size = Math.round(10 + norm * 20);
+          const norm  = (item.count - minC) / ((maxC - minC) || 1);
+          const size  = Math.round(10 + norm * 20);
           const color = colors[i % colors.length];
           const opHex = Math.round((0.12 + norm * 0.22) * 255).toString(16).padStart(2,"0");
           html += `<span class="cloud-word" style="font-size:${size}px;color:${color};background:${color}${opHex}" title="${item.count} mentions">${item.word}</span>`;
         });
+
         html += `</div></div>`;
       }
 
+      // ── SOURCE BADGES ──
       if (data.sources) {
         html += `<div class="sources-strip">`;
         for (const [s, c] of Object.entries(data.sources)) {
@@ -1593,174 +936,34 @@
         html += `</div>`;
       }
 
-      html += `<div class="results-header"><span class="results-title">All signals · ${data.total} results</span><span class="results-count">sorted by relevance · last 90 days</span></div>`;
+      // ── RESULTS LIST ──
+      html += `
+        <div class="results-header">
+          <span class="results-title">All signals · ${data.total} results</span>
+          <span class="results-count">sorted by relevance · last 90 days</span>
+        </div>`;
+
       data.results.forEach(r => {
-        const titleHtml = r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>` : r.title;
-        const dateStr = r.created && r.created > 0 ? new Date(r.created*1000).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
+        const titleHtml = r.url
+          ? `<a href="${r.url}" target="_blank" rel="noopener">${r.title}</a>`
+          : r.title;
+        const dateStr = r.created && r.created > 0
+          ? new Date(r.created*1000).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})
+          : "";
         const meta = [sourceLabels[r.source]||r.source, dateStr].filter(Boolean).join(" · ");
-        html += `<div class="result-item"><span class="result-score">${r.score}</span><div class="result-content"><div class="result-title">${titleHtml}</div><div class="result-meta">${meta}</div></div></div>`;
+        html += `
+          <div class="result-item">
+            <span class="result-score">${r.score}</span>
+            <div class="result-content">
+              <div class="result-title">${titleHtml}</div>
+              <div class="result-meta">${meta}</div>
+            </div>
+          </div>`;
       });
 
       container.innerHTML = html;
-      // Re-observe fade-in elements after results render
-      // We need to do this because the elements did not exist
-      // when the observer was first set up at page load.
-      // innerHTML replaces the DOM, so we observe the new elements.
-      document.querySelectorAll('.fade-in-section').forEach(el => {
-        fadeObserver.observe(el);
-      });
       if (data.sources && data.results) buildChart(data.sources, data.results);
     }
-// ── HANDLE AGENT UPDATES ──────────────────────────────────────────────
-    // Called every time the Chief of Staff agent streams a new event.
-    // Updates the agent panel in real time without touching any other UI.
-
-    function handleAgentUpdate(msg) {
-      // Make the agent panel visible as soon as any agent event arrives.
-      // This handles the race condition where Agent 4 fires before
-      // the "complete" message has been processed by the browser.
-      const panel = document.getElementById("agentPanel");
-      if (panel && panel.style.display === "none") {
-        panel.style.display = "block";
-      }
-
-      const status   = document.getElementById("agentStatus");
-      const findings = document.getElementById("agentFindings");
-
-      if (!status || !findings) return;
-
-      const phase = msg.phase || "";
-
-
-      if (phase === "thinking" || phase === "waiting") {
-        // Agent is thinking — just update the status text
-        // We do not add a card for this — just show it is working
-        status.innerHTML = `<span class="agent-dot"></span>${msg.message || "Thinking..."}`;
-      }
-
-      else if (phase === "investigating") {
-        // Agent has decided what to investigate — show it
-        status.innerHTML = `<span class="agent-dot"></span>Loop ${msg.loop || "?"} — ${msg.message || "Investigating..."}`;
-      }
-
-      else if (phase === "complete") {
-        // Agent completed a loop — add a finding card at the top
-        // prepend so newest findings appear first
-        const card = document.createElement("div");
-        card.style.marginBottom = "12px";
-
-        // The main synthesis — 2 sentences from the Chief of Staff
-        let html = `<div class="agent-finding">
-          ${msg.message || ""}
-          <!-- We show "Agent 1", "Agent 2" etc instead of "Loop 1", "Loop 2".
-               The user does not need to know it is a loop — they need to know
-               which agent found it. msg.loop is the loop number (1, 2, 3)
-               so we reuse it as the agent number. -->
-          <!--
-            msg.loop is 1, 2, 3, or 4 — we use it as the agent number.
-            We show the angle in plain English, not technical terms.
-            We never show the word "loop" anywhere.
-          -->
-          <div class="agent-finding-meta">Agent ${msg.loop || "?"} · ${msg.total_found || 0} signals · ${msg.angle || "signal analysis"}</div>
-        </div>`;
-
-        // The raw signals the agents found — shown as a collapsible list
-        const agentFindings = msg.findings || [];
-        if (agentFindings.length > 0) {
-          html += `<div style="margin-top:6px;">`;
-          agentFindings.slice(0, 3).forEach(f => {
-            const sourceLabel = {
-              scholar:    "Research",
-              regulatory: "Regulatory",
-              reddit:     "Reddit",
-              hackernews: "HN",
-              googlenews: "News"
-            }[f.source] || f.source || "";
-
-            const titleDisplay = f.url
-              ? `<a href="${f.url}" target="_blank" rel="noopener">${f.title}</a>`
-              : f.title;
-
-            html += `<div class="agent-signal">
-              <span style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-right:6px;">${sourceLabel}</span>
-              ${titleDisplay}
-            </div>`;
-          });
-          html += `</div>`;
-        }
-
-        card.innerHTML = html;
-
-        // Prepend — newest finding at top
-        findings.insertBefore(card, findings.firstChild);
-
-        // Update status
-        // "Agent N complete" is clearer than "Cycle N complete"// Clean handoff language — no technical terms
-        const nextAgent = (msg.loop || 0) + 1;
-        status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop || "?"} complete${nextAgent <= 4 ? ' — Agent ' + nextAgent + ' starting' : ''}...`;status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop || "?"} complete — next agent starting...`;
-      }
-
-      else if (phase === "finished") {
-        // Agent has completed all loops
-        // When all agents are done, show a clean completion message
-        // msg.total_findings comes from the backend — total signals found across all agents
-        status.innerHTML = `✓ All agents complete — ${msg.total_findings || 0} additional signals found`;
-        status.style.color = "var(--teal)";
-
-        // Remove the pulsing dot for the finished state
-        const dot = status.querySelector(".agent-dot");
-        if (dot) dot.style.animation = "none";
-      }
-    }
-    function animateCount(id, target) {
-      const el = document.getElementById(id);
-      if (!el || !target) return;
-      let start = 0; const steps = 30;
-      const timer = setInterval(() => {
-        start += target / steps;
-        el.textContent = Math.min(Math.round(start), target);
-        if (start >= target) clearInterval(timer);
-      }, 600 / steps);
-    }
-
-    function buildChart(sources, results) {
-      const colors = { reddit:"#c2410c",hackernews:"#92400e",newsapi:"#0d7a6b",newsdata:"#0369a1",youtube:"#be123c",rss:"#15803d",wikipedia:"#6d28d9",mastodon:"#563acc",trustpilot:"#007b5e",appstore:"#0066cc",playstore:"#1a7340",googlenews:"#ea4335",bingnews:"#004488" };
-      const timed = results.filter(r => r.created && r.created > 0);
-      if (timed.length < 2) { buildBarChart(sources, results, colors); return; }
-      timed.sort((a,b) => a.created - b.created);
-      const sourcesSeen = [...new Set(timed.map(r => r.source))];
-      const datasets = sourcesSeen.map(source => ({
-        label: sourceLabels[source]||source,
-        data: timed.filter(r => r.source===source).map((r,i) => ({
-          x: new Date(r.created*1000), y: r.score + Math.sin(i*1.9+source.charCodeAt(0)*0.1)*0.3,
-          url: r.url, title: r.title, realScore: r.score
-        })),
-        borderColor: colors[source]||"#888", backgroundColor: colors[source]||"#888",
-        pointRadius:5, pointHoverRadius:8, showLine:true, tension:0.4, borderWidth:1.5
-      }));
-      const ctx = document.getElementById("signalChart").getContext("2d");
-      signalChart = new Chart(ctx, {
-        type:"scatter", data:{datasets},
-        options:{
-          onClick:(evt,els) => { if(els.length>0){ const pt=signalChart.data.datasets[els[0].datasetIndex].data[els[0].index]; if(pt.url) window.open(pt.url,"_blank"); } },
-          plugins:{ legend:{labels:{color:"#9a9590",font:{size:10,family:"'DM Mono',monospace"},boxWidth:8}},
-            tooltip:{callbacks:{ title:items=>new Date(items[0].raw.x).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}), label:items=>{const d=items.raw;const t=d.title.length>50?d.title.substring(0,50)+"…":d.title;return[`Score: ${d.realScore}`,t,"Click to open"];} }} },
-          scales:{ x:{type:"time",ticks:{color:"#9a9590",font:{size:10},maxTicksLimit:6},grid:{color:"#e8e4da"}}, y:{ticks:{color:"#9a9590",font:{size:10}},grid:{color:"#e8e4da"}} }
-        }
-      });
-    }
-
-    function buildBarChart(sources, results, colors) {
-      const sbs={};
-      results.forEach(r => { if(!sbs[r.source]) sbs[r.source]=[]; sbs[r.source].push(r.score); });
-      const labels=[],avgScores=[],bgColors=[];
-      for(const [s,c] of Object.entries(sources)) {
-        if(c>0 && sbs[s]){ labels.push(sourceLabels[s]||s); avgScores.push(Math.round(sbs[s].reduce((a,b)=>a+b,0)/sbs[s].length*10)/10); bgColors.push(colors[s]||"#888"); }
-      }
-      const ctx=document.getElementById("signalChart").getContext("2d");
-      signalChart=new Chart(ctx,{type:"bar",data:{labels,datasets:[{label:"Avg score",data:avgScores,backgroundColor:bgColors,borderRadius:3,borderSkipped:false}]},options:{plugins:{legend:{labels:{color:"#9a9590",font:{size:10}}}},scales:{x:{ticks:{color:"#9a9590"},grid:{color:"#e8e4da"}},y:{ticks:{color:"#9a9590"},grid:{color:"#e8e4da"}}}}});
-    }
-
 
     // ── ANIMATE COUNT ─────────────────────────────────────────────────────
     function animateCount(id, target) {
@@ -1847,37 +1050,189 @@
         }
       });
     }
-    // ── SCROLL FADE-IN OBSERVER ───────────────────────────────────────────
-    // Intersection Observer watches elements and fires a callback
-    // when they enter or leave the viewport.
-    //
-    // We use it to add the class "is-visible" to any element with
-    // class "fade-in-section" when it scrolls into view.
-    // The CSS transition above does the actual animation.
-    //
-    // threshold: 0.1 means the callback fires when 10% of the element
-    // is visible. At 0 it fires immediately on any pixel entering.
-    // At 1.0 it waits until the whole element is visible.
-    // 0.1 is the sweet spot — fires just as the element appears.
+    // ── AGENT PANEL RESET ─────────────────────────────────────────────────
+    // Called at the start of every new search from resetAnimation().
+    // Clears all previous agent findings and hides the panels.
+    // Without this, findings from search 1 show during search 2.
 
-    const fadeObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          // Element entered the viewport — make it visible
-          entry.target.classList.add('is-visible');
-          // Once visible, stop watching this element
-          // (we do not want it to fade out when scrolling back up)
-          fadeObserver.unobserve(entry.target);
+    function resetAgentPanel() {
+      // Hide both panels
+      const panel = document.getElementById("agentPanel");
+      const a4    = document.getElementById("agent4Container");
+      if (panel) panel.style.display = "none";
+      if (a4)    a4.style.display    = "none";
+
+      // Clear all findings
+      const findings = document.getElementById("agentFindings");
+      const a4f      = document.getElementById("agent4Findings");
+      if (findings) findings.innerHTML = "";
+      if (a4f)      a4f.innerHTML      = "";
+
+      // Reset status text
+      const status  = document.getElementById("agentStatus");
+      const status4 = document.getElementById("agent4Status");
+      if (status) {
+        status.innerHTML  = '<span class="agent-dot"></span>Starting...';
+        status.style.color = "";
+      }
+      if (status4) {
+        status4.innerHTML = '<span class="agent-dot" style="background:var(--teal);"></span>Scanning competitors...';
+        status4.style.color = "";
+      }
+    }
+
+    // ── HANDLE AGENTS 1-3 UPDATES ─────────────────────────────────────────
+    // Receives "agent_update" events from the backend.
+    // Each phase ("investigating", "complete", "waiting", "finished")
+    // updates the panel differently.
+
+    function handleAgentUpdate(msg) {
+      // Make panel visible on first event
+      const panel = document.getElementById("agentPanel");
+      if (panel) panel.style.display = "block";
+
+      const status   = document.getElementById("agentStatus");
+      const findings = document.getElementById("agentFindings");
+      if (!status || !findings) return;
+
+      const phase = msg.phase || "";
+
+      if (phase === "investigating") {
+        // Agent is working — update status only, no card yet
+        // msg.message already has "Agent N — [angle]" from backend
+        status.innerHTML = `<span class="agent-dot"></span>${msg.message || "Working..."}`;
+      }
+
+      else if (phase === "waiting") {
+        // Between agents — show handoff message
+        status.innerHTML = `<span class="agent-dot"></span>${msg.message || "Next agent starting..."}`;
+      }
+
+      else if (phase === "complete") {
+        // Agent finished — add a finding card
+        // We prepend so newest findings appear at top
+
+        const card = document.createElement("div");
+        card.style.marginBottom = "12px";
+
+        // Build the card HTML
+        // msg.message = the synthesis sentence from the AI
+        // msg.angle   = what angle was investigated (cleaned of loop language)
+        // msg.loop    = the agent number (1, 2, or 3)
+        let html = `<div class="agent-finding">
+          ${msg.message || ""}
+          <div class="agent-finding-meta">
+            Agent ${msg.loop || "?"} 
+            · ${msg.total_found || 0} signals 
+            · ${msg.angle || "signal analysis"}
+          </div>
+        </div>`;
+
+        // Show top 3 source signals as clickable links
+        const agentFindings = msg.findings || [];
+        if (agentFindings.length > 0) {
+          html += `<div style="margin-top:6px;">`;
+          agentFindings.slice(0, 3).forEach(f => {
+            const src = {
+              scholar:    "Research",
+              regulatory: "Regulatory",
+              reddit:     "Reddit",
+              hackernews: "HN",
+              googlenews: "News",
+              competitive:"Competitor"
+            }[f.source] || f.source || "";
+
+            const title = f.url
+              ? `<a href="${f.url}" target="_blank" rel="noopener">${f.title}</a>`
+              : f.title;
+
+            html += `<div class="agent-signal">
+              <span style="font-family:var(--mono);font-size:9px;
+                           color:var(--text3);margin-right:6px;">${src}</span>
+              ${title}
+            </div>`;
+          });
+          html += `</div>`;
         }
-      });
-    }, { threshold: 0.1 });
 
-    // Watch all elements with class "fade-in-section"
-    // querySelectorAll returns all matching elements as a list
-    // forEach loops through each one and starts observing it
-    document.querySelectorAll('.fade-in-section').forEach(el => {
-      fadeObserver.observe(el);
-    });
+        card.innerHTML = html;
+        // Prepend — newest finding appears at the top
+        findings.insertBefore(card, findings.firstChild);
+
+        // Update status to show this agent completed
+        const next = (msg.loop || 0) + 1;
+        if (next <= 3) {
+          status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete — Agent ${next} starting...`;
+        } else {
+          status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete`;
+        }
+      }
+
+      else if (phase === "finished") {
+        // All agents done — remove the pulsing dot, show completion
+        status.innerHTML  = `✓ ${msg.message || "All agents complete"}`;
+        status.style.color = "var(--teal)";
+      }
+    }
+
+    // ── HANDLE AGENT 4 (COMPETITIVE) ──────────────────────────────────────
+    // Receives "agent_4" events from the backend.
+    // Agent 4 has its own container, its own styling (teal not amber),
+    // and is completely separate from Agents 1-3.
+    // This means it can never be overwritten by Agent 1-3 events.
+
+    function handleAgent4Update(msg) {
+      // Show the Agent 4 container
+      const container = document.getElementById("agent4Container");
+      if (container) container.style.display = "block";
+
+      const status   = document.getElementById("agent4Status");
+      const findings = document.getElementById("agent4Findings");
+      if (!status || !findings) return;
+
+      const phase = msg.phase || "";
+
+      if (phase === "investigating") {
+        status.innerHTML = `<span class="agent-dot" style="background:var(--teal);"></span>${msg.message || "Scanning competitors..."}`;
+      }
+
+      else if (phase === "complete") {
+        // Show the competitive synthesis
+        let html = `<div class="agent-4-finding">
+          ${msg.message || ""}
+          <div class="agent-finding-meta" style="color:var(--text3);">
+            Competitor Intelligence · ${msg.total_found || 0} signals found
+          </div>
+        </div>`;
+
+        // Show competitor signals as links
+        const f = msg.findings || [];
+        if (f.length > 0) {
+          html += `<div style="margin-top:6px;">`;
+          f.slice(0, 3).forEach(item => {
+            const title = item.url
+              ? `<a href="${item.url}" target="_blank" rel="noopener">${item.title}</a>`
+              : item.title;
+            html += `<div class="agent-signal">
+              <span style="font-family:var(--mono);font-size:9px;
+                           color:var(--teal);margin-right:6px;">Competitor</span>
+              ${title}
+            </div>`;
+          });
+          html += `</div>`;
+        }
+
+        findings.innerHTML = html;
+        status.innerHTML  = `✓ Competitor scan complete`;
+        status.style.color = "var(--teal)";
+      }
+
+      else if (phase === "none") {
+        // Nothing found — hide the container entirely
+        // No empty state needed — absence is cleaner than "nothing found"
+        if (container) container.style.display = "none";
+      }
+    }
   </script>
 </body>
 </html>

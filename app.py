@@ -1027,6 +1027,41 @@ def strip_markdown(text):
 
     return text.strip()
 
+def strip_agent_language(text: str) -> str:
+    """
+    Removes technical internal words from any text shown to the user.
+    
+    Why this exists:
+    The AI sometimes uses words like "loop", "cycle", "investigation"
+    even when told not to. Instead of fighting the AI with longer prompts,
+    we clean the output after the fact. This is more reliable.
+    
+    We replace each banned word with a natural alternative.
+    re.sub with re.IGNORECASE catches Loop, LOOP, loop — all variants.
+    The \b markers mean "word boundary" — so "loop" matches but
+    "loophole" does not. We only replace the whole word.
+    """
+    if not text:
+        return text
+    
+    # Each tuple is (pattern_to_find, replacement)
+    # \b = word boundary — prevents replacing parts of other words
+    replacements = [
+        (r'\bloop\s+\d+\b',       'Agent'),        # "loop 3" → "Agent"
+        (r'\bLoop\s+\d+\b',       'Agent'),        # "Loop 3" → "Agent"  
+        (r'\bcycle\s+\d+\b',      'Agent'),        # "cycle 2" → "Agent"
+        (r'\biteration\s+\d+\b',  'Agent'),        # "iteration 1" → "Agent"
+        (r'\bloop\b',             'cycle'),         # standalone "loop" → "cycle"
+        (r'\binvestigation\b',    'analysis'),      # "investigation" → "analysis"
+        (r'\bInvestigate\b',      'Analyse'),       # "Investigate" → "Analyse"
+        (r'\bInvestigating\b',    'Analysing'),     # "Investigating" → "Analysing"
+    ]
+    
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
+    return text.strip()
+
 
 def ai_call(prompt):
     # Sends a prompt to the AI and returns the response text
@@ -2186,7 +2221,11 @@ No markdown. No backticks. Raw JSON only."""
 
         # Tell the frontend what the agent is doing right now
         # "Agent N" not "Loop N" — strategic language, not technical
-        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Agent {loop_count} — {angle}', 'why': why, 'loop': loop_count})}\n\n"
+        # Clean angle and why before sending to frontend
+        # strip_agent_language removes any technical words the AI snuck in
+        clean_angle = strip_agent_language(angle)
+        clean_why   = strip_agent_language(why)
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Agent {loop_count} — {clean_angle}', 'why': clean_why, 'loop': loop_count})}\n\n"
 
         # ── Step 2: Run all three specialists simultaneously ──────────────────
         # asyncio.gather runs all three at the same time
@@ -2198,19 +2237,18 @@ No markdown. No backticks. Raw JSON only."""
         # It uses the original query and existing_results to find competitors.
         # It does not use search_query because competitors relate to the
         # original brand, not the specific angle being investigated.
-        competitive_task = competitive_agent(query, existing_results)
-
-        signal_result, context_result, risk_result, competitive_result = await asyncio.gather(
+        # competitive_agent is NOT in this loop
+        # It runs separately after all loops complete — see below
+        signal_result, context_result, risk_result = await asyncio.gather(
             signal_task,
             context_task,
             risk_task,
-            competitive_task,
             return_exceptions=True
         )
 
         loop_findings = []
 
-        for result in [signal_result, context_result, risk_result, competitive_result]:
+        for result in [signal_result, context_result, risk_result]:
             if isinstance(result, Exception):
                 continue  # Skip failed agents silently
             if isinstance(result, dict):
@@ -2221,13 +2259,7 @@ No markdown. No backticks. Raw JSON only."""
         # We send a "investigating" event first so the frontend
         # knows Agent 4 is working, then "complete" with findings.
         # This also ensures the agent panel is visible before results arrive.
-        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': 'Agent 4 — tracking competitor movements', 'why': 'Understanding what competitors are doing changes the urgency of your response', 'loop': 4})}\n\n"
-
-        if isinstance(competitive_result, dict) and competitive_result.get("synthesis"):
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': competitive_result['synthesis'], 'angle': 'competitor movements', 'findings': competitive_result.get('findings', [])[:3], 'loop': 4, 'total_found': competitive_result.get('count', 0)})}\n\n"
-        elif isinstance(competitive_result, dict) and competitive_result.get("count", 0) > 0:
-            # Found signals but synthesis failed — still show the signals
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': f'Found {competitive_result.get("count", 0)} competitor signals across {len(competitive_result.get("competitors", []))} companies.', 'angle': 'competitor movements', 'findings': competitive_result.get('findings', [])[:3], 'loop': 4, 'total_found': competitive_result.get('count', 0)})}\n\n"
+    
         if not loop_findings:
             yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'No new signals found on this angle. Trying another...'})}\n\n"
             await asyncio.sleep(15)
@@ -2262,7 +2294,10 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
             synthesis = f"Agents found {len(loop_findings)} signals on {angle}."
 
         # Stream the complete loop result to the frontend
-        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': synthesis, 'angle': angle, 'findings': loop_findings[:5], 'loop': loop_count, 'total_found': len(loop_findings)})}\n\n"
+        # Clean synthesis and angle before sending to frontend
+        clean_synthesis = strip_agent_language(strip_markdown(synthesis))
+        clean_angle     = strip_agent_language(angle)
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'complete', 'message': clean_synthesis, 'angle': clean_angle, 'findings': loop_findings[:5], 'loop': loop_count, 'total_found': len(loop_findings)})}\n\n"
 
         # ── Step 4: Wait before next loop ────────────────────────────────────
         # We wait 45 seconds between loops.
@@ -2270,11 +2305,43 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
         # It also means the agent runs for ~3 minutes total — enough to be
         # genuinely useful without being annoying.
         if loop_count < max_loops:
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent digesting findings. Next investigation in 45 seconds...', 'loop': loop_count})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {loop_count + 1} starting in 45 seconds...', 'loop': loop_count})}\n\n"
             await asyncio.sleep(45)
 
     # Agent has completed all loops
-    yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'finished', 'message': f'Agent completed {loop_count} investigation cycles. {len(all_agent_findings)} additional signals found.', 'total_findings': len(all_agent_findings)})}\n\n"
+    # ── AGENT 4 runs here — after all three loop agents complete ─────────────
+    # Running it here means:
+    # 1. It never gets overwritten by loop iterations
+    # 2. The user has had 3-4 minutes to read main results before it arrives
+    # 3. It has the full existing_results context from all three loops
+    # 4. Its own SSE type "agent_4" means the frontend handles it separately
+
+    yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'investigating', 'message': 'Agent 4 — tracking what competitors are doing right now'})}\n\n"
+
+    try:
+        competitive_result = await competitive_agent(query, existing_results + all_agent_findings)
+
+        if isinstance(competitive_result, dict):
+            synthesis = competitive_result.get("synthesis", "")
+            findings  = competitive_result.get("findings", [])
+            count     = competitive_result.get("count", 0)
+            
+            # Clean any technical language from the synthesis
+            clean_synthesis = strip_agent_language(strip_markdown(synthesis)) if synthesis else ""
+
+            if clean_synthesis:
+                yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'complete', 'message': clean_synthesis, 'findings': findings[:5], 'total_found': count})}\n\n"
+            elif count > 0:
+                yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'complete', 'message': f'Found {count} competitor signals.', 'findings': findings[:5], 'total_found': count})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'none', 'message': 'No significant competitor signals found.'})}\n\n"
+
+    except Exception as e:
+        print(f"Agent 4 error: {e}")
+        yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'none', 'message': 'Competitor scan unavailable.'})}\n\n"
+
+    # Now send the finished event
+    yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'finished', 'message': f'All agents complete. {len(all_agent_findings)} additional signals found.', 'total_findings': len(all_agent_findings)})}\n\n"
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 # Endpoints are the URLs your frontend can call
