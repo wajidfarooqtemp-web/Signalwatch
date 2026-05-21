@@ -804,6 +804,8 @@
             }
 
             // Handle each message type
+            // ping events are keepalives — ignore them silently
+            if (msg.type === "ping") continue;
             if (msg.type === "progress") {
               const lineEl = document.createElement("div");
               lineEl.style.cssText = [
@@ -1195,8 +1197,30 @@
       }
 
       else if (phase === "waiting") {
-        // Between agents — show handoff message
-        status.innerHTML = `<span class="agent-dot"></span>${msg.message || "Next agent starting..."}`;
+        // Show a live countdown so the user knows exactly when the next agent starts
+        // msg.wait_seconds comes from the backend — currently 45
+        const waitSecs = msg.wait_seconds || 45;
+        const nextAgent = (msg.loop || 0) + 1;
+        let remaining = waitSecs;
+
+        // Clear any previous countdown interval so they don't stack up
+        // window.agentCountdown stores the interval ID so we can cancel it
+        if (window.agentCountdown) clearInterval(window.agentCountdown);
+
+        // Update the status text immediately before the interval fires
+        status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete — Agent ${nextAgent} starts in <strong>${remaining}s</strong>`;
+
+        // setInterval fires every 1000ms (1 second) and counts down
+        // When it reaches 0 it clears itself
+        window.agentCountdown = setInterval(() => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            clearInterval(window.agentCountdown);
+            status.innerHTML = `<span class="agent-dot"></span>Agent ${nextAgent} starting...`;
+          } else {
+            status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete — Agent ${nextAgent} starts in <strong>${remaining}s</strong>`;
+          }
+        }, 1000);
       }
 
       else if (phase === "complete") {

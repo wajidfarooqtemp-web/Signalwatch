@@ -2188,8 +2188,13 @@ No markdown. No backticks. Raw JSON only."""
 
         if not think_result:
             # AI failed — skip this loop
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'Evaluating signal patterns...'})}\n\n"
-            await asyncio.sleep(30)
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'Evaluating signal patterns...', 'loop': loop_count})}\n\n"
+            # Send keepalive pings every 10 seconds during the wait
+            # Render closes SSE connections idle for more than 55 seconds
+            # Without pings, Agent 4 never arrives because the connection dies
+            for _ in range(3):
+                await asyncio.sleep(10)
+                yield f"data: {json.dumps({'type': 'ping'})}\n\n"
             continue
 
         # Parse the investigation angle
@@ -2214,7 +2219,9 @@ No markdown. No backticks. Raw JSON only."""
         # Skip if we already investigated this angle
         if search_query in investigated_angles:
             yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'Scanning for new angles...'})}\n\n"
-            await asyncio.sleep(20)
+            for _ in range(2):
+                await asyncio.sleep(10)
+                yield f"data: {json.dumps({'type': 'ping'})}\n\n"
             continue
 
         investigated_angles.add(search_query)
@@ -2262,7 +2269,9 @@ No markdown. No backticks. Raw JSON only."""
     
         if not loop_findings:
             yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'thinking', 'message': 'No new signals found on this angle. Trying another...'})}\n\n"
-            await asyncio.sleep(15)
+            await asyncio.sleep(10)
+            yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+            await asyncio.sleep(5)
             continue
 
         # ── Step 3: Chief of Staff synthesises what the agents found ─────────
@@ -2306,8 +2315,14 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
         # genuinely useful without being annoying.
         if loop_count < max_loops:
             next_num = loop_count + 1
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {next_num} starting shortly...', 'loop': loop_count})}\n\n"
-            await asyncio.sleep(45)
+            # Send the exact wait seconds so the frontend can show a live countdown
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {next_num} starting in 45 seconds...', 'loop': loop_count, 'wait_seconds': 45})}\n\n"
+            # Send a ping every 10 seconds during the 45 second wait
+            # This keeps the SSE connection alive on Render's free tier
+            for _ in range(4):
+                await asyncio.sleep(10)
+                yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+            await asyncio.sleep(5)
 
     # Agent has completed all loops
     # ── AGENT 4 runs here — after all three loop agents complete ─────────────
