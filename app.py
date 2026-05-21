@@ -55,7 +55,7 @@ app.add_middleware(
 )
 
 # ─── API KEYS ────────────────────────────────────────────────────────────────
-# os.getenv() reads environment variables — these are stored securely on Railway
+# os.getenv() reads environment variables — these are stored securely on Railway/render
 # The second argument "" is the default value if the variable is not found
 # Never hardcode real API keys in code — always use environment variables
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -1077,7 +1077,7 @@ def ai_call(prompt):
                 headers={
                     "Authorization":  f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type":   "application/json",
-                    "HTTP-Referer":   "https://signalwatch-production.up.railway.app",
+                    "HTTP-Referer":   "https://signalwatch-r6s8.onrender.com",
                     "X-Title":        "Signalwatch"
                 },
                 json={
