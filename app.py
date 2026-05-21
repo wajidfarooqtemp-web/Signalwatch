@@ -1051,7 +1051,7 @@ def strip_agent_language(text: str) -> str:
         (r'\bLoop\s+\d+\b',       'Agent'),        # "Loop 3" → "Agent"  
         (r'\bcycle\s+\d+\b',      'Agent'),        # "cycle 2" → "Agent"
         (r'\biteration\s+\d+\b',  'Agent'),        # "iteration 1" → "Agent"
-        (r'\bloop\b',             'cycle'),         # standalone "loop" → "cycle"
+        (r'\bloop\b',             'phase'),         # standalone "loop" → "phase"
         (r'\binvestigation\b',    'analysis'),      # "investigation" → "analysis"
         (r'\bInvestigate\b',      'Analyse'),       # "Investigate" → "Analyse"
         (r'\bInvestigating\b',    'Analysing'),     # "Investigating" → "Analysing"
@@ -2202,9 +2202,9 @@ No markdown. No backticks. Raw JSON only."""
             # When AI returns malformed JSON, we fall back to a generic angle.
             # We never use the word "loop" — the user sees "Agent N" not "Loop N".
             investigation = {
-                "angle":        "broader signal patterns",
+                "angle":        "broader sentiment and reputation patterns",
                 "search_query": query,
-                "why":          "Finding signals across additional sources"
+                "why":          "Surfacing signals the initial scan may have missed"
             }
 
         angle        = investigation.get("angle", "")
@@ -2305,7 +2305,8 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
         # It also means the agent runs for ~3 minutes total — enough to be
         # genuinely useful without being annoying.
         if loop_count < max_loops:
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {loop_count + 1} starting in 45 seconds...', 'loop': loop_count})}\n\n"
+            next_num = loop_count + 1
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {next_num} starting shortly...', 'loop': loop_count})}\n\n"
             await asyncio.sleep(45)
 
     # Agent has completed all loops

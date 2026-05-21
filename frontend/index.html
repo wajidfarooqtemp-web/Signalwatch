@@ -9,6 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script defer src="https://cloud.umami.is/script.js" data-website-id="750bf47c-83de-4c08-ac8b-f4deeb5dcae6"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     :root {
@@ -317,6 +318,22 @@
       margin-bottom:10px;
     }
 
+/* GOOGLE LOGIN MODAL */
+    .modal-overlay { position:fixed; inset:0; background:rgba(15,13,11,0.55); z-index:500; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+    .modal-overlay.open { opacity:1; pointer-events:all; }
+    .modal-box { background:var(--white); border:1px solid var(--border); border-top:3px solid var(--teal); border-radius:8px; padding:36px 40px; max-width:420px; width:90%; text-align:center; transform:translateY(12px); transition:transform 0.2s; }
+    .modal-overlay.open .modal-box { transform:translateY(0); }
+    .modal-icon { font-size:32px; margin-bottom:16px; }
+    .modal-title { font-family:var(--serif); font-size:22px; font-weight:700; color:var(--ink); letter-spacing:-0.3px; margin-bottom:10px; }
+    .modal-sub { font-size:14px; color:var(--text2); line-height:1.7; margin-bottom:28px; font-weight:300; }
+    .modal-sub strong { font-weight:600; color:var(--text); }
+    .google-btn { display:inline-flex; align-items:center; gap:10px; background:var(--white); border:1.5px solid var(--border2); border-radius:5px; padding:11px 22px; font-size:14px; font-weight:500; color:var(--text); cursor:pointer; transition:box-shadow 0.15s,border-color 0.15s; font-family:var(--sans); }
+    .google-btn:hover { border-color:var(--teal); box-shadow:0 2px 8px rgba(13,122,107,0.1); }
+    .modal-skip { display:block; margin-top:16px; font-size:12px; color:var(--text3); cursor:pointer; font-family:var(--mono); text-decoration:underline; }
+    .modal-skip:hover { color:var(--text2); }
+    .modal-signed-in { display:flex; align-items:center; gap:10px; background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:5px; padding:10px 16px; font-size:13px; color:var(--teal); font-weight:500; }
+    .modal-avatar { width:28px; height:28px; border-radius:50%; background:var(--teal-mid); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-size:12px; font-weight:700; color:var(--teal); flex-shrink:0; }
+
     /* FOOTER */
     .site-footer { border-top:1px solid var(--border); background:var(--bg2); padding:20px 40px; display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:10px; color:var(--text3); letter-spacing:0.3px; flex-wrap:wrap; gap:8px; }
 
@@ -382,6 +399,22 @@
   <div class="mobile-menu" id="mobileMenu">
     <div class="mobile-btn active" id="mNavSearch" onclick="showPage('search');toggleMenu()">Search</div>
     <div class="mobile-btn" id="mNavAbout" onclick="showPage('about');toggleMenu()">About</div>
+  </div>
+
+  <!-- GOOGLE LOGIN MODAL -->
+  <div class="modal-overlay" id="loginModal">
+    <div class="modal-box">
+      <div class="modal-icon">◎</div>
+      <div class="modal-title">One more search needs a sign-in</div>
+      <p class="modal-sub">Your first search was free. Sign in with Google to continue. <strong>3 searches per day</strong> — resets at midnight.</p>
+      <div id="modalContent">
+        <button class="google-btn" onclick="signInWithGoogle()">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+          Continue with Google
+        </button>
+      </div>
+      <span class="modal-skip" onclick="skipLogin()">Skip for now — use my 3 anyway</span>
+    </div>
   </div>
 
   <!-- SEARCH PAGE -->
@@ -571,8 +604,17 @@
 
     let signalChart = null;
 
+    // YOUR Google Client ID from console.cloud.google.com
+    const GOOGLE_CLIENT_ID = "710302750053-57riraefjqe9o03rpvutf0t0bqouplqb.apps.googleusercontent.com";
+
+    let googleIdToken  = null;
+    let googleUserName = null;
+
     // ── TOKEN ─────────────────────────────────────────────────────────────
+    // If Google-authed, send the Google ID token prefixed with "google_"
+    // Backend strips the prefix and verifies against Google's servers
     function getToken() {
+      if (googleIdToken) return "google_" + googleIdToken;
       let t = localStorage.getItem("sw_token");
       if (!t) {
         t = "sw_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -580,7 +622,40 @@
       }
       return t;
     }
-    const SW_TOKEN = getToken();
+
+    // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
+    function signInWithGoogle() {
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback:  handleGoogleCredential,
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+      google.accounts.id.prompt();
+    }
+
+    function handleGoogleCredential(response) {
+      googleIdToken = response.credential;
+      try {
+        const payload = JSON.parse(atob(googleIdToken.split('.')[1]));
+        googleUserName = payload.given_name || payload.name || "you";
+      } catch(e) { googleUserName = "you"; }
+      document.getElementById("modalContent").innerHTML = `
+        <div class="modal-signed-in">
+          <div class="modal-avatar">${googleUserName[0].toUpperCase()}</div>
+          <span>Signed in as ${googleUserName} — continuing</span>
+        </div>`;
+      document.querySelector(".modal-skip").style.display = "none";
+      localStorage.setItem("sw_authed", "google");
+      setTimeout(() => closeModal(true), 800);
+    }
+
+    function skipLogin()  { closeModal(false); }
+    function openModal()  { document.getElementById("loginModal").classList.add("open"); }
+    function closeModal(continueSearch) {
+      document.getElementById("loginModal").classList.remove("open");
+      if (continueSearch) runSearch();
+    }
 
     // ── LIMIT MESSAGE ─────────────────────────────────────────────────────
     function showLimitMessage(container) {
@@ -594,6 +669,7 @@
 
     // ── CHECK LIMIT ON PAGE LOAD ──────────────────────────────────────────
     function checkLocalLimit() {
+      if (localStorage.getItem("sw_authed") === "google") return;
       const today      = new Date().toDateString();
       const savedDate  = localStorage.getItem("sw_date");
       const savedCount = parseInt(localStorage.getItem("sw_count") || "0");
@@ -642,6 +718,14 @@
       const query = document.getElementById("queryInput").value.trim();
       if (!query) return;
 
+      // After first search, unauthenticated users see the Google login modal
+      const searchCount = parseInt(localStorage.getItem("sw_count") || "0");
+      const isAuthed    = localStorage.getItem("sw_authed") === "google";
+      if (searchCount >= 1 && !isAuthed && !googleIdToken) {
+        openModal();
+        return;
+      }
+
       const btn       = document.getElementById("searchBtn");
       const loading   = document.getElementById("loading");
       const container = document.getElementById("resultsContainer");
@@ -654,6 +738,7 @@
       progress.innerHTML = "";
       document.getElementById("loadingText").textContent = "Scanning sources for " + query;
       if (signalChart) { signalChart.destroy(); signalChart = null; }
+      resetAgentPanel(); // clear previous agent findings before new search
 
       const url = `${API_BASE}/search-stream?query=${encodeURIComponent(query)}&token=${encodeURIComponent(SW_TOKEN)}`;
 
@@ -765,13 +850,16 @@
             }
 
             else if (msg.type === "complete") {
+              // Main results done — render them
               loading.style.display = "none";
               progress.innerHTML = "";
               document.getElementById("loadingText").textContent = "Scanning sources and analysing patterns";
               btn.disabled = false;
               btn.textContent = "Analyse";
               renderResults(msg, query);
-              return; // We got everything — stop reading
+              // Show agent panel — agents start working now
+              // DO NOT return here — SSE must stay open for agent events
+              document.getElementById("agentPanel").style.display = "block";
             }
           }
         }
@@ -809,9 +897,12 @@
       }
 
       if (data.searches_remaining !== undefined) {
-        const used = 3 - data.searches_remaining;
-        localStorage.setItem("sw_count", used.toString());
-        localStorage.setItem("sw_date", new Date().toDateString());
+        const isAuthed = localStorage.getItem("sw_authed") === "google";
+        if (!isAuthed) {
+          const used = 3 - data.searches_remaining;
+          localStorage.setItem("sw_count", used.toString());
+          localStorage.setItem("sw_date", new Date().toDateString());
+        }
         document.getElementById("searchesLeft").style.display = "block";
         document.getElementById("searchesCount").textContent = data.searches_remaining;
         if (data.searches_remaining <= 0) {
