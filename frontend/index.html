@@ -3,6 +3,30 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!--
+    Content Security Policy — browser-level whitelist.
+    Even if an attacker injects a script tag, the browser refuses to run it
+    unless the source is on this list. Blocks XSS at the browser level.
+    This works alongside the CSP header the backend sends.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="
+          default-src 'self';
+          script-src 'self' 'unsafe-inline'
+            https://cdnjs.cloudflare.com
+            https://cdn.jsdelivr.net
+            https://cloud.umami.is
+            https://accounts.google.com;
+          style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+          font-src https://fonts.gstatic.com;
+          connect-src 'self'
+            https://signalwatch-r6s8.onrender.com
+            https://accounts.google.com
+            https://oauth2.googleapis.com;
+          frame-src https://accounts.google.com;
+          img-src 'self' data: https:;
+          frame-ancestors 'none';
+        ">
   <title>Signalwatch — Brand Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -512,28 +536,51 @@
          <!-- LEAD GENERATION SECTION -->
     <!-- Hidden until user clicks Find Leads -->
     <!-- Sits above agent panel so it is visible without scrolling far -->
+    <!-- LEAD GENERATION SECTION -->
     <div id="leadSection" style="display:none; margin-bottom:16px;">
 
-      <!-- The button — only shows after a search completes -->
-      <div id="leadBtnWrap" style="margin-bottom:12px;">
+      <div id="leadBtnWrap" style="margin-bottom:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+
+        <!--
+          The Find Leads button.
+          Ink background with teal accent — deliberately different from
+          every other button on the page so it stands out immediately.
+          The lightning bolt communicates speed and action.
+        -->
         <button id="leadBtn" onclick="findLeads()" style="
           font-family:var(--mono);
           font-size:11px;
           font-weight:600;
-          letter-spacing:1px;
+          letter-spacing:1.5px;
           text-transform:uppercase;
-          color:var(--white);
-          background:var(--amber);
-          border:none;
+          color:#3de6c8;
+          background:var(--ink);
+          border:1.5px solid #3de6c8;
           border-radius:4px;
-          padding:10px 20px;
+          padding:12px 24px;
           cursor:pointer;
-          transition:background 0.15s;
-        ">⚡ Find Leads — who needs this right now</button>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-left:12px;">
-          Scores every mention for buying intent
+          transition:all 0.2s;
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+        "
+        onmouseover="this.style.background='#3de6c8';this.style.color='var(--ink)'"
+        onmouseout="this.style.background='var(--ink)';this.style.color='#3de6c8'"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M7.5 1L2 7.5h4.5L5 12l6.5-6.5H7L7.5 1z"
+                  fill="currentColor"/>
+          </svg>
+          Find Leads
+        </button>
+
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">
+          Who actually needs this right now — scored by intent
         </span>
       </div>
+
+      <div id="leadResults"></div>
+    </div>
 
       <!-- Lead results appear here after button click -->
       <div id="leadResults"></div>
@@ -1445,8 +1492,24 @@
         );
         const data  = await res.json();
 
+        if (data.error === "used") {
+          // Token has already used their one free lead scan
+          // Hide the button entirely — no point showing it again
+          const btnWrap = document.getElementById("leadBtnWrap");
+          if (btnWrap) btnWrap.style.display = "none";
+          results.innerHTML = `
+            <div style="font-family:var(--mono);font-size:11px;
+                        color:var(--text3);padding:12px 0;
+                        border-left:2px solid var(--border);padding-left:12px;">
+              You have used your one free lead scan.
+              Each account gets one — it keeps the results fresh and the
+              signal honest.
+            </div>`;
+          return;
+        }
+
         if (data.error) {
-          results.innerHTML = `<div class="error-msg">${data.error}</div>`;
+          results.innerHTML = `<div class="error-msg">${escapeHtml(data.error)}</div>`;
           return;
         }
 
@@ -1461,34 +1524,51 @@
       }
     }
 
+    // Pitches stored here by index so onclick never contains AI text
+    // This prevents XSS — AI text never goes inside an HTML attribute
+    // Instead we store it in a JS array and reference it by index number
+    let storedPitches = [];
+
     function renderLeads(data) {
       const results = document.getElementById("leadResults");
+      storedPitches = []; // Clear previous pitches
 
       if (!data.leads || data.leads.length === 0) {
         results.innerHTML = `
-          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:12px 0;">
-            No high-intent leads found in the top ${data.scanned || 8} mentions.
-            Try a more specific query — e.g. "plumbers London" instead of "plumbers".
+          <div style="font-family:var(--mono);font-size:11px;
+                      color:var(--text3);padding:12px 0;">
+            No high-intent leads in the top ${data.scanned || 8} mentions.
+            Try a more specific search — "plumbers London" rather than "plumbers".
           </div>`;
         return;
       }
 
-      // Intent score colour — higher score = more urgent = amber
-      const scoreColor = { 3:"#92400e", 4:"var(--amber)", 5:"#dc2626" };
-      const scoreBg    = { 3:"#fffbeb", 4:"var(--amber-light)", 5:"#fff1f2" };
-      const scoreBorder = { 3:"#fde68a", 4:"var(--amber-mid)", 5:"#fecdd3" };
+      const scoreColor  = { 3:"#92400e", 4:"#c4720a", 5:"#c0392b" };
+      const scoreBg     = { 3:"#fffbeb", 4:"#fef7ee", 5:"#fff1f2" };
+      const scoreBorder = { 3:"#fde68a", 4:"#f5c882", 5:"#fecdd3" };
 
       let html = `
         <div style="font-family:var(--mono);font-size:10px;color:var(--text3);
                     padding:4px 0 12px;letter-spacing:0.5px;">
-          ${data.total} leads found from ${data.scanned} mentions scored
+          ${data.total} lead${data.total !== 1 ? "s" : ""} from
+          ${data.scanned} mentions scored
         </div>`;
 
       data.leads.forEach((lead, i) => {
-        const sc = lead.intent_score || 3;
-        const col    = scoreColor[sc]    || scoreColor[3];
-        const bg     = scoreBg[sc]       || scoreBg[3];
-        const border = scoreBorder[sc]   || scoreBorder[3];
+        // Store pitch in JS array — never in HTML attributes
+        // onclick calls copyPitch(i) which looks up storedPitches[i]
+        storedPitches.push(lead.pitch || "");
+
+        const sc     = Math.min(Math.max(lead.intent_score || 3, 3), 5);
+        const col    = scoreColor[sc];
+        const bg     = scoreBg[sc];
+        const border = scoreBorder[sc];
+
+        // Escape HTML in user-generated content before inserting into DOM
+        // This prevents stored XSS if AI returns HTML characters
+        const safeMention = escapeHtml(lead.mention || "");
+        const safePain    = escapeHtml(lead.pain    || "");
+        const safePitch   = escapeHtml(lead.pitch   || "");
 
         html += `
           <div style="
@@ -1499,7 +1579,6 @@
             padding:16px 20px;
             margin-bottom:10px;
           ">
-            <!-- Intent score badge -->
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
               <span style="
                 font-family:var(--mono);font-size:9px;font-weight:600;
@@ -1508,49 +1587,77 @@
                 padding:2px 8px;border-radius:2px;
               ">Intent ${sc}/5</span>
               <span style="font-family:var(--mono);font-size:9px;color:${col};">
-                ${lead.score_label || ""}
+                ${escapeHtml(lead.score_label || "")}
               </span>
-              <span style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-left:auto;">
-                ${lead.source || ""}
+              <span style="font-family:var(--mono);font-size:9px;
+                           color:var(--text3);margin-left:auto;">
+                ${escapeHtml(lead.source || "")}
               </span>
             </div>
 
-            <!-- The original mention -->
             <div style="font-size:12px;color:var(--text3);margin-bottom:10px;
                         font-style:italic;line-height:1.5;">
-              "${lead.mention || ""}"
+              "${safeMention}"
             </div>
 
-            <!-- The pain -->
             <div style="margin-bottom:10px;">
               <span style="font-family:var(--mono);font-size:9px;color:var(--text3);
                            letter-spacing:0.5px;text-transform:uppercase;">The Pain</span>
-              <div style="font-size:13px;color:var(--text2);margin-top:4px;line-height:1.6;">
-                ${lead.pain || ""}
-              </div>
+              <div style="font-size:13px;color:var(--text2);margin-top:4px;
+                          line-height:1.6;">${safePain}</div>
             </div>
 
-            <!-- The pitch — copyable -->
             <div>
               <span style="font-family:var(--mono);font-size:9px;color:var(--teal);
-                           letter-spacing:0.5px;text-transform:uppercase;">Ready-to-send pitch</span>
+                           letter-spacing:0.5px;text-transform:uppercase;">
+                Ready to send
+              </span>
               <div style="
                 font-size:13px;color:var(--text);margin-top:6px;line-height:1.7;
                 background:var(--teal-light);border:1px solid var(--teal-mid);
                 border-radius:4px;padding:12px 14px;
-              ">${lead.pitch || ""}</div>
-              <!-- Copy button -->
-              <button onclick="copyPitch(this, '${(lead.pitch || "").replace(/'/g, "\\'").replace(/\n/g, " ")}')"
+              ">${safePitch}</div>
+              <!--
+                onclick uses index i — never contains AI text.
+                storedPitches[i] is looked up at click time from the JS array.
+                This is the correct way to attach data to DOM elements safely.
+              -->
+              <button onclick="copyPitch(this, ${i})"
                 style="
                   font-family:var(--mono);font-size:9px;color:var(--teal);
-                  background:none;border:1px solid var(--teal-mid);border-radius:3px;
-                  padding:3px 10px;margin-top:6px;cursor:pointer;letter-spacing:0.3px;
+                  background:none;border:1px solid var(--teal-mid);
+                  border-radius:3px;padding:3px 10px;margin-top:6px;
+                  cursor:pointer;letter-spacing:0.3px;
                 ">Copy pitch</button>
             </div>
           </div>`;
       });
 
       results.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+      // Converts dangerous HTML characters to safe display equivalents
+      // < becomes &lt; so a browser renders it as text, not as a tag
+      // This is the standard defence against XSS in dynamic HTML
+      return String(str)
+        .replace(/&/g,  "&amp;")
+        .replace(/</g,  "&lt;")
+        .replace(/>/g,  "&gt;")
+        .replace(/"/g,  "&quot;")
+        .replace(/'/g,  "&#39;");
+    }
+
+    function copyPitch(btn, index) {
+      // Looks up pitch text from the JS array — never from the DOM
+      // This is safe because storedPitches contains plain text, not HTML
+      const text = storedPitches[index] || "";
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = "Copied";
+        setTimeout(() => { btn.textContent = "Copy pitch"; }, 2000);
+      }).catch(() => {
+        btn.textContent = "Select and copy manually";
+      });
     }
 
     function copyPitch(btn, text) {

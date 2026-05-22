@@ -159,6 +159,15 @@ def setup_db():
                 PRIMARY KEY (token, search_date)
             )
         """)
+
+        # Tracks which tokens have used their one free lead scan
+        # Once a token appears here, they cannot use /find-leads again
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lead_scans (
+                token      TEXT PRIMARY KEY,
+                used_at    TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
         # Stores every Google login so you can see who used your product
         # Query anytime from Render PostgreSQL console:
         # SELECT * FROM logins ORDER BY logged_in_at DESC;
@@ -230,6 +239,50 @@ def increment_count(token):
 # Run setup_db() once when the server starts
 # This creates the table if it does not exist
 setup_db()
+
+def check_lead_allowance(token: str) -> bool:
+    """
+    Returns True if this token has NOT yet used their lead scan.
+    Returns False if they have — block them.
+    """
+    conn = get_db()
+    if not conn:
+        return True  # If DB is down, allow rather than block real users
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM lead_scans WHERE token = %s",
+            (token,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row is None  # None means not used yet — allow
+    except Exception as e:
+        print(f"check_lead_allowance error: {e}")
+        return True
+
+def consume_lead_allowance(token: str):
+    """
+    Records that this token has used their lead scan.
+    Uses INSERT ... ON CONFLICT DO NOTHING so calling twice is safe.
+    """
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO lead_scans (token)
+               VALUES (%s)
+               ON CONFLICT (token) DO NOTHING""",
+            (token,)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"consume_lead_allowance error: {e}")
 
 
 # ─── DATA SOURCES ─────────────────────────────────────────────────────────────
@@ -2445,8 +2498,11 @@ Perform these 3 tasks:
 
 2. THE CORE PAIN: Summarize exactly what problem they are trying to solve in 1 sentence.
 
-3. THE PERFECT PITCH: Write a 3-sentence cold outreach message a service provider
-   can copy-paste. Do NOT sound like AI. Sound like a helpful peer offering a direct solution.
+3. THE PERFECT PITCH: Write a 3-4 line cold outreach message.
+   British English. Conversational. Like a colleague who spotted something useful.
+   No buzzwords. No "I hope this finds you well." No AI filler.
+   Get to the point in the first sentence. Offer something specific.
+   Sound like a person, not a tool.
 
 Return JSON only:
 {{
@@ -2518,6 +2574,18 @@ async def find_leads(query: str, request: Request, token: str = ""):
     if not resolved_token:
         return {"error": "invalid token", "leads": []}
 
+    # One lead generation per token. Ever. Not per day — ever.
+    # This prevents abuse and creates urgency to pay for more.
+    # We store used tokens in a separate table so it survives server restarts.
+    if not check_lead_allowance(resolved_token):
+        return {
+            "error":      "used",
+            "leads":      [],
+            "message":    "You have used your one free lead scan."
+        }
+    # Mark this token as having used their lead scan
+    consume_lead_allowance(resolved_token)
+
     try:
         # Fetch from the three fastest sources in parallel
         reddit_results, hn_results, news_results = await asyncio.gather(
@@ -2569,6 +2637,96 @@ async def find_leads(query: str, request: Request, token: str = ""):
     except Exception as e:
         print(f"Find leads error: {e}")
         return {"error": "Lead generation failed", "leads": []}
+
+
+# ─── SECURITY HEADERS ────────────────────────────────────────────────────────
+# Runs on every single response automatically.
+# Each header closes a specific attack vector.
+
+from collections import defaultdict
+
+# In-memory IP rate limiter — second layer after token rate limiting
+# Prevents someone hammering the API without a valid token
+_ip_log: dict = defaultdict(list)
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """
+    Adds security headers to every response and rate-limits by IP.
+
+    Content-Security-Policy: browser whitelist — blocks injected scripts
+    X-Frame-Options: prevents clickjacking via iframes
+    X-Content-Type-Options: prevents MIME sniffing attacks
+    Referrer-Policy: stops search queries leaking to third parties
+    Strict-Transport-Security: forces HTTPS, prevents SSL stripping
+    """
+    # IP rate limit — 60 requests per hour per IP
+    # Gets the real client IP from Render's proxy headers
+    client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+    if not client_ip:
+        client_ip = request.client.host if request.client else "unknown"
+
+    # Allow health check pings without counting against the limit
+    if request.url.path != "/":
+        now = datetime.now()
+        cutoff = now - timedelta(hours=1)
+        # Remove timestamps older than 1 hour (sliding window)
+        _ip_log[client_ip] = [t for t in _ip_log[client_ip] if t > cutoff]
+
+        if len(_ip_log[client_ip]) >= 60:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=429,
+                content={"error": "Too many requests. Try again later."},
+                headers={"Retry-After": "3600"}
+            )
+        _ip_log[client_ip].append(now)
+
+    response = await call_next(request)
+
+    # Content Security Policy
+    # default-src 'self': only load from our own domain by default
+    # script-src: only these exact script sources are allowed to run
+    # frame-ancestors 'none': nobody can embed us in an iframe (clickjacking)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' "
+        "https://cdnjs.cloudflare.com "
+        "https://cdn.jsdelivr.net "
+        "https://cloud.umami.is "
+        "https://accounts.google.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; "
+        "connect-src 'self' "
+        "https://signalwatch-r6s8.onrender.com "
+        "https://accounts.google.com "
+        "https://oauth2.googleapis.com; "
+        "frame-src https://accounts.google.com; "
+        "img-src 'self' data: https:; "
+        "frame-ancestors 'none'"
+    )
+
+    # Prevents your page being embedded in iframes — blocks clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Stops browsers guessing content types — prevents MIME confusion attacks
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Only sends your domain name in Referer header — not the full URL
+    # Prevents search queries leaking to third-party scripts
+    response.headers["Referrer-Policy"] = "strict-origin"
+
+    # Forces HTTPS for 1 year — prevents SSL stripping attacks
+    # Only effective when you have a custom domain with HTTPS
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
+
+    # Remove headers that reveal server information to attackers
+    response.headers.pop("Server", None)
+    response.headers.pop("X-Powered-By", None)
+
+    return response
     
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 # Endpoints are the URLs your frontend can call
