@@ -101,6 +101,22 @@ def verify_google_token(id_token_str):
         email = data.get("email", "unknown")
         print(f"Google login: {email} (sub: {sub[:8]}...)")
 
+        # Store this login in the database
+        # This lets you query who has used Signalwatch from the Render console
+        try:
+            conn = get_db()
+            if conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "INSERT INTO logins (email, google_sub) VALUES (%s, %s)",
+                    (email, sub)
+                )
+                conn.commit()
+                cur.close()
+                conn.close()
+        except Exception as db_err:
+            print(f"Login log error: {db_err}")
+
         return f"g_{sub}"
     except Exception as e:
         print(f"Google token verify error: {e}")
@@ -141,6 +157,17 @@ def setup_db():
                 search_date DATE NOT NULL,
                 count INTEGER DEFAULT 0,
                 PRIMARY KEY (token, search_date)
+            )
+        """)
+        # Stores every Google login so you can see who used your product
+        # Query anytime from Render PostgreSQL console:
+        # SELECT * FROM logins ORDER BY logged_in_at DESC;
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS logins (
+                id          SERIAL PRIMARY KEY,
+                email       TEXT NOT NULL,
+                google_sub  TEXT NOT NULL,
+                logged_in_at TIMESTAMPTZ DEFAULT NOW()
             )
         """)
         conn.commit()  # Save the changes
@@ -2335,7 +2362,33 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
     yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'investigating', 'message': 'Agent 4 — tracking what competitors are doing right now'})}\n\n"
 
     try:
-        competitive_result = await competitive_agent(query, existing_results + all_agent_findings)
+        # Run Agent 4 and a keepalive ping loop simultaneously
+        # asyncio.gather runs both at the same time
+        # The ping loop sends a ping every 15 seconds while Agent 4 works
+        # Without this, Render closes the SSE connection before Agent 4 finishes
+
+        async def ping_while_working():
+            # Agent 4 takes roughly 60-90 seconds
+            # We ping every 15 seconds = up to 6 pings = keeps connection alive
+            for _ in range(6):
+                await asyncio.sleep(15)
+                yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+
+        # Run competitive_agent in a thread (it is a regular async function)
+        comp_task = asyncio.create_task(
+            competitive_agent(query, existing_results + all_agent_findings)
+        )
+
+        # Send pings while waiting for Agent 4 to complete
+        # We check every 15 seconds if Agent 4 is done
+        for _ in range(6):
+            if comp_task.done():
+                break
+            await asyncio.sleep(15)
+            yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+
+        # Get the result (task is done by now or we wait for it)
+        competitive_result = await comp_task
 
         if isinstance(competitive_result, dict):
             synthesis = competitive_result.get("synthesis", "")
@@ -2359,6 +2412,164 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
     # Now send the finished event
     yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'finished', 'message': f'All agents complete. {len(all_agent_findings)} additional signals found.', 'total_findings': len(all_agent_findings)})}\n\n"
 
+# ─── LEAD GENERATION AGENT ───────────────────────────────────────────────────
+# Triggered when user clicks "Find Leads" button on the frontend.
+# Takes the already-crawled results and scores each one for buying intent.
+# Returns only high-intent leads (score 3, 4, or 5 out of 5).
+#
+# Why this earns money:
+# A plumber searches "plumbers London complaints". They get a briefing.
+# They click "Find Leads" and see 5 people who said this week they need
+# a plumber in London, with a ready-to-send cold outreach message.
+# That is worth paying for immediately.
+#
+# Cost: one AI call per result scored. We limit to top 8 results maximum.
+# Free models handle this fine.
+
+async def score_lead(mention_title: str, mention_source: str, query: str) -> dict:
+    """
+    Scores one mention for buying intent using your lead generation prompt.
+    Returns a dict with intent_score, pain, pitch, and the original mention.
+    Returns None if intent score is below 3 (not worth showing).
+    """
+    prompt = f"""You are a Lead Generation Sniper. Analyze this social media mention and turn it into a lead.
+
+Platform: {mention_source}
+Mention: "{mention_title}"
+Context (what was searched): {query}
+
+Perform these 3 tasks:
+
+1. BUYING INTENT (Score 1-5): Rate how close this person is to spending money.
+   1 = just complaining, 5 = actively asking for a vendor/tool right now.
+
+2. THE CORE PAIN: Summarize exactly what problem they are trying to solve in 1 sentence.
+
+3. THE PERFECT PITCH: Write a 3-sentence cold outreach message a service provider
+   can copy-paste. Do NOT sound like AI. Sound like a helpful peer offering a direct solution.
+
+Return JSON only:
+{{
+  "intent_score": <number 1-5>,
+  "pain": "<one sentence>",
+  "pitch": "<three sentences as one string>"
+}}
+
+No markdown. No backticks. Raw JSON only."""
+
+    result = await asyncio.to_thread(ai_call, prompt)
+    if not result:
+        return None
+
+    try:
+        clean = re.sub(r'```[a-z]*\n?', '', result)
+        clean = re.sub(r'```', '', clean).strip()
+        parsed = json.loads(clean)
+
+        score = int(parsed.get("intent_score", 0))
+
+        # Only return leads with intent score 3 or above
+        # Score 1-2 are complaints with no buying intent — useless to a business
+        if score < 3:
+            return None
+
+        return {
+            "intent_score": score,
+            "pain":         parsed.get("pain", ""),
+            "pitch":        parsed.get("pitch", ""),
+            "mention":      mention_title,
+            "source":       mention_source,
+            "score_label":  ["", "", "", "Considering", "Ready to buy", "Actively seeking"][min(score, 5)]
+        }
+
+    except Exception as e:
+        print(f"Lead scoring error: {e}")
+        return None
+
+
+@app.get("/find-leads")
+async def find_leads(query: str, request: Request, token: str = ""):
+    """
+    Lead generation endpoint — triggered when user clicks Find Leads.
+
+    Takes the same query the user already searched.
+    Fetches fresh results from the fastest sources (Reddit + HN + Google News).
+    Scores top 8 for buying intent.
+    Returns only those scoring 3 or above.
+
+    Why we fetch fresh instead of reusing results:
+    The main search results are not stored anywhere (no database cost).
+    A fresh fetch takes 15-20 seconds and costs nothing.
+    """
+    # Sanitise and validate
+    query = sanitise_query(query)
+    if not query:
+        return {"error": "invalid query", "leads": []}
+
+    # Resolve token — same as search endpoint
+    resolved_token = None
+    if token and token.startswith("sw_"):
+        resolved_token = token
+    elif token and token.startswith("google_"):
+        id_token_str = token[len("google_"):]
+        google_uid = verify_google_token(id_token_str)
+        if google_uid:
+            resolved_token = google_uid
+    if not resolved_token:
+        return {"error": "invalid token", "leads": []}
+
+    try:
+        # Fetch from the three fastest sources in parallel
+        reddit_results, hn_results, news_results = await asyncio.gather(
+            asyncio.to_thread(fetch_reddit, query),
+            asyncio.to_thread(fetch_hackernews, query),
+            asyncio.to_thread(fetch_google_news, query),
+            return_exceptions=True
+        )
+
+        all_results = []
+        for r in [reddit_results, hn_results, news_results]:
+            if isinstance(r, list):
+                all_results += r
+
+        # Rank and take top 8 only
+        # More than 8 AI calls would be slow and wasteful
+        ranked = filter_and_rank(all_results, query)[:8]
+
+        if not ranked:
+            return {"leads": [], "message": "No mentions found to score."}
+
+        # Score each mention for buying intent concurrently
+        # asyncio.gather runs all scoring calls at the same time
+        # Total time = slowest single AI call, not sum of all calls
+        score_tasks = [
+            score_lead(r["title"], r["source"], query)
+            for r in ranked
+        ]
+        scored = await asyncio.gather(*score_tasks, return_exceptions=True)
+
+        # Filter out None (low intent) and exceptions
+        leads = [
+            s for s in scored
+            if s and isinstance(s, dict)
+        ]
+
+        # Sort by intent score — highest first
+        leads.sort(key=lambda x: x["intent_score"], reverse=True)
+
+        print(f"Lead generation: {len(ranked)} mentions scored, {len(leads)} leads found")
+
+        return {
+            "leads":   leads,
+            "total":   len(leads),
+            "scanned": len(ranked),
+            "query":   query
+        }
+
+    except Exception as e:
+        print(f"Find leads error: {e}")
+        return {"error": "Lead generation failed", "leads": []}
+    
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 # Endpoints are the URLs your frontend can call
 # @app.get("/") means: when someone visits / run this function

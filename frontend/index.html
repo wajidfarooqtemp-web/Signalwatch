@@ -509,6 +509,36 @@
          Agent 4 runs after Agents 1-3 complete and has different visual
          styling (teal instead of amber). Keeping it separate means it
          never gets confused with or overwritten by the other agents. -->
+         <!-- LEAD GENERATION SECTION -->
+    <!-- Hidden until user clicks Find Leads -->
+    <!-- Sits above agent panel so it is visible without scrolling far -->
+    <div id="leadSection" style="display:none; margin-bottom:16px;">
+
+      <!-- The button — only shows after a search completes -->
+      <div id="leadBtnWrap" style="margin-bottom:12px;">
+        <button id="leadBtn" onclick="findLeads()" style="
+          font-family:var(--mono);
+          font-size:11px;
+          font-weight:600;
+          letter-spacing:1px;
+          text-transform:uppercase;
+          color:var(--white);
+          background:var(--amber);
+          border:none;
+          border-radius:4px;
+          padding:10px 20px;
+          cursor:pointer;
+          transition:background 0.15s;
+        ">⚡ Find Leads — who needs this right now</button>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-left:12px;">
+          Scores every mention for buying intent
+        </span>
+      </div>
+
+      <!-- Lead results appear here after button click -->
+      <div id="leadResults"></div>
+
+    </div>
     <div id="agentPanel" style="display:none;">
       <div class="agent-card">
         <div class="agent-header">
@@ -1056,6 +1086,12 @@
 
       container.innerHTML = html;
       if (data.sources && data.results) buildChart(data.sources, data.results);
+
+      // Store query and show the Find Leads button after every search
+      // lastQuery is used by findLeads() to know what to score
+      lastQuery = query;
+      const leadSection = document.getElementById("leadSection");
+      if (leadSection) leadSection.style.display = "block";
     }
 
     // ── ANIMATE COUNT ─────────────────────────────────────────────────────
@@ -1143,12 +1179,20 @@
         }
       });
     }
+
     // ── AGENT PANEL RESET ─────────────────────────────────────────────────
     // Called at the start of every new search from resetAnimation().
     // Clears all previous agent findings and hides the panels.
     // Without this, findings from search 1 show during search 2.
 
+
     function resetAgentPanel() {
+
+      // Hide and clear lead section on new search
+      const leadSection = document.getElementById("leadSection");
+      if (leadSection) leadSection.style.display = "none";
+      const leadResults = document.getElementById("leadResults");
+      if (leadResults) leadResults.innerHTML = "";
       // Hide both panels
       const panel = document.getElementById("agentPanel");
       const a4    = document.getElementById("agent4Container");
@@ -1308,7 +1352,33 @@
       const phase = msg.phase || "";
 
       if (phase === "investigating") {
-        status.innerHTML = `<span class="agent-dot" style="background:var(--teal);"></span>${msg.message || "Scanning competitors..."}`;
+        // Show agent speciality so users understand what each agent does
+        // These match the actual backend agents exactly
+        const agentSpeciality = {
+          1: "Signal Intelligence — scanning Reddit, news and forums",
+          2: "Research Intelligence — searching academic papers and sources",
+          3: "Risk Intelligence — checking regulatory and financial filings"
+        };
+        const speciality = agentSpeciality[msg.loop] || "";
+        status.innerHTML = `<span class="agent-dot"></span>${msg.message || "Working..."}`;
+
+        // Add the speciality label as a subtle line below the status
+        // Only show if we know which agent this is
+        if (speciality) {
+          const findingsEl = document.getElementById("agentFindings");
+          if (findingsEl) {
+            // Remove any previous speciality label before adding new one
+            const prev = document.getElementById("agentSpecialityLabel");
+            if (prev) prev.remove();
+
+            const label = document.createElement("div");
+            label.id = "agentSpecialityLabel";
+            label.style.cssText = "font-family:var(--mono);font-size:9px;color:var(--text3);padding:4px 0 8px;letter-spacing:0.5px;border-bottom:1px solid var(--border);margin-bottom:8px;";
+            label.textContent = speciality;
+            // Insert at top of findings, above previous results
+            findingsEl.insertBefore(label, findingsEl.firstChild);
+          }
+        }
       }
 
       else if (phase === "complete") {
@@ -1348,6 +1418,157 @@
         if (container) container.style.display = "none";
       }
     }
+    // ── FIND LEADS ────────────────────────────────────────────────────────
+    // Called when user clicks the Find Leads button.
+    // Sends the current query to /find-leads and renders the scored results.
+
+    // Stores the last searched query so findLeads knows what to score
+    let lastQuery = "";
+
+    async function findLeads() {
+      if (!lastQuery) return;
+
+      const btn        = document.getElementById("leadBtn");
+      const results    = document.getElementById("leadResults");
+
+      btn.disabled     = true;
+      btn.textContent  = "Scanning for leads...";
+      results.innerHTML = `
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:12px 0;">
+          Scoring mentions for buying intent — takes about 30 seconds...
+        </div>`;
+
+      try {
+        const token = getToken();
+        const res   = await fetch(
+          `${API_BASE}/find-leads?query=${encodeURIComponent(lastQuery)}&token=${encodeURIComponent(token)}`
+        );
+        const data  = await res.json();
+
+        if (data.error) {
+          results.innerHTML = `<div class="error-msg">${data.error}</div>`;
+          return;
+        }
+
+        renderLeads(data);
+
+      } catch(err) {
+        console.error("Lead gen error:", err);
+        results.innerHTML = `<div class="error-msg">Could not fetch leads. Please try again.</div>`;
+      } finally {
+        btn.disabled    = false;
+        btn.textContent = "⚡ Find Leads — who needs this right now";
+      }
+    }
+
+    function renderLeads(data) {
+      const results = document.getElementById("leadResults");
+
+      if (!data.leads || data.leads.length === 0) {
+        results.innerHTML = `
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:12px 0;">
+            No high-intent leads found in the top ${data.scanned || 8} mentions.
+            Try a more specific query — e.g. "plumbers London" instead of "plumbers".
+          </div>`;
+        return;
+      }
+
+      // Intent score colour — higher score = more urgent = amber
+      const scoreColor = { 3:"#92400e", 4:"var(--amber)", 5:"#dc2626" };
+      const scoreBg    = { 3:"#fffbeb", 4:"var(--amber-light)", 5:"#fff1f2" };
+      const scoreBorder = { 3:"#fde68a", 4:"var(--amber-mid)", 5:"#fecdd3" };
+
+      let html = `
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);
+                    padding:4px 0 12px;letter-spacing:0.5px;">
+          ${data.total} leads found from ${data.scanned} mentions scored
+        </div>`;
+
+      data.leads.forEach((lead, i) => {
+        const sc = lead.intent_score || 3;
+        const col    = scoreColor[sc]    || scoreColor[3];
+        const bg     = scoreBg[sc]       || scoreBg[3];
+        const border = scoreBorder[sc]   || scoreBorder[3];
+
+        html += `
+          <div style="
+            background:var(--white);
+            border:1px solid ${border};
+            border-left:3px solid ${col};
+            border-radius:5px;
+            padding:16px 20px;
+            margin-bottom:10px;
+          ">
+            <!-- Intent score badge -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <span style="
+                font-family:var(--mono);font-size:9px;font-weight:600;
+                letter-spacing:1px;text-transform:uppercase;
+                color:var(--white);background:${col};
+                padding:2px 8px;border-radius:2px;
+              ">Intent ${sc}/5</span>
+              <span style="font-family:var(--mono);font-size:9px;color:${col};">
+                ${lead.score_label || ""}
+              </span>
+              <span style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-left:auto;">
+                ${lead.source || ""}
+              </span>
+            </div>
+
+            <!-- The original mention -->
+            <div style="font-size:12px;color:var(--text3);margin-bottom:10px;
+                        font-style:italic;line-height:1.5;">
+              "${lead.mention || ""}"
+            </div>
+
+            <!-- The pain -->
+            <div style="margin-bottom:10px;">
+              <span style="font-family:var(--mono);font-size:9px;color:var(--text3);
+                           letter-spacing:0.5px;text-transform:uppercase;">The Pain</span>
+              <div style="font-size:13px;color:var(--text2);margin-top:4px;line-height:1.6;">
+                ${lead.pain || ""}
+              </div>
+            </div>
+
+            <!-- The pitch — copyable -->
+            <div>
+              <span style="font-family:var(--mono);font-size:9px;color:var(--teal);
+                           letter-spacing:0.5px;text-transform:uppercase;">Ready-to-send pitch</span>
+              <div style="
+                font-size:13px;color:var(--text);margin-top:6px;line-height:1.7;
+                background:var(--teal-light);border:1px solid var(--teal-mid);
+                border-radius:4px;padding:12px 14px;
+              ">${lead.pitch || ""}</div>
+              <!-- Copy button -->
+              <button onclick="copyPitch(this, '${(lead.pitch || "").replace(/'/g, "\\'").replace(/\n/g, " ")}')"
+                style="
+                  font-family:var(--mono);font-size:9px;color:var(--teal);
+                  background:none;border:1px solid var(--teal-mid);border-radius:3px;
+                  padding:3px 10px;margin-top:6px;cursor:pointer;letter-spacing:0.3px;
+                ">Copy pitch</button>
+            </div>
+          </div>`;
+      });
+
+      results.innerHTML = html;
+    }
+
+    function copyPitch(btn, text) {
+      // Copies the pitch to clipboard
+      // navigator.clipboard is the modern API — works in all browsers
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = "Copied";
+        setTimeout(() => { btn.textContent = "Copy pitch"; }, 2000);
+      }).catch(() => {
+        btn.textContent = "Copy failed";
+      });
+    }
+
+    // ── SHOW LEAD BUTTON AFTER SEARCH COMPLETES ───────────────────────────
+    // We need to store the query and show the lead section after results render.
+    // This hooks into renderResults — find the line container.innerHTML = html;
+    // and add the two lines below it.
+
   </script>
 </body>
 </html>
