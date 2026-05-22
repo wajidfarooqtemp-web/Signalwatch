@@ -578,14 +578,12 @@
           Who actually needs this right now — scored by intent
         </span>
       </div>
-
+<!-- Lead results appear here after button click -->
       <div id="leadResults"></div>
     </div>
 
-      <!-- Lead results appear here after button click -->
-      <div id="leadResults"></div>
-
-    </div>
+      
+      
     <div id="agentPanel" style="display:none;">
       <div class="agent-card">
         <div class="agent-header">
@@ -1657,17 +1655,6 @@
         setTimeout(() => { btn.textContent = "Copy pitch"; }, 2000);
       }).catch(() => {
         btn.textContent = "Select and copy manually";
-      });
-    }
-
-    function copyPitch(btn, text) {
-      // Copies the pitch to clipboard
-      // navigator.clipboard is the modern API — works in all browsers
-      navigator.clipboard.writeText(text).then(() => {
-        btn.textContent = "Copied";
-        setTimeout(() => { btn.textContent = "Copy pitch"; }, 2000);
-      }).catch(() => {
-        btn.textContent = "Copy failed";
       });
     }
 
