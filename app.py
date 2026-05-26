@@ -2666,11 +2666,11 @@ async def add_security_headers(request: Request, call_next):
     if not client_ip:
         client_ip = request.client.host if request.client else "unknown"
 
-    # Allow health check pings without counting against the limit
-    if request.url.path != "/":
+    # Skip rate limiting for OPTIONS requests — these are CORS preflight checks
+    # Blocking them breaks all cross-origin requests from the browser
+    if request.url.path != "/" and request.method != "OPTIONS":
         now = datetime.now()
         cutoff = now - timedelta(hours=1)
-        # Remove timestamps older than 1 hour (sliding window)
         _ip_log[client_ip] = [t for t in _ip_log[client_ip] if t > cutoff]
 
         if len(_ip_log[client_ip]) >= 60:
@@ -2699,8 +2699,10 @@ async def add_security_headers(request: Request, call_next):
         "font-src https://fonts.gstatic.com; "
         "connect-src 'self' "
         "https://signalwatch-r6s8.onrender.com "
+        "https://signalwatch-production.up.railway.app "
         "https://accounts.google.com "
-        "https://oauth2.googleapis.com; "
+        "https://oauth2.googleapis.com "
+        "https://api-gateway.umami.dev; "
         "frame-src https://accounts.google.com; "
         "img-src 'self' data: https:; "
         "frame-ancestors 'none'"

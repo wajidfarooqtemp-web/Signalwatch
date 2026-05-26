@@ -3,30 +3,6 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <!--
-    Content Security Policy — browser-level whitelist.
-    Even if an attacker injects a script tag, the browser refuses to run it
-    unless the source is on this list. Blocks XSS at the browser level.
-    This works alongside the CSP header the backend sends.
-  -->
-  <meta http-equiv="Content-Security-Policy"
-        content="
-          default-src 'self';
-          script-src 'self' 'unsafe-inline'
-            https://cdnjs.cloudflare.com
-            https://cdn.jsdelivr.net
-            https://cloud.umami.is
-            https://accounts.google.com;
-          style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-          font-src https://fonts.gstatic.com;
-          connect-src 'self'
-            https://signalwatch-r6s8.onrender.com
-            https://accounts.google.com
-            https://oauth2.googleapis.com;
-          frame-src https://accounts.google.com;
-          img-src 'self' data: https:;
-          frame-ancestors 'none';
-        ">
   <title>Signalwatch — Brand Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
