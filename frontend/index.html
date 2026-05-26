@@ -497,7 +497,14 @@
     <div class="results-wrap">
       <div class="loading" id="loading">
         <div class="loading-text" id="loadingText">Scanning sources and analysing patterns</div>
-        <div class="loading-bar"><div class="loading-fill"></div></div>
+        <div class="loading-bar" style="margin-bottom: 20px;"><div class="loading-fill"></div></div>
+        
+        <div style="position:relative; width:100%; max-width:500px; height:100px; background:#0f172a; border:1px solid #1e293b; border-radius:6px; overflow:hidden; margin: 0 auto 20px;">
+            <canvas id="curveCanvas" style="width:100%; height:100%; display:block;"></canvas>
+        </div>
+
+        <div id="feed-matrix" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:400px; margin:0 auto 20px; text-align: left;"></div>
+
         <div id="liveProgress" style="margin:16px auto 0;max-width:300px;text-align:left;"></div>
       </div>
       <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
@@ -765,9 +772,19 @@
     // appear to hang. fetch() with streaming reads chunks as they arrive
     // and gives us control over when to parse each line.
     // This is more reliable on Railway than native EventSource.
+    // Global toggle for the curve canvas animation loop
+    let isAnimating = false;
+
     async function runSearch() {
       const query = document.getElementById("queryInput").value.trim();
       if (!query) return;
+      
+      // Clear out active streaming panels
+      const feedMatrix = document.getElementById("feed-matrix");
+      if (feedMatrix) feedMatrix.innerHTML = "";
+      
+      // Start generating interactive visual waves
+      isAnimating = true;
 
       // After first search, unauthenticated users see the Google login modal
       const searchCount = parseInt(localStorage.getItem("sw_count") || "0");
@@ -858,13 +875,27 @@
             // ping events are keepalives — ignore them silently
             if (msg.type === "ping") continue;
             if (msg.type === "progress") {
+              const count = msg.count;
+              
+              // STRATEGIC FILTER: Hide "none" or "0" sources completely from the dynamic grid
+              if (count && count !== "none" && parseInt(count) > 0) {
+                const feedMatrix = document.getElementById("feed-matrix");
+                if (feedMatrix) {
+                  let formattedLabel = msg.label.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  let cell = document.getElementById(`source-matrix-${msg.label}`);
+                  if (!cell) {
+                    cell = document.createElement('div');
+                    cell.id = `source-matrix-${msg.label}`;
+                    cell.style = "background:var(--white); padding:10px 14px; border:1px solid var(--border); border-radius:4px; display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:11px; box-shadow:0 1px 3px rgba(0,0,0,0.02);";
+                    feedMatrix.appendChild(cell);
+                  }
+                  cell.innerHTML = `<span style="color:var(--text2)">${formattedLabel}</span> <span style="color:var(--teal); font-weight:600;">+${count} signals</span>`;
+                }
+              }
+
+              // Fallback text logger preservation
               const lineEl = document.createElement("div");
-              lineEl.style.cssText = [
-                "display:flex", "justify-content:space-between",
-                "font-family:var(--mono)", "font-size:11px",
-                "color:" + (msg.count > 0 ? "var(--teal)" : "var(--text3)"),
-                "padding:2px 0"
-              ].join(";");
+              lineEl.style.cssText = ["display:flex", "justify-content:space-between", "font-family:var(--mono)", "font-size:11px", "color:" + (msg.count > 0 ? "var(--teal)" : "var(--text3)"), "padding:2px 0"].join(";");
               lineEl.innerHTML = `<span>${msg.label}</span><span>${msg.count > 0 ? msg.count+" signals" : "none"}</span>`;
               progress.appendChild(lineEl);
             }
@@ -904,6 +935,7 @@
 
             else if (msg.type === "complete") {
               // Main results done — render them
+              isAnimating = false;
               loading.style.display = "none";
               progress.innerHTML = "";
               document.getElementById("loadingText").textContent = "Scanning sources and analysing patterns";
@@ -1638,7 +1670,67 @@
     // We need to store the query and show the lead section after results render.
     // This hooks into renderResults — find the line container.innerHTML = html;
     // and add the two lines below it.
+// ── HIGH-END CANVAS RENDERING PATH ENGINE ──
+    const canvas = document.getElementById('curveCanvas');
+    const ctx = canvas?.getContext('2d');
+    let particles = [];
 
+    function resizeCanvas() { 
+      if (canvas) { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; } 
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function createSpark() {
+      return { 
+        x: 0, 
+        y: canvas ? canvas.height / 2 : 50, 
+        progress: 0, 
+        speed: 0.006 + Math.random() * 0.008, 
+        cp1y: Math.random() * (canvas ? canvas.height : 100), 
+        cp2y: Math.random() * (canvas ? canvas.height : 100), 
+        color: Math.random() > 0.5 ? '#22d3ee' : '#a78bfa' 
+      };
+    }
+
+    function renderCurves() {
+      if (!canvas || !ctx) return;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.18)'; // Deep Slate Blue alpha fade trail
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      if (isAnimating && Math.random() < 0.25) {
+        particles.push(createSpark());
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i]; 
+        p.progress += p.speed;
+        
+        let cp1x = canvas.width * 0.3, cp2x = canvas.width * 0.7;
+        ctx.beginPath(); 
+        ctx.strokeStyle = 'rgba(51, 65, 85, 0.15)';
+        ctx.moveTo(0, canvas.height / 2); 
+        ctx.bezierCurveTo(cp1x, p.cp1y, cp2x, p.cp2y, canvas.width, canvas.height / 2); 
+        ctx.stroke();
+
+        let t = p.progress;
+        let cx = (1-t)**3 * 0 + 3*(1-t)**2 * t * cp1x + 3*(1-t) * t**2 * cp2x + t**3 * canvas.width;
+        let cy = (1-t)**3 * (canvas.height/2) + 3*(1-t)**2 * t * p.cp1y + 3*(1-t) * t**2 * p.cp2y + t**3 * (canvas.height/2);
+
+        ctx.beginPath(); 
+        ctx.fillStyle = p.color; 
+        ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); 
+        ctx.shadowBlur = 10; 
+        ctx.shadowColor = p.color; 
+        ctx.fill(); 
+        ctx.shadowBlur = 0;
+
+        if (p.progress >= 1) particles.splice(i, 1);
+      }
+      requestAnimationFrame(renderCurves);
+    }
+    // Launch background thread monitoring
+    setTimeout(renderCurves, 100);
   </script>
 </body>
 </html>
