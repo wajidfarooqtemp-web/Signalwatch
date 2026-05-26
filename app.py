@@ -2660,6 +2660,15 @@ async def add_security_headers(request: Request, call_next):
     Referrer-Policy: stops search queries leaking to third parties
     Strict-Transport-Security: forces HTTPS, prevents SSL stripping
     """
+    # Allow Vercel frontend to stream data from this Render backend
+    if request.method == "OPTIONS":
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Origin"] = "https://signalwatch.vercel.app"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
+
+    # IP rate limit — 60 requests per hour per IP
     # IP rate limit — 60 requests per hour per IP
     # Gets the real client IP from Render's proxy headers
     client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
