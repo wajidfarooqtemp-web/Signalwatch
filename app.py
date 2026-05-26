@@ -2733,9 +2733,11 @@ async def add_security_headers(request: Request, call_next):
         "max-age=31536000; includeSubDomains"
     )
 
-    # Remove headers that reveal server information to attackers
-    response.headers.pop("Server", None)
-    response.headers.pop("X-Powered-By", None)
+    # Remove headers that reveal server information to attackers safely
+    if "Server" in response.headers:
+        response.headers.delete("Server")
+    if "X-Powered-By" in response.headers:
+        response.headers.delete("X-Powered-By")
 
     return response
     
