@@ -496,16 +496,20 @@
 
     <div class="results-wrap">
       <div class="loading" id="loading">
-        <div class="loading-text" id="loadingText">Scanning sources and analysing patterns</div>
-        <div class="loading-bar" style="margin-bottom: 20px;"><div class="loading-fill"></div></div>
+        <div class="loading-text" id="loadingText" style="margin-bottom: 12px;">Scanning sources and analysing patterns</div>
+        <div class="loading-bar" style="margin-bottom: 24px;"><div class="loading-fill"></div></div>
         
-        <div style="position:relative; width:100%; max-width:500px; height:100px; background:#0f172a; border:1px solid #1e293b; border-radius:6px; overflow:hidden; margin: 0 auto 20px;">
-            <canvas id="curveCanvas" style="width:100%; height:100%; display:block;"></canvas>
+        <div style="position:relative; width:100%; max-width:750px; height:360px; background:#0f121a; border:1px solid #1e2230; border-radius:8px; overflow:hidden; margin: 0 auto 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);">
+            <canvas id="sseCurveCanvas"></canvas>
+            <div style="position: absolute; top: 15px; left: 15px; color: #3de6c8; font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; font-weight: 500; display: flex; align-items: center; gap: 6px;">
+                <span style="width: 6px; height: 6px; background: #3de6c8; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite;"></span>
+                SYSTEM REALTIME SIGNAL MATRIX
+            </div>
         </div>
 
-        <div id="feed-matrix" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:400px; margin:0 auto 20px; text-align: left;"></div>
+        <div id="feed-matrix" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:500px; margin:0 auto 20px; text-align: left;"></div>
 
-        <div id="liveProgress" style="margin:16px auto 0;max-width:300px;text-align:left;"></div>
+        <div id="liveProgress" style="margin:16px auto 0;max-width:300px;text-align:left; display: none;"></div>
       </div>
       <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
          Hidden on page load. Becomes visible when the first agent event arrives.
@@ -876,7 +880,10 @@
             if (msg.type === "ping") continue;
             if (msg.type === "progress") {
               const count = msg.count;
-              
+              // Visual Network Pulse Wire Hook
+              if (msg.source && window.triggerSignalPulse) {
+                window.triggerSignalPulse(msg.source);
+              }
               // STRATEGIC FILTER: Hide "none" or "0" sources completely from the dynamic grid
               if (count && count !== "none" && parseInt(count) > 0) {
                 const feedMatrix = document.getElementById("feed-matrix");
@@ -1670,67 +1677,132 @@
     // We need to store the query and show the lead section after results render.
     // This hooks into renderResults — find the line container.innerHTML = html;
     // and add the two lines below it.
-// ── HIGH-END CANVAS RENDERING PATH ENGINE ──
-    const canvas = document.getElementById('curveCanvas');
-    const ctx = canvas?.getContext('2d');
-    let particles = [];
+// ── HIGH-END BALANCED S-CURVE NETWORK ENGINE ──
+    const curveCanvas = document.getElementById('sseCurveCanvas');
+    const curveCtx = curveCanvas?.getContext('2d');
+    let pathPulses = [];
 
-    function resizeCanvas() { 
-      if (canvas) { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; } 
+    function resizeCurveCanvas() {
+        if (curveCanvas) {
+            curveCanvas.width = curveCanvas.parentElement.clientWidth;
+            curveCanvas.height = curveCanvas.parentElement.clientHeight;
+        }
     }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+    window.addEventListener('resize', resizeCurveCanvas);
+    resizeCurveCanvas();
 
-    function createSpark() {
-      return { 
-        x: 0, 
-        y: canvas ? canvas.height / 2 : 50, 
-        progress: 0, 
-        speed: 0.006 + Math.random() * 0.008, 
-        cp1y: Math.random() * (canvas ? canvas.height : 100), 
-        cp2y: Math.random() * (canvas ? canvas.height : 100), 
-        color: Math.random() > 0.5 ? '#22d3ee' : '#a78bfa' 
-      };
-    }
-
-    function renderCurves() {
-      if (!canvas || !ctx) return;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.18)'; // Deep Slate Blue alpha fade trail
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      if (isAnimating && Math.random() < 0.25) {
-        particles.push(createSpark());
-      }
-
-      for (let i = particles.length - 1; i >= 0; i--) {
-        let p = particles[i]; 
-        p.progress += p.speed;
+    // Symmetrical geometric layout map matching all 11 active data sources
+    const curveNodes = [
+        { id: 'youtube', label: 'YouTube', side: 'left', yOffset: -110, color: '#be123c' },
+        { id: 'newsapi', label: 'News', side: 'left', yOffset: -66, color: '#0d7a6b' },
+        { id: 'reddit', label: 'Reddit', side: 'left', yOffset: -22, color: '#c2410c' },
+        { id: 'hackernews', label: 'Tech Forums', side: 'left', yOffset: 22, color: '#92400e' },
+        { id: 'trustpilot', label: 'Trustpilot', side: 'left', yOffset: 66, color: '#007b5e' },
+        { id: 'rss', label: 'RSS Feeds', side: 'left', yOffset: 110, color: '#15803d' },
         
-        let cp1x = canvas.width * 0.3, cp2x = canvas.width * 0.7;
-        ctx.beginPath(); 
-        ctx.strokeStyle = 'rgba(51, 65, 85, 0.15)';
-        ctx.moveTo(0, canvas.height / 2); 
-        ctx.bezierCurveTo(cp1x, p.cp1y, cp2x, p.cp2y, canvas.width, canvas.height / 2); 
-        ctx.stroke();
+        { id: 'appstore', label: 'App Store', side: 'right', yOffset: -110, color: '#0066cc' },
+        { id: 'playstore', label: 'Play Store', side: 'right', yOffset: -66, color: '#1a7340' },
+        { id: 'googlenews', label: 'Google News', side: 'right', yOffset: -22, color: '#ea4335' },
+        { id: 'newsdata', label: 'Global News', side: 'right', yOffset: 22, color: '#0369a1' },
+        { id: 'wikipedia', label: 'Wikipedia', side: 'right', yOffset: 66, color: '#6d28d9' },
+        { id: 'mastodon', label: 'Mastodon', side: 'right', yOffset: 110, color: '#563acc' }
+    ];
 
-        let t = p.progress;
-        let cx = (1-t)**3 * 0 + 3*(1-t)**2 * t * cp1x + 3*(1-t) * t**2 * cp2x + t**3 * canvas.width;
-        let cy = (1-t)**3 * (canvas.height/2) + 3*(1-t)**2 * t * p.cp1y + 3*(1-t) * t**2 * p.cp2y + t**3 * (canvas.height/2);
-
-        ctx.beginPath(); 
-        ctx.fillStyle = p.color; 
-        ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); 
-        ctx.shadowBlur = 10; 
-        ctx.shadowColor = p.color; 
-        ctx.fill(); 
-        ctx.shadowBlur = 0;
-
-        if (p.progress >= 1) particles.splice(i, 1);
-      }
-      requestAnimationFrame(renderCurves);
+    // Cubic Bezier structural rendering mapping equations
+    function getBezierPoint(start, cp1, cp2, end, t) {
+        return {
+            x: Math.pow(1 - t, 3) * start.x + 3 * Math.pow(1 - t, 2) * t * cp1.x + 3 * (1 - t) * Math.pow(T, 2) * cp2.x + Math.pow(t, 3) * end.x,
+            y: Math.pow(1 - t, 3) * start.y + 3 * Math.pow(1 - t, 2) * T * cp1.y + 3 * (1 - T) * Math.pow(T, 2) * cp2.y + Math.pow(t, 3) * end.y
+        }.replace ? null : {
+            x: Math.pow(1 - t, 3) * start.x + 3 * Math.pow(1 - t, 2) * t * cp1.x + 3 * (1 - t) * Math.pow(t, 2) * cp2.x + Math.pow(t, 3) * end.x,
+            y: Math.pow(1 - t, 3) * start.y + 3 * Math.pow(1 - t, 2) * t * cp1.y + 3 * (1 - t) * Math.pow(t, 2) * cp2.y + Math.pow(t, 3) * end.y
+        };
     }
-    // Launch background thread monitoring
-    setTimeout(renderCurves, 100);
+
+    function renderCurveNetwork() {
+        if (!curveCanvas || !curveCtx) return;
+
+        // Premium dark visual trailing alpha refresh setup
+        curveCtx.fillStyle = 'rgba(15, 18, 26, 0.22)';
+        curveCtx.fillRect(0, 0, curveCanvas.width, curveCanvas.height);
+
+        const cx = curveCanvas.width / 2;
+        const cy = curveCanvas.height / 2;
+        const horizDistance = curveCanvas.width > 600 ? 220 : 140;
+
+        curveNodes.forEach(node => {
+            node.x = node.side === 'left' ? cx - horizDistance : cx + horizDistance;
+            node.y = cy + node.yOffset;
+
+            // Generate beautifully curved control handles
+            node.cp1 = { x: node.side === 'left' ? node.x + 90 : node.x - 90, y: node.y };
+            node.cp2 = { x: node.side === 'left' ? cx - 60 : cx + 60, y: cy };
+            node.end = { x: cx, y: cy };
+
+            // Draw clean path architecture layout guides
+            curveCtx.beginPath();
+            curveCtx.moveTo(node.x, node.y);
+            curveCtx.bezierCurveTo(node.cp1.x, node.cp1.y, node.cp2.x, node.cp2.y, node.end.x, node.end.y);
+            curveCtx.strokeStyle = node.color + '18'; // Ghost tracing line profiles
+            curveCtx.lineWidth = 1.5;
+            curveCtx.stroke();
+
+            // Symmetrical node coordinates painting
+            curveCtx.beginPath();
+            curveCtx.arc(node.x, node.y, 4, 0, Math.PI * 2);
+            curveCtx.fillStyle = node.color;
+            curveCtx.fill();
+
+            // Monospaced text alignment formatting rules
+            curveCtx.fillStyle = '#94a3b8';
+            curveCtx.font = '10px "DM Mono", monospace';
+            curveCtx.textAlign = node.side === 'left' ? 'right' : 'left';
+            curveCtx.fillText(node.label, node.side === 'left' ? node.x - 12 : node.x + 12, node.y + 3.5);
+        });
+
+        // Compute active moving tracking data streams
+        for (let i = pathPulses.length - 1; i >= 0; i--) {
+            let p = pathPulses[i];
+            p.progress += 0.025; // Controls the transit speed across vectors
+
+            const pos = getBezierPoint({ x: p.node.x, y: p.node.y }, p.node.cp1, p.node.cp2, p.node.end, p.progress);
+
+            curveCtx.beginPath();
+            curveCtx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
+            curveCtx.fillStyle = p.node.color;
+            curveCtx.shadowBlur = 12;
+            curveCtx.shadowColor = p.node.color;
+            curveCtx.fill();
+            curveCtx.shadowBlur = 0;
+
+            if (p.progress >= 1) pathPulses.splice(i, 1);
+        }
+
+        // Concentric Core Platform Branding Hub Target Ring (SW Core)
+        curveCtx.beginPath();
+        curveCtx.arc(cx, cy, 14, 0, Math.PI * 2);
+        curveCtx.fillStyle = '#1e2028';
+        curveCtx.strokeStyle = isAnimating ? '#3de6c8' : '#475569';
+        curveCtx.lineWidth = 2;
+        curveCtx.fill();
+        curveCtx.stroke();
+        
+        curveCtx.fillStyle = isAnimating ? '#3de6c8' : '#94a3b8';
+        curveCtx.font = 'bold 9px "DM Sans", sans-serif';
+        curveCtx.textAlign = 'center';
+        curveCtx.fillText('SW', cx, cy + 3);
+
+        requestAnimationFrame(renderCurveNetwork);
+    }
+    setTimeout(renderCurveNetwork, 100);
+
+    // Global communication routing engine hook
+    window.triggerSignalPulse = function(sourceId) {
+        const target = curveNodes.find(n => n.id === sourceId);
+        if (target) {
+            pathPulses.push({ node: target, progress: 0 });
+        }
+    };
   </script>
 </body>
 </html>
