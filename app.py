@@ -295,86 +295,129 @@ def consume_lead_allowance(token: str):
 #            0 means we do not know the date
 
 def fetch_reddit(query):
-    # Uses Reddit's own public JSON API — no API key needed.
-    # reddit.com/search.json is a public endpoint that works from any server.
-    # The only requirement is a custom User-Agent header — Reddit blocks
-    # requests that use the default "python-requests" user agent.
+    """
+    Fetches Reddit posts using their public JSON API.
+    
+    Why the 403 happens:
+    Reddit checks the User-Agent header. If it looks like a script
+    (like Python's default "python-requests/2.x"), Reddit blocks it.
+    We fix this by sending headers that look like a real Chrome browser.
+    
+    Fallback strategy:
+    We try the main reddit.com search first.
+    If that returns 403, we try old.reddit.com — a simpler version
+    of Reddit that is less aggressively protected.
+    We try both before giving up.
+    """
     results = []
 
-    try:
-        cutoff = datetime.now() - timedelta(days=90)
+    # These headers make our request look like it comes from Chrome browser
+    # Reddit checks these and blocks requests that look like scripts
+    browser_headers = {
+        # This is what Chrome 120 sends — Reddit sees it as a real browser
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        # Tell Reddit we accept JSON — without this it sometimes returns HTML
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-GB,en;q=0.9",
+        # These make the request look more like a real browser session
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+    }
 
-        # t=month means last month; we filter stricter below
-        url = (
-            f"https://www.reddit.com/search.json"
+    # Two URLs to try — main Reddit first, old.reddit as fallback
+    # old.reddit.com is the classic interface and is less aggressively protected
+    endpoints = [
+        (
+            "https://www.reddit.com/search.json"
             f"?q={requests.utils.quote(query)}"
-            f"&sort=relevance"
-            f"&t=month"
-            f"&limit=100"
-            f"&raw_json=1"
-        )
+            "&sort=relevance&t=month&limit=100&raw_json=1"
+        ),
+        (
+            "https://old.reddit.com/search.json"
+            f"?q={requests.utils.quote(query)}"
+            "&sort=relevance&t=month&limit=100&raw_json=1"
+        ),
+    ]
 
-        res = requests.get(
-            url,
-            timeout=15,
-            headers={
-                # Reddit requires a descriptive User-Agent
-                # Format: AppName/Version (reason; contact)
-                "User-Agent": "signalwatch/1.0 (brand intelligence tool; contact wajidfarooq3@gmail.com)"
-            }
-        )
+    data = None
+    for url in endpoints:
+        try:
+            res = requests.get(url, timeout=15, headers=browser_headers)
 
-        if res.status_code == 429:
-            print("Reddit: rate limited")
-            return []
+            if res.status_code == 200:
+                # Success — parse and use this response
+                data = res.json()
+                print(f"Reddit: connected via {url[:35]}...")
+                break
 
-        if res.status_code != 200:
-            print(f"Reddit JSON API: status {res.status_code}")
-            return []
-
-        data = res.json()
-        posts = data.get("data", {}).get("children", [])
-
-        if not posts:
-            print(f"Reddit: no results for '{query}'")
-            return []
-
-        seen = set()
-
-        for post in posts:
-            d = post.get("data", {})
-            title = d.get("title", "")
-
-            if not title or title in seen:
-                continue
-            seen.add(title)
-
-            created = d.get("created_utc", 0)
-            try:
-                created = int(float(created))
-            except:
-                created = 0
-
-            if created and datetime.fromtimestamp(created) < cutoff:
+            elif res.status_code == 403:
+                # Blocked — try the next endpoint
+                print(f"Reddit: 403 on {url[:35]}, trying fallback...")
                 continue
 
-            subreddit = d.get("subreddit", "")
-            post_id   = d.get("id", "")
-            post_url  = f"https://reddit.com/r/{subreddit}/comments/{post_id}/" if post_id else ""
+            elif res.status_code == 429:
+                # Rate limited — no point trying again immediately
+                print("Reddit: rate limited")
+                return []
 
-            results.append({
-                "title":   title,
-                "source":  "reddit",
-                "url":     post_url,
-                "created": created
-            })
+            else:
+                print(f"Reddit: status {res.status_code}")
+                continue
 
-        print(f"Reddit (JSON API): {len(results)} posts")
-        return results
+        except Exception as e:
+            print(f"Reddit: error on {url[:35]}: {e}")
+            continue
 
-    except Exception as e:
-        print(f"Reddit JSON API error: {e}")
+    if not data:
+        print("Reddit: all endpoints failed — returning empty")
         return []
+
+    posts = data.get("data", {}).get("children", [])
+
+    if not posts:
+        print(f"Reddit: no results for '{query}'")
+        return []
+
+    cutoff = datetime.now() - timedelta(days=90)
+    seen = set()
+
+    for post in posts:
+        d = post.get("data", {})
+        title = d.get("title", "")
+
+        if not title or title in seen:
+            continue
+        seen.add(title)
+
+        created = d.get("created_utc", 0)
+        try:
+            created = int(float(created))
+        except:
+            created = 0
+
+        if created and datetime.fromtimestamp(created) < cutoff:
+            continue
+
+        subreddit = d.get("subreddit", "")
+        post_id   = d.get("id", "")
+        post_url  = (
+            f"https://reddit.com/r/{subreddit}/comments/{post_id}/"
+            if post_id else ""
+        )
+
+        results.append({
+            "title":   title,
+            "source":  "reddit",
+            "url":     post_url,
+            "created": created
+        })
+
+    print(f"Reddit: {len(results)} posts")
+    return results
 
 
 def fetch_hackernews(query):
@@ -476,41 +519,106 @@ def fetch_newsdata(query):
 
 
 def fetch_rss(query):
-    # Reads RSS feeds from major news outlets
-    # RSS (Really Simple Syndication) is a public format news sites use
-    # No API key needed — it is like a public noticeboard
+    """
+    Reads RSS feeds from major news and industry outlets.
+    
+    Why RSS is your most reliable source:
+    RSS is structured XML — it never blocks, never rate limits,
+    needs no API key, and almost every news site offers it free.
+    Expanding from 5 to 25 feeds significantly increases your signal count.
+    
+    How it works:
+    We fetch each RSS feed, then check every article title for
+    your search keywords. Only articles containing your keywords are kept.
+    This keeps results relevant even from general news feeds.
+    """
     feeds = [
+        # ── UK news ──────────────────────────────────────────────────────────
         "https://feeds.bbci.co.uk/news/rss.xml",
-        "https://feeds.theguardian.com/theguardian/world/rss",
-        "https://feeds.skynews.com/feeds/rss/world.xml",
+        "https://feeds.bbci.co.uk/news/business/rss.xml",
+        "https://feeds.bbci.co.uk/news/technology/rss.xml",
+        "https://feeds.theguardian.com/theguardian/business/rss",
+        "https://feeds.theguardian.com/theguardian/technology/rss",
+        "https://feeds.theguardian.com/theguardian/money/rss",
+        "https://feeds.skynews.com/feeds/rss/business.xml",
+        "https://feeds.skynews.com/feeds/rss/technology.xml",
+        "https://www.independent.co.uk/rss",
+
+        # ── US news ───────────────────────────────────────────────────────────
+        "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
+        "https://feeds.washingtonpost.com/rss/business",
+        "https://feeds.washingtonpost.com/rss/technology",
+
+        # ── International news ────────────────────────────────────────────────
         "https://www.aljazeera.com/xml/rss/all.xml",
+        "https://feeds.reuters.com/reuters/businessNews",
+        "https://feeds.reuters.com/reuters/technologyNews",
+
+        # ── Tech and industry ─────────────────────────────────────────────────
+        # TechCrunch covers startup and tech brand news extensively
+        "https://techcrunch.com/feed/",
+        # The Verge covers consumer tech products and brands
+        "https://www.theverge.com/rss/index.xml",
+        # Wired covers tech culture and brand stories
+        "https://www.wired.com/feed/rss",
+        # Forbes covers business and brand stories
+        "https://www.forbes.com/feeds/forbesrss/",
+
+        # ── Business and consumer ─────────────────────────────────────────────
+        "https://www.ft.com/?format=rss",
+        "https://feeds.skynews.com/feeds/rss/world.xml",
+
+        # ── Global coverage ───────────────────────────────────────────────────
         "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+        "https://feeds.theguardian.com/theguardian/world/rss",
+        "https://www.aljazeera.com/xml/rss/all.xml",
     ]
+
+    # Remove any duplicate feeds that snuck in
+    # dict.fromkeys preserves order while removing duplicates
+    feeds = list(dict.fromkeys(feeds))
+
     results = []
-    keywords = query.lower().split()  # Split query into individual words
+    # Split query into individual keywords for matching
+    # e.g. "nike complaints" → ["nike", "complaints"]
+    keywords = query.lower().split()
 
     for feed_url in feeds:
         try:
-            res = requests.get(feed_url, timeout=8, headers={"User-Agent": "signalwatch/1.0"})
-            # ET.fromstring() parses the XML content of the RSS feed
+            res = requests.get(
+                feed_url,
+                timeout=8,
+                headers={"User-Agent": "signalwatch/1.0"}
+            )
+            if res.status_code != 200:
+                continue
+
+            # ET.fromstring() parses the XML — RSS is just structured XML
             root = ET.fromstring(res.content)
 
-            # RSS feeds contain <item> elements, each being one article
             for item in root.iter("item"):
-                title_el = item.find("title")  # Find the <title> tag inside each item
+                title_el = item.find("title")
+                link_el  = item.find("link")
+
                 if title_el is not None and title_el.text:
                     title = title_el.text.strip()
-                    # Only include articles that contain at least one search keyword
+                    # Only include if at least one search keyword appears
                     if any(k in title.lower() for k in keywords):
+                        link = link_el.text.strip() if link_el and link_el.text else ""
                         results.append({
                             "title":   title,
                             "source":  "rss",
-                            "url":     "",
+                            "url":     link,
                             "created": 0
                         })
-        except Exception as e:
-            print(f"RSS error {feed_url}:", e)
 
+        except Exception as e:
+            # One feed failing does not stop the others
+            print(f"RSS error {feed_url[:40]}: {e}")
+            continue
+
+    print(f"RSS: {len(results)} articles across {len(feeds)} feeds")
     return results
 
 
