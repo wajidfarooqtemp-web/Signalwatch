@@ -495,68 +495,58 @@
     </div>
 
     <div class="results-wrap">
-      <div class="loading" id="loading" style="padding:0;">
+      <div class="loading" id="loading">
+        <div class="loading-text" id="loadingText">Scanning sources...</div>
 
-  <!-- TOP BAR -->
-  <div style="background:#111827;border-bottom:1px solid #1e2630;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;">
-    <div style="font-family:var(--mono);font-size:11px;color:#4b5563;" id="loadingText">Scanning sources...</div>
-    <div style="display:flex;align-items:center;gap:16px;">
-      <div>
-        <div style="font-family:var(--mono);font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.8px;">Sources</div>
-        <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:#3de6c8;line-height:1.1;" id="hw-src-count">0</div>
+        <!--
+          Hub animation — curved coloured lines connecting source nodes
+          to a central hub. Uses your existing CSS colour variables.
+          No black boxes. White/cream background matches your frontend.
+          Lines light up as each source returns results.
+        -->
+        <svg id="hw-svg" viewBox="0 0 560 320"
+             style="max-width:560px;width:100%;margin:8px auto 0;display:block;"
+             aria-hidden="true">
+          <defs>
+            <radialGradient id="hw-glow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#0d7a6b" stop-opacity=".12"/>
+              <stop offset="100%" stop-color="#0d7a6b" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+
+          <!-- Soft glow behind centre -->
+          <circle cx="280" cy="160" r="48" fill="url(#hw-glow)"/>
+
+          <!-- Paths and dots drawn by JS -->
+          <g id="hw-paths"></g>
+          <g id="hw-tdots"></g>
+
+          <!-- Centre hub -->
+          <circle cx="280" cy="160" r="34"
+                  fill="var(--white)" stroke="var(--teal)" stroke-width="1.5"/>
+          <circle cx="280" cy="160" r="28"
+                  fill="var(--white)" stroke="var(--teal)" stroke-width=".5"
+                  stroke-opacity=".4"/>
+          <text x="280" y="156" text-anchor="middle"
+                font-family="DM Mono,monospace" font-size="8"
+                font-weight="700" fill="var(--teal)">SW</text>
+          <text x="280" y="168" text-anchor="middle"
+                font-family="DM Mono,monospace" font-size="6.5"
+                fill="var(--teal)" opacity=".7">Intelligence</text>
+
+          <!-- Source nodes drawn by JS -->
+          <g id="hw-nodes"></g>
+
+          <!-- Signal count label -->
+          <text id="hw-sigcount" x="280" y="210"
+                text-anchor="middle"
+                font-family="DM Mono,monospace" font-size="10"
+                fill="var(--teal)" opacity="0">0 signals</text>
+        </svg>
+
+        <div id="liveProgress"
+             style="margin:8px auto 0;max-width:320px;text-align:left;"></div>
       </div>
-      <div style="width:1px;height:28px;background:#1e2630;"></div>
-      <div>
-        <div style="font-family:var(--mono);font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.8px;">Signals</div>
-        <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:#f5c882;line-height:1.1;" id="hw-sig-count">0</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;color:#3de6c8;">
-        <div style="width:5px;height:5px;border-radius:50%;background:#3de6c8;animation:pulse 1.5s ease-in-out infinite;"></div>
-        Live
-      </div>
-    </div>
-  </div>
-
-  <!-- HUB + FEED -->
-  <div style="display:grid;grid-template-columns:1fr 200px;height:360px;background:#0d1117;">
-
-    <!-- SVG HUB -->
-    <div style="position:relative;overflow:hidden;">
-      <svg id="hw-svg" width="100%" viewBox="0 0 460 340" style="display:block;">
-        <defs>
-          <radialGradient id="hw-rg" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#3de6c8" stop-opacity=".15"/>
-            <stop offset="100%" stop-color="#3de6c8" stop-opacity="0"/>
-          </radialGradient>
-        </defs>
-        <circle cx="230" cy="172" r="52" fill="url(#hw-rg)"/>
-        <circle cx="230" cy="172" r="44" fill="none" stroke="#3de6c8" stroke-width=".5" stroke-opacity=".2"/>
-        <g id="hw-paths"></g>
-        <g id="hw-tdots"></g>
-        <circle cx="230" cy="172" r="32" fill="#0d1117" stroke="#3de6c8" stroke-width="1.5"/>
-        <circle cx="230" cy="172" r="26" fill="#0d1117" stroke="#3de6c8" stroke-width=".5" stroke-opacity=".35"/>
-        <text x="230" y="167" text-anchor="middle" font-family="DM Mono,monospace" font-size="7" font-weight="700" fill="#3de6c8">SignalWatch</text>
-        <text x="230" y="177" text-anchor="middle" font-family="DM Mono,monospace" font-size="6" fill="#3de6c8" opacity=".7">Intelligence Hub</text>
-        <g id="hw-nodes"></g>
-      </svg>
-    </div>
-
-    <!-- LIVE FEED -->
-    <div style="background:#111827;border-left:1px solid #1e2630;display:flex;flex-direction:column;overflow:hidden;">
-      <div style="font-family:var(--mono);font-size:9px;color:#3de6c8;padding:7px 10px;border-bottom:1px solid #1e2630;letter-spacing:.8px;text-transform:uppercase;">Incoming signals</div>
-      <div id="hw-feed" style="flex:1;overflow-y:auto;overflow-x:hidden;">
-        <div style="padding:20px 10px;font-family:var(--mono);font-size:9px;color:#1f2937;text-align:center;">Waiting for signals...</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- LOG BAR -->
-  <div style="background:#080c12;border-top:1px solid #1e2630;padding:7px 14px;height:72px;overflow:hidden;">
-    <div style="font-family:var(--mono);font-size:8px;color:#3de6c8;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;font-weight:700;">Generating AI Briefing: [Streaming...]</div>
-    <div id="hw-log" style="font-family:var(--mono);font-size:9px;color:#374151;line-height:1.6;"></div>
-  </div>
-
-</div>
       <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
          Hidden on page load. Becomes visible when the first agent event arrives.
          Agents 1-3 findings go into #agentFindings.
@@ -705,74 +695,80 @@
     const API_BASE = "https://signalwatch-r6s8.onrender.com";
 
     // ── HUB ANIMATION ─────────────────────────────────────────────────────
-    // Runs during SSE loading. Source nodes light up as each source returns.
-    // Curved bezier paths connect each source to the centre hub.
-    // Travelling dots animate along the curves when signals arrive.
+    // Curved coloured lines from source nodes to centre hub.
+    // Uses existing CSS variables — matches your frontend exactly.
+    // Works on mobile (SVG scales with viewBox).
 
-    const HW_CX=230, HW_CY=172, HW_R=138;
+    const HW={cx:280,cy:160,r:132};
 
-    // 13 sources positioned around the hub by angle
     const HW_SRCS={
       reddit:    {lbl:'Reddit',     col:'#c2410c', ang:-148},
-      hackernews:{lbl:'HackerNews', col:'#d97706', ang:-110},
+      hackernews:{lbl:'HN',         col:'#92400e', ang:-110},
       youtube:   {lbl:'YouTube',    col:'#be123c', ang:-72},
-      newsapi:   {lbl:'NewsAPI',    col:'#0d7a6b', ang:-34},
+      newsapi:   {lbl:'News',       col:'#0d7a6b', ang:-34},
       mastodon:  {lbl:'Mastodon',   col:'#563acc', ang:4},
-      wikipedia: {lbl:'Wikipedia',  col:'#6d28d9', ang:42},
-      trustpilot:{lbl:'Trustpilot', col:'#047857', ang:80},
-      appstore:  {lbl:'App Store',  col:'#1d4ed8', ang:118},
-      playstore: {lbl:'Play Store', col:'#166534', ang:156},
-      googlenews:{lbl:'G.News',     col:'#b91c1c', ang:194},
-      bingnews:  {lbl:'Bing News',  col:'#1e3a8a', ang:232},
+      wikipedia: {lbl:'Wiki',       col:'#6d28d9', ang:42},
+      trustpilot:{lbl:'Trustpilot', col:'#007b5e', ang:80},
+      appstore:  {lbl:'App Store',  col:'#0066cc', ang:118},
+      playstore: {lbl:'Play Store', col:'#1a7340', ang:156},
+      googlenews:{lbl:'G.News',     col:'#ea4335', ang:194},
+      bingnews:  {lbl:'Bing',       col:'#004488', ang:232},
       rss:       {lbl:'RSS',        col:'#15803d', ang:270},
       newsdata:  {lbl:'NewsData',   col:'#0369a1', ang:308},
     };
 
-    function hwNpos(ang){
+    let hwTotalSig=0;
+
+    function hwPos(ang){
       const r=Math.PI/180;
-      return{x:HW_CX+HW_R*Math.cos(ang*r), y:HW_CY+HW_R*Math.sin(ang*r)};
+      return{
+        x:HW.cx+HW.r*Math.cos(ang*r),
+        y:HW.cy+HW.r*Math.sin(ang*r)
+      };
     }
 
-    // Control point for quadratic bezier — creates the curve
-    // Offset perpendicular to the line so each curve bows outward slightly
-    function hwCtrl(ax,ay,bx,by){
-      const mx=(ax+bx)/2, my=(ay+by)/2;
-      const dx=bx-ax, dy=by-ay;
+    // Control point bows the line outward — creates the curve
+    function hwCtrl(ax,ay){
+      const mx=(ax+HW.cx)/2, my=(ay+HW.cy)/2;
+      const dx=HW.cx-ax, dy=HW.cy-ay;
       const len=Math.sqrt(dx*dx+dy*dy)||1;
-      return{x:mx+(-dy/len*28), y:my+(dx/len*28)};
+      // Perpendicular offset
+      return{x:mx+(-dy/len*32), y:my+(dx/len*32)};
     }
 
-    // Point on bezier curve at parameter t (0=start, 1=end)
-    function hwBezPt(ax,ay,qx,qy,bx,by,t){
+    // Position on bezier at t=0..1
+    function hwBez(ax,ay,qx,qy,t){
       const it=1-t;
-      return{x:it*it*ax+2*it*t*qx+t*t*bx, y:it*it*ay+2*it*t*qy+t*t*by};
+      return{
+        x:it*it*ax+2*it*t*qx+t*t*HW.cx,
+        y:it*it*ay+2*it*t*qy+t*t*HW.cy
+      };
     }
 
-    // Build all SVG elements once when page loads
     function hwInit(){
-      const svg=document.getElementById('hw-svg');
-      if(!svg)return;
       const pathsG=document.getElementById('hw-paths');
       const dotsG=document.getElementById('hw-tdots');
       const nodesG=document.getElementById('hw-nodes');
       if(!pathsG||!dotsG||!nodesG)return;
 
       Object.entries(HW_SRCS).forEach(([id,s])=>{
-        const p=hwNpos(s.ang);
-        const cp=hwCtrl(p.x,p.y,HW_CX,HW_CY);
+        const p=hwPos(s.ang);
+        const cp=hwCtrl(p.x,p.y);
 
-        // Curved path — dashed and dim until source returns
+        // Curved dashed path — dim until source returns
         const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-        path.setAttribute('d',`M${p.x},${p.y} Q${cp.x},${cp.y} ${HW_CX},${HW_CY}`);
+        path.setAttribute('d',
+          `M${p.x.toFixed(1)},${p.y.toFixed(1)} Q${cp.x.toFixed(1)},${cp.y.toFixed(1)} ${HW.cx},${HW.cy}`
+        );
         path.setAttribute('fill','none');
         path.setAttribute('stroke',s.col);
         path.setAttribute('stroke-width','1');
-        path.setAttribute('stroke-opacity','.15');
-        path.setAttribute('stroke-dasharray','3 4');
+        path.setAttribute('stroke-opacity','.18');
+        path.setAttribute('stroke-dasharray','4 5');
         path.id='hwp-'+id;
         pathsG.appendChild(path);
 
-        // Travelling dot — follows the curve when signals arrive
+        // Travelling dot
         const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
         dot.setAttribute('r','3.5');
         dot.setAttribute('fill',s.col);
@@ -780,171 +776,108 @@
         dot.id='hwd-'+id;
         dotsG.appendChild(dot);
 
-        // Node group — dim until source returns
+        // Node group
         const g=document.createElementNS('http://www.w3.org/2000/svg','g');
         g.id='hwn-'+id;
-        g.style.opacity='.2';
+        g.style.opacity='.22';
         g.style.transition='opacity .5s';
 
-        // Glow ring
-        const glow=document.createElementNS('http://www.w3.org/2000/svg','circle');
-        glow.setAttribute('cx',p.x);glow.setAttribute('cy',p.y);
-        glow.setAttribute('r','21');
-        glow.setAttribute('fill',s.col);glow.setAttribute('fill-opacity','.06');
-
-        // Main circle
+        // Circle — white fill matches frontend background
         const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
         c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);
-        c.setAttribute('r','16');
-        c.setAttribute('fill','#0d1117');
-        c.setAttribute('stroke',s.col);c.setAttribute('stroke-width','1.2');
+        c.setAttribute('r','18');
+        c.setAttribute('fill','var(--white,#fff)');
+        c.setAttribute('stroke',s.col);
+        c.setAttribute('stroke-width','1.3');
 
-        // Source name
+        // Label
         const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-        t.setAttribute('x',p.x);t.setAttribute('y',p.y-2);
+        t.setAttribute('x',p.x);t.setAttribute('y',p.y-1);
         t.setAttribute('text-anchor','middle');
+        t.setAttribute('dominant-baseline','middle');
         t.setAttribute('font-family','DM Mono,monospace');
-        t.setAttribute('font-size','6.5');t.setAttribute('font-weight','700');
+        t.setAttribute('font-size','7');
+        t.setAttribute('font-weight','700');
         t.setAttribute('fill',s.col);
-        t.textContent=s.lbl.split(' ')[0];
+        t.textContent=s.lbl;
 
-        // Signal count
+        // Count
         const ct=document.createElementNS('http://www.w3.org/2000/svg','text');
-        ct.setAttribute('x',p.x);ct.setAttribute('y',p.y+8);
+        ct.setAttribute('x',p.x);ct.setAttribute('y',p.y+10);
         ct.setAttribute('text-anchor','middle');
         ct.setAttribute('font-family','DM Mono,monospace');
-        ct.setAttribute('font-size','5.5');ct.setAttribute('opacity','.7');
+        ct.setAttribute('font-size','6');
+        ct.setAttribute('opacity','.7');
         ct.setAttribute('fill',s.col);
-        ct.id='hwct-'+id;ct.textContent='—';
+        ct.id='hwct-'+id;
+        ct.textContent='';
 
-        g.appendChild(glow);g.appendChild(c);g.appendChild(t);g.appendChild(ct);
+        g.appendChild(c);g.appendChild(t);g.appendChild(ct);
         nodesG.appendChild(g);
       });
     }
 
-    // Animate a dot travelling from source node along the curve to hub centre
     function hwAnimDot(id){
       const s=HW_SRCS[id]; if(!s)return;
-      const p=hwNpos(s.ang);
-      const cp=hwCtrl(p.x,p.y,HW_CX,HW_CY);
+      const p=hwPos(s.ang);
+      const cp=hwCtrl(p.x,p.y);
       const dot=document.getElementById('hwd-'+id); if(!dot)return;
       let t=0;
       dot.setAttribute('opacity','1');
       const iv=setInterval(()=>{
-        t+=0.032;
+        t+=0.03;
         if(t>=1){clearInterval(iv);dot.setAttribute('opacity','0');return;}
-        const pt=hwBezPt(p.x,p.y,cp.x,cp.y,HW_CX,HW_CY,t);
-        dot.setAttribute('cx',pt.x);dot.setAttribute('cy',pt.y);
-        // Fade dot as it approaches hub
-        dot.setAttribute('opacity',t<0.8?'1':String(1-(t-0.8)/0.2));
+        const pt=hwBez(p.x,p.y,cp.x,cp.y,t);
+        dot.setAttribute('cx',pt.x.toFixed(1));
+        dot.setAttribute('cy',pt.y.toFixed(1));
+        // Fade near hub
+        dot.setAttribute('opacity',t<0.8?'1':((1-t)/0.2).toFixed(2));
       },14);
     }
 
-    // Light up a source when SSE progress event arrives
-    // Called from the existing progress handler in runSearch()
     function hwLightSource(id,count){
       const node=document.getElementById('hwn-'+id);
       const path=document.getElementById('hwp-'+id);
       const ctEl=document.getElementById('hwct-'+id);
-
       if(node)node.style.opacity='1';
-      if(ctEl)ctEl.textContent=count>0?count+' sig':'0 sig';
-
+      if(ctEl)ctEl.textContent=count>0?count:'0';
       if(count>0){
-        // Solid bright line
         if(path){
-          path.setAttribute('stroke-opacity','.75');
-          path.setAttribute('stroke-width','1.5');
+          path.setAttribute('stroke-opacity','.8');
+          path.setAttribute('stroke-width','1.8');
           path.setAttribute('stroke-dasharray','none');
         }
         hwAnimDot(id);
+        // Update signal counter
+        hwTotalSig+=count;
+        const lbl=document.getElementById('hw-sigcount');
+        if(lbl){
+          lbl.textContent=hwTotalSig+' signals';
+          lbl.setAttribute('opacity','1');
+        }
       } else {
-        if(path){path.setAttribute('stroke-opacity','.2');}
-      }
-
-      // Update top bar counters
-      const srcEl=document.getElementById('hw-src-count');
-      const sigEl=document.getElementById('hw-sig-count');
-      if(srcEl)srcEl.textContent=parseInt(srcEl.textContent||0)+1;
-      if(sigEl){
-        const prev=parseInt(sigEl.textContent.replace(/,/g,'')||0);
-        const target=prev+count;
-        let cur=prev;
-        const step=Math.max(1,Math.ceil(count/15));
-        const t=setInterval(()=>{
-          cur=Math.min(cur+step,target);
-          sigEl.textContent=cur.toLocaleString();
-          if(cur>=target)clearInterval(t);
-        },30);
+        if(path)path.setAttribute('stroke-opacity','.15');
       }
     }
 
-    // Add item to live feed panel
-    function hwAddFeed(label,count){
-      const feed=document.getElementById('hw-feed'); if(!feed)return;
-      const s=Object.values(HW_SRCS).find(x=>x.lbl.split(' ')[0]===label.split(' ')[0])||{col:'#4b5563'};
-
-      // Clear "waiting" placeholder on first item
-      if(feed.children.length===1&&feed.firstChild.style.textAlign==='center'){
-        feed.innerHTML='';
-      }
-
-      const d=document.createElement('div');
-      d.style.cssText='padding:6px 10px;border-bottom:1px solid #1a2030;opacity:0;transform:translateY(5px);transition:opacity .3s,transform .3s;cursor:pointer;';
-      d.innerHTML=`
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
-          <div style="width:5px;height:5px;border-radius:50%;background:${s.col};flex-shrink:0;"></div>
-          <div style="font-family:var(--mono);font-size:9px;font-weight:600;color:#9ca3af;">${label}</div>
-          <div style="font-family:var(--mono);font-size:8px;color:#374151;margin-left:auto;">${count>0?count+' signals':'no results'}</div>
-        </div>
-        <div style="font-family:var(--mono);font-size:8px;color:#374151;">just now</div>`;
-      feed.insertBefore(d,feed.firstChild);
-      requestAnimationFrame(()=>{d.style.opacity='1';d.style.transform='translateY(0)';});
-      while(feed.children.length>15)feed.removeChild(feed.lastChild);
-    }
-
-    // Add line to the AI briefing log at the bottom
-    const hwLogLines=[
-      'Analysing co-occurrence patterns across all signals...',
-      'Cross-referencing sentiment clusters by source...',
-      'Identifying highest-signal mentions for briefing...',
-      'Generating intelligence briefing from pattern data...',
-    ];
-    let hwLogIdx=0;
-    function hwAddLog(){
-      const log=document.getElementById('hw-log'); if(!log)return;
-      if(hwLogIdx>=hwLogLines.length)return;
-      const d=document.createElement('div');
-      d.style.cssText='opacity:0;transition:opacity .35s;font-family:DM Mono,monospace;font-size:9px;color:#4b5563;';
-      d.textContent=hwLogLines[hwLogIdx++];
-      log.appendChild(d);
-      requestAnimationFrame(()=>d.style.opacity='1');
-      while(log.children.length>3)log.removeChild(log.firstChild);
-    }
-
-    // Reset hub animation at start of each search
     function hwReset(){
-      hwLogIdx=0;
-      const srcEl=document.getElementById('hw-src-count');
-      const sigEl=document.getElementById('hw-sig-count');
-      if(srcEl)srcEl.textContent='0';
-      if(sigEl)sigEl.textContent='0';
-      const feed=document.getElementById('hw-feed');
-      if(feed)feed.innerHTML='<div style="padding:20px 10px;font-family:var(--mono);font-size:9px;color:#1f2937;text-align:center;">Waiting for signals...</div>';
-      const log=document.getElementById('hw-log');
-      if(log)log.innerHTML='';
-      // Reset all nodes and paths
+      hwTotalSig=0;
+      const lbl=document.getElementById('hw-sigcount');
+      if(lbl){lbl.textContent='0 signals';lbl.setAttribute('opacity','0');}
       Object.keys(HW_SRCS).forEach(id=>{
-        const node=document.getElementById('hwn-'+id);
-        const path=document.getElementById('hwp-'+id);
+        const n=document.getElementById('hwn-'+id);
+        const p=document.getElementById('hwp-'+id);
         const ct=document.getElementById('hwct-'+id);
-        if(node){node.style.opacity='.2';}
-        if(path){path.setAttribute('stroke-opacity','.15');path.setAttribute('stroke-width','1');path.setAttribute('stroke-dasharray','3 4');}
-        if(ct)ct.textContent='—';
+        if(n)n.style.opacity='.22';
+        if(p){
+          p.setAttribute('stroke-opacity','.18');
+          p.setAttribute('stroke-width','1');
+          p.setAttribute('stroke-dasharray','4 5');
+        }
+        if(ct)ct.textContent='';
       });
     }
 
-    // Initialise SVG on page load
     hwInit();
     const sourceLabels = {
       reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
@@ -1159,11 +1092,7 @@
             // ping events are keepalives — ignore them silently
             if (msg.type === "ping") continue;
             if (msg.type === "progress") {
-              // Light up the hub node for this source
               hwLightSource(msg.source, msg.count || 0);
-              // Add to live feed panel
-              hwAddFeed(msg.label, msg.count || 0);
-              // Update loading text
               document.getElementById("loadingText").textContent =
                 "Scanning " + msg.label + "...";
             }
