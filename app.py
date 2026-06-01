@@ -240,26 +240,32 @@ def increment_count(token):
 # This creates the table if it does not exist
 setup_db()
 
-def check_lead_allowance(token: str) -> bool:
+def try_consume_lead_allowance(token: str) -> bool:
     """
-    Returns True if this token has NOT yet used their lead scan.
-    Returns False if they have — block them.
+    Atomically checks and consumes the lead allowance in one DB round-trip.
+    Returns True if the token was allowed (first use).
+    Returns False if already used.
     """
     conn = get_db()
     if not conn:
-        return True  # If DB is down, allow rather than block real users
+        return True  # Fail open if DB is down
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT 1 FROM lead_scans WHERE token = %s",
+            """INSERT INTO lead_scans (token)
+               VALUES (%s)
+               ON CONFLICT (token) DO NOTHING""",
             (token,)
         )
-        row = cur.fetchone()
+        # rowcount == 1 means the row was inserted (first use)
+        # rowcount == 0 means it already existed (already used)
+        allowed = cur.rowcount == 1
+        conn.commit()
         cur.close()
         conn.close()
-        return row is None  # None means not used yet — allow
+        return allowed
     except Exception as e:
-        print(f"check_lead_allowance error: {e}")
+        print(f"try_consume_lead_allowance error: {e}")
         return True
 
 def consume_lead_allowance(token: str):
@@ -296,128 +302,96 @@ def consume_lead_allowance(token: str):
 
 def fetch_reddit(query):
     """
-    Fetches Reddit posts using their public JSON API.
-    
-    Why the 403 happens:
-    Reddit checks the User-Agent header. If it looks like a script
-    (like Python's default "python-requests/2.x"), Reddit blocks it.
-    We fix this by sending headers that look like a real Chrome browser.
-    
-    Fallback strategy:
-    We try the main reddit.com search first.
-    If that returns 403, we try old.reddit.com — a simpler version
-    of Reddit that is less aggressively protected.
-    We try both before giving up.
+    Reddit via RSS — replaced JSON API (which 403s from Render datacenter IPs).
+    Reddit's search.rss endpoint is served via CDN and not IP-blocked.
+    Returns same dict format as before so nothing else needs changing.
     """
     results = []
+    try:
+        # Atom namespace — Reddit RSS uses the Atom feed standard
+        # Every tag in the XML is prefixed with this namespace
+        ATOM = "http://www.w3.org/2005/Atom"
 
-    # These headers make our request look like it comes from Chrome browser
-    # Reddit checks these and blocks requests that look like scripts
-    browser_headers = {
-        # This is what Chrome 120 sends — Reddit sees it as a real browser
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        # Tell Reddit we accept JSON — without this it sometimes returns HTML
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-GB,en;q=0.9",
-        # These make the request look more like a real browser session
-        "Accept-Encoding": "gzip, deflate, br",
-        "DNT": "1",
-    }
-
-    # Two URLs to try — main Reddit first, old.reddit as fallback
-    # old.reddit.com is the classic interface and is less aggressively protected
-    endpoints = [
-        (
-            "https://www.reddit.com/search.json"
+        url = (
+            f"https://www.reddit.com/search.rss"
             f"?q={requests.utils.quote(query)}"
-            "&sort=relevance&t=month&limit=100&raw_json=1"
-        ),
-        (
-            "https://old.reddit.com/search.json"
-            f"?q={requests.utils.quote(query)}"
-            "&sort=relevance&t=month&limit=100&raw_json=1"
-        ),
-    ]
-
-    data = None
-    for url in endpoints:
-        try:
-            res = requests.get(url, timeout=15, headers=browser_headers)
-
-            if res.status_code == 200:
-                # Success — parse and use this response
-                data = res.json()
-                print(f"Reddit: connected via {url[:35]}...")
-                break
-
-            elif res.status_code == 403:
-                # Blocked — try the next endpoint
-                print(f"Reddit: 403 on {url[:35]}, trying fallback...")
-                continue
-
-            elif res.status_code == 429:
-                # Rate limited — no point trying again immediately
-                print("Reddit: rate limited")
-                return []
-
-            else:
-                print(f"Reddit: status {res.status_code}")
-                continue
-
-        except Exception as e:
-            print(f"Reddit: error on {url[:35]}: {e}")
-            continue
-
-    if not data:
-        print("Reddit: all endpoints failed — returning empty")
-        return []
-
-    posts = data.get("data", {}).get("children", [])
-
-    if not posts:
-        print(f"Reddit: no results for '{query}'")
-        return []
-
-    cutoff = datetime.now() - timedelta(days=90)
-    seen = set()
-
-    for post in posts:
-        d = post.get("data", {})
-        title = d.get("title", "")
-
-        if not title or title in seen:
-            continue
-        seen.add(title)
-
-        created = d.get("created_utc", 0)
-        try:
-            created = int(float(created))
-        except:
-            created = 0
-
-        if created and datetime.fromtimestamp(created) < cutoff:
-            continue
-
-        subreddit = d.get("subreddit", "")
-        post_id   = d.get("id", "")
-        post_url  = (
-            f"https://reddit.com/r/{subreddit}/comments/{post_id}/"
-            if post_id else ""
+            f"&sort=relevance&t=month&limit=100"
         )
 
-        results.append({
-            "title":   title,
-            "source":  "reddit",
-            "url":     post_url,
-            "created": created
-        })
+        res = requests.get(
+            url,
+            timeout=15,
+            headers={
+                # Reddit still requires a descriptive User-Agent even for RSS
+                "User-Agent": "signalwatch/1.0 (brand intelligence; contact wajidfarooqtemp@gmail.com)"
+            }
+        )
 
-    print(f"Reddit: {len(results)} posts")
-    return results
+        if res.status_code == 429:
+            print("Reddit RSS: rate limited")
+            return []
+        if res.status_code != 200:
+            print(f"Reddit RSS: status {res.status_code}")
+            return []
+        if not res.content:
+            print("Reddit RSS: empty response")
+            return []
+
+        root = ET.fromstring(res.content)
+        cutoff = datetime.now() - timedelta(days=90)
+        seen = set()
+
+        # Atom feeds use <entry> not <item>
+        for entry in root.iter(f"{{{ATOM}}}entry"):
+
+            # Title is in <title> with Atom namespace
+            title_el = entry.find(f"{{{ATOM}}}title")
+            if title_el is None or not title_el.text:
+                continue
+            title = title_el.text.strip()
+            if not title or title in seen:
+                continue
+            seen.add(title)
+
+            # URL is in <link href="..."> — it's an attribute, not text
+            link_el = entry.find(f"{{{ATOM}}}link")
+            post_url = link_el.get("href", "") if link_el is not None else ""
+
+            # Published date is in <updated> or <published>
+            date_el = (
+                entry.find(f"{{{ATOM}}}updated") or
+                entry.find(f"{{{ATOM}}}published")
+            )
+            ts = 0
+            if date_el is not None and date_el.text:
+                try:
+                    # Atom dates are ISO 8601: 2024-01-15T12:00:00+00:00
+                    dt_str = date_el.text.strip()
+                    # Remove timezone offset for naive comparison
+                    dt_str = dt_str[:19]
+                    dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
+                    if dt < cutoff:
+                        continue
+                    ts = int(dt.timestamp())
+                except Exception:
+                    pass  # Keep post even if date parse fails
+
+            results.append({
+                "title":   title,
+                "source":  "reddit",
+                "url":     post_url,
+                "created": ts
+            })
+
+        print(f"Reddit RSS: {len(results)} posts")
+        return results
+
+    except ET.ParseError as e:
+        print(f"Reddit RSS: XML parse error: {e}")
+        return []
+    except Exception as e:
+        print(f"Reddit RSS error: {e}")
+        return []
 
 
 def fetch_hackernews(query):
@@ -1026,7 +1000,10 @@ def fetch_google_news(query):
         root = ET.fromstring(res.content)
 
         # Google News RSS: channel > item > title + pubDate
-        cutoff = datetime.now() - timedelta(days=30)  # Last 30 days only
+        # Google News RSS already only contains recent articles.
+        # We do not apply a hard cutoff — if date parsing fails for any reason,
+        # we still include the article rather than silently dropping it.
+        # The ts=0 default is safe — it just won't show on the timeline chart.
 
         for item in root.iter("item"):
             title_el = item.find("title")
@@ -1037,21 +1014,20 @@ def fetch_google_news(query):
                 continue
 
             title = title_el.text.strip()
-
-            # Parse publication date
             ts = 0
+
             if date_el and date_el.text:
                 try:
-                    # Google News date format: "Mon, 21 Apr 2026 10:00:00 GMT"
                     from email.utils import parsedate_to_datetime
                     dt = parsedate_to_datetime(date_el.text)
-                    # Make datetime naive (remove timezone info) for comparison
-                    dt_naive = dt.replace(tzinfo=None)
-                    if dt_naive < cutoff:
-                        continue
                     ts = int(dt.timestamp())
+                    # Only filter if we're confident the article is genuinely old
+                    # Use 90 days to match other sources, not 30
+                    cutoff = datetime.now() - timedelta(days=90)
+                    if dt.replace(tzinfo=None) < cutoff:
+                        continue
                 except Exception:
-                    pass
+                    pass  # Date unclear — include the article anyway
 
             url_text = link_el.text if link_el and link_el.text else ""
 
@@ -1144,6 +1120,11 @@ def fetch_wikipedia(query):
     url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={requests.utils.quote(search_term)}&limit=3&format=json"
     try:
         res = requests.get(url, timeout=8)
+        # Wikipedia occasionally returns 200 with empty body
+        # json() on empty string raises "Expecting value: line 1 column 1"
+        if not res.content or not res.content.strip():
+            print("Wikipedia: empty response body")
+            return results
         data = res.json()
         # Wikipedia returns: [query, [titles], [descriptions], [urls]]
         for title, desc in zip(data[1], data[2]):
@@ -2026,7 +2007,7 @@ async def context_agent(query: str) -> dict:
             lambda: requests.get(
                 crossref_url,
                 timeout=10,
-                headers={"User-Agent": "signalwatch/1.0 (mailto:wajidfarooq3@gmail.com)"}
+                headers={"User-Agent": "signalwatch/1.0 (mailto:wajidfarooqtemp@gmail.com)"}
             )
         )
         if res.status_code == 200:
@@ -2125,7 +2106,7 @@ async def risk_agent(query: str) -> dict:
             lambda: requests.get(
                 edgar_url,
                 timeout=10,
-                headers={"User-Agent": "signalwatch/1.0 wajidfarooq3@gmail.com"}
+                headers={"User-Agent": "signalwatch/1.0 wajidfarooqtemp@gmail.com"}
             )
         )
         if res.status_code == 200:
@@ -2136,7 +2117,13 @@ async def risk_agent(query: str) -> dict:
                 names  = source.get("display_names", [])
                 ftype  = source.get("form_type", "")
                 fdate  = source.get("file_date", "")
-                name   = names[0].get("name", "") if names else query
+                # names[0] is sometimes a string, sometimes a dict depending on EDGAR's response
+                # We handle both cases defensively
+                if names:
+                    first = names[0]
+                    name = first.get("name", "") if isinstance(first, dict) else str(first)
+                else:
+                    name = query
                 if name:
                     findings.append({
                         "title":   f"[SEC Filing {fdate}] {name} — Form {ftype}",
@@ -2685,14 +2672,8 @@ async def find_leads(query: str, request: Request, token: str = ""):
     # One lead generation per token. Ever. Not per day — ever.
     # This prevents abuse and creates urgency to pay for more.
     # We store used tokens in a separate table so it survives server restarts.
-    if not check_lead_allowance(resolved_token):
-        return {
-            "error":      "used",
-            "leads":      [],
-            "message":    "You have used your one free lead scan."
-        }
-    # Mark this token as having used their lead scan
-    consume_lead_allowance(resolved_token)
+    if not try_consume_lead_allowance(resolved_token):
+        return {"error": "used", "leads": [], "message": "You have used your one free lead scan."}
 
     try:
         # Fetch from the three fastest sources in parallel
@@ -2842,10 +2823,13 @@ async def add_security_headers(request: Request, call_next):
     )
 
     # Remove headers that reveal server information to attackers safely
-    if "Server" in response.headers:
-        response.headers.delete("Server")
-    if "X-Powered-By" in response.headers:
-        response.headers.delete("X-Powered-By")
+    # MutableHeaders does not have .delete() — use dict-style deletion
+    # Wrapped in try/except because some headers are read-only in certain contexts
+    for header in ["Server", "X-Powered-By"]:
+        try:
+            del response.headers[header]
+        except Exception:
+            pass
 
     return response
     
