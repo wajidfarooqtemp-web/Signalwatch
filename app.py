@@ -526,8 +526,7 @@ def fetch_rss(query):
 
         # ── International news ────────────────────────────────────────────────
         "https://www.aljazeera.com/xml/rss/all.xml",
-        "https://feeds.reuters.com/reuters/businessNews",
-        "https://feeds.reuters.com/reuters/technologyNews",
+        "https://feeds.reuters.com/reuters/businessNews".replace("feeds.reuters.com", "news.google.com/rss/search?q=reuters+business"),
 
         # ── Tech and industry ─────────────────────────────────────────────────
         # TechCrunch covers startup and tech brand news extensively
@@ -1120,10 +1119,8 @@ def fetch_wikipedia(query):
     url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={requests.utils.quote(search_term)}&limit=3&format=json"
     try:
         res = requests.get(url, timeout=8)
-        # Wikipedia occasionally returns 200 with empty body
-        # json() on empty string raises "Expecting value: line 1 column 1"
+        # Wikipedia sometimes returns 200 with empty body — guard before parsing
         if not res.content or not res.content.strip():
-            print("Wikipedia: empty response body")
             return results
         data = res.json()
         # Wikipedia returns: [query, [titles], [descriptions], [urls]]

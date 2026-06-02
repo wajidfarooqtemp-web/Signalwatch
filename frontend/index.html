@@ -1360,7 +1360,8 @@
     // This means it can never be overwritten by Agent 1-3 events.
 
     function handleAgent4Update(msg) {
-      // Show the Agent 4 container
+      // Agent 4 (Competitor Intelligence) has its own container
+      // Kept completely separate from agents 1-3
       const container = document.getElementById("agent4Container");
       if (container) container.style.display = "block";
 
@@ -1371,33 +1372,8 @@
       const phase = msg.phase || "";
 
       if (phase === "investigating") {
-        // Show agent speciality so users understand what each agent does
-        // These match the actual backend agents exactly
-        const agentSpeciality = {
-          1: "Signal Intelligence — scanning Reddit, news and forums",
-          2: "Research Intelligence — searching academic papers and sources",
-          3: "Risk Intelligence — checking regulatory and financial filings"
-        };
-        const speciality = agentSpeciality[msg.loop] || "";
-        status.innerHTML = `<span class="agent-dot"></span>${msg.message || "Working..."}`;
-
-        // Add the speciality label as a subtle line below the status
-        // Only show if we know which agent this is
-        if (speciality) {
-          const findingsEl = document.getElementById("agentFindings");
-          if (findingsEl) {
-            // Remove any previous speciality label before adding new one
-            const prev = document.getElementById("agentSpecialityLabel");
-            if (prev) prev.remove();
-
-            const label = document.createElement("div");
-            label.id = "agentSpecialityLabel";
-            label.style.cssText = "font-family:var(--mono);font-size:9px;color:var(--text3);padding:4px 0 8px;letter-spacing:0.5px;border-bottom:1px solid var(--border);margin-bottom:8px;";
-            label.textContent = speciality;
-            // Insert at top of findings, above previous results
-            findingsEl.insertBefore(label, findingsEl.firstChild);
-          }
-        }
+        // Just update the status text — no speciality labels here
+        status.innerHTML = `<span class="agent-dot" style="background:var(--teal);"></span>${msg.message || "Scanning competitors..."}`;
       }
 
       else if (phase === "complete") {
@@ -1409,7 +1385,7 @@
           </div>
         </div>`;
 
-        // Show competitor signals as links
+        // Show up to 3 competitor signals as links
         const f = msg.findings || [];
         if (f.length > 0) {
           html += `<div style="margin-top:6px;">`;
@@ -1418,8 +1394,7 @@
               ? `<a href="${item.url}" target="_blank" rel="noopener">${item.title}</a>`
               : item.title;
             html += `<div class="agent-signal">
-              <span style="font-family:var(--mono);font-size:9px;
-                           color:var(--teal);margin-right:6px;">Competitor</span>
+              <span style="font-family:var(--mono);font-size:9px;color:var(--teal);margin-right:6px;">Competitor</span>
               ${title}
             </div>`;
           });
@@ -1432,8 +1407,7 @@
       }
 
       else if (phase === "none") {
-        // Nothing found — hide the container entirely
-        // No empty state needed — absence is cleaner than "nothing found"
+        // Nothing found — hide the container
         if (container) container.style.display = "none";
       }
     }
