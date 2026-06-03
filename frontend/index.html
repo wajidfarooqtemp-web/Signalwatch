@@ -117,8 +117,6 @@
     .results-wrap { max-width:1100px; margin:0 auto; padding:0 40px 80px; }
     .loading { display:none; padding:60px 0; text-align:center; }
     .loading-text { font-family:var(--mono); font-size:12px; color:var(--text3); letter-spacing:0.5px; margin-bottom:16px; }
-    .loading-bar { width:240px; height:2px; background:var(--border); border-radius:2px; margin:0 auto 0; overflow:hidden; }
-    .loading-fill { width:40%; height:100%; background:var(--teal); animation:loadbar 1.4s ease-in-out infinite; }
     @keyframes loadbar { 0%{transform:translateX(-100%)} 100%{transform:translateX(350%)} }
 
     /* BRIEFING */
@@ -364,6 +362,75 @@
       .site-footer { padding:16px; flex-direction:column; align-items:flex-start; }
       .about-hero { padding:40px 16px 36px; }
     }
+    /* Enterprise scan log — each row slides in from left like a terminal */
+@keyframes swRowIn {
+  from { opacity:0; transform:translateX(-6px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+
+/* Source row inside the log */
+.sw-source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  animation: swRowIn 0.18s ease forwards;
+}
+.sw-source-row:last-child { border-bottom: none; }
+
+/* Source name — left side */
+.sw-source-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text2);
+  font-size: 11px;
+}
+
+/* The tick or dash that appears on completion */
+.sw-source-tick {
+  width: 14px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* Signal count — right side */
+.sw-source-count {
+  font-size: 11px;
+  color: var(--text3);
+  min-width: 60px;
+  text-align: right;
+}
+.sw-source-count.has-results {
+  color: var(--teal);
+  font-weight: 500;
+}
+/* Lead intelligence button — enterprise secondary action style */
+.leads-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--teal);
+  background: var(--white);
+  border: 1.5px solid var(--teal);
+  border-radius: 4px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.leads-btn:hover  { background: var(--teal); color: var(--white); }
+.leads-btn:active { background: #0b6859; color: var(--white); }
+.leads-btn:disabled {
+  background: var(--bg2);
+  color: var(--text3);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
   </style>
 </head>
 <body>
@@ -459,7 +526,7 @@
       <div class="stat-strip-inner">
         <div class="stat-item">
           <div class="stat-label">Sources</div>
-          <div class="stat-value teal">11</div>
+          <div class="stat-value teal">13</div>
           <div class="stat-sub">Live data sources</div>
         </div>
         <div class="stat-item">
@@ -497,15 +564,80 @@
 
     <div class="results-wrap">
       <div class="loading" id="loading">
-        <div class="loading-text" id="loadingText">Scanning sources and analysing patterns</div>
-        <div class="loading-bar"><div class="loading-fill"></div></div>
-        <div id="swDots" style="margin:12px auto 0;display:flex;justify-content:center;gap:6px;">
-          <span style="width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block;animation:dotPulse 1.4s ease-in-out infinite;animation-delay:0s"></span>
-          <span style="width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block;animation:dotPulse 1.4s ease-in-out infinite;animation-delay:0.2s"></span>
-          <span style="width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block;animation:dotPulse 1.4s ease-in-out infinite;animation-delay:0.4s"></span>
-        </div>
-        <div id="liveProgress" style="margin:12px auto 0;max-width:300px;text-align:center;"></div>
-      </div>
+
+  <!-- SCAN HEADER — query name + elapsed timer -->
+  <div style="
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:16px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--border);
+  ">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <!-- Steady green dot — not pulsing. Pulsing = uncertainty. Steady = running. -->
+      <span style="
+        width:6px;height:6px;border-radius:50%;
+        background:var(--teal);display:inline-block;
+        flex-shrink:0;
+      "></span>
+      <span style="
+        font-family:var(--mono);font-size:10px;
+        letter-spacing:1.5px;text-transform:uppercase;
+        color:var(--text3);
+      ">Scanning</span>
+      <span id="swQueryLabel" style="
+        font-family:var(--mono);font-size:10px;
+        color:var(--text2);font-weight:500;
+      "></span>
+    </div>
+    <!-- Elapsed timer — enterprise products show time, not fake progress -->
+    <span id="swElapsed" style="
+      font-family:var(--mono);font-size:10px;
+      color:var(--text3);
+    ">0s</span>
+  </div>
+
+  <!-- SOURCE LOG — each source appears as it completes, like a deployment log -->
+  <div id="swSourceLog" style="
+    font-family:var(--mono);
+    font-size:11px;
+    line-height:1;
+    max-height:220px;
+    overflow:hidden;
+  "></div>
+
+  <!-- TOTALS ROW — updates in real time as signals accumulate -->
+  <div style="
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-top:16px;
+    padding-top:12px;
+    border-top:1px solid var(--border);
+  ">
+    <span style="
+      font-family:var(--mono);font-size:10px;
+      letter-spacing:1px;text-transform:uppercase;
+      color:var(--text3);
+    ">Signals collected</span>
+    <span id="swTotalCounter" style="
+      font-family:var(--mono);font-size:13px;
+      font-weight:500;color:var(--teal);
+      letter-spacing:-0.5px;
+    ">0</span>
+  </div>
+
+  <!-- STATUS LINE — changes based on phase -->
+  <div id="loadingText" style="
+    font-family:var(--mono);font-size:10px;
+    color:var(--text3);margin-top:8px;
+    letter-spacing:0.3px;
+  ">Initialising scan...</div>
+
+  <!-- Hidden — still needed for agent event plumbing -->
+  <div id="liveProgress" style="display:none;"></div>
+</div>
       <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
          Hidden on page load. Becomes visible when the first agent event arrives.
          Agents 1-3 findings go into #agentFindings.
@@ -521,45 +653,32 @@
     <!-- LEAD GENERATION SECTION -->
     <div id="leadSection" style="display:none; margin-bottom:16px;">
 
-      <div id="leadBtnWrap" style="margin-bottom:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-
-        <!--
-          The Find Leads button.
-          Ink background with teal accent — deliberately different from
-          every other button on the page so it stands out immediately.
-          The lightning bolt communicates speed and action.
-        -->
-        <button id="leadBtn" onclick="findLeads()" style="
-          font-family:var(--mono);
-          font-size:11px;
-          font-weight:600;
-          letter-spacing:1.5px;
-          text-transform:uppercase;
-          color:#3de6c8;
-          background:var(--ink);
-          border:1.5px solid #3de6c8;
-          border-radius:4px;
-          padding:12px 24px;
-          cursor:pointer;
-          transition:all 0.2s;
-          display:inline-flex;
-          align-items:center;
-          gap:8px;
-        "
-        onmouseover="this.style.background='#3de6c8';this.style.color='var(--ink)'"
-        onmouseout="this.style.background='var(--ink)';this.style.color='#3de6c8'"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <path d="M7.5 1L2 7.5h4.5L5 12l6.5-6.5H7L7.5 1z"
-                  fill="currentColor"/>
-          </svg>
-          Find Leads
-        </button>
-
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">
-          Who actually needs this right now — scored by intent
-        </span>
-      </div>
+      <div id="leadBtnWrap" style="
+  margin-bottom:16px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+  padding:16px 20px;
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:5px;
+">
+  <div style="flex:1;min-width:200px;">
+    <div style="
+      font-family:var(--mono);font-size:9px;
+      letter-spacing:1.5px;text-transform:uppercase;
+      color:var(--text3);margin-bottom:4px;
+    ">Lead Intelligence</div>
+    <div style="
+      font-size:13px;color:var(--text2);
+      font-weight:300;line-height:1.5;
+    ">Score these mentions for buying intent and generate outreach</div>
+  </div>
+  <button id="leadBtn" onclick="findLeads()" class="leads-btn">
+    Find Leads
+  </button>
+</div>
 <!-- Lead results appear here after button click -->
       <div id="leadResults"></div>
     </div>
@@ -597,14 +716,14 @@
       <div id="resultsContainer">
         <div class="empty-state">
           <div class="empty-title">Enter a query above to begin</div>
-          <div class="empty-sub">Signal intelligence from the last 90 days · 11 sources</div>
+          <div class="empty-sub">Signal intelligence from the last 90 days · 13 sources</div>
         </div>
       </div>
     </div>
 
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
-      <span>11 sources · Signal intelligence · Last 90 days · More sources coming</span>
+      <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
   </div>
 
@@ -644,7 +763,7 @@
     </div>
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
-      <span>11 sources · Signal intelligence · Last 90 days · More sources coming</span>
+      <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
   </div>
 
@@ -660,6 +779,12 @@
     };
 
     let signalChart = null;
+    // ── SCAN ANIMATION STATE ──────────────────────────────────────────────────
+    // These track the live scan so the animation stays accurate across sources.
+    let swRunningTotal = 0;   // cumulative signal count shown in totals row
+    let swSourcesDone  = 0;   // how many sources have reported back
+    let swElapsedTimer = null; // interval ID for the elapsed time counter
+    let swElapsedSecs  = 0;   // seconds since scan started
 
     // YOUR Google Client ID from console.cloud.google.com
     const GOOGLE_CLIENT_ID = "710302750053-57riraefjqe9o03rpvutf0t0bqouplqb.apps.googleusercontent.com";
@@ -791,6 +916,18 @@
       btn.disabled = true;
       btn.textContent = "Analysing...";
       loading.style.display = "block";
+      // Start elapsed timer — shows the user real time passing, not fake progress
+      swElapsedTimer = setInterval(() => {
+        swElapsedSecs++;
+        const el = document.getElementById("swElapsed");
+        if (el) el.textContent = swElapsedSecs < 60
+        ? swElapsedSecs + "s"
+        : Math.floor(swElapsedSecs/60) + "m " + (swElapsedSecs%60) + "s";
+      }, 1000);
+
+      // Set the query label in the scan header
+      const ql = document.getElementById("swQueryLabel");
+      if (ql) ql.textContent = '"' + query + '"';
       container.innerHTML = "";
       progress.innerHTML = "";
       document.getElementById("loadingText").textContent = "Scanning sources for " + query;
@@ -864,15 +1001,47 @@
             // ping events are keepalives — ignore them silently
             if (msg.type === "ping") continue;
             if (msg.type === "progress") {
-              document.getElementById("loadingText").textContent = "Scanning " + msg.label + "...";
-            }
+  // Add count to running total
+  swRunningTotal += (msg.count || 0);
+  swSourcesDone  += 1;
+
+  // Update the totals counter
+  const counter = document.getElementById("swTotalCounter");
+  if (counter) counter.textContent = swRunningTotal.toLocaleString();
+
+  // Append a row to the source log
+  const log = document.getElementById("swSourceLog");
+  if (log) {
+    const row = document.createElement("div");
+    row.className = "sw-source-row";
+
+    const hasResults = (msg.count || 0) > 0;
+
+    // Tick = results found. Dash = no results. Both are honest.
+    const tick = hasResults ? "✓" : "–";
+    const tickColor = hasResults ? "var(--teal)" : "var(--border2)";
+
+    row.innerHTML = `
+      <span class="sw-source-name">
+        <span class="sw-source-tick" style="color:${tickColor}">${tick}</span>
+        ${msg.label || msg.source}
+      </span>
+      <span class="sw-source-count ${hasResults ? 'has-results' : ''}">
+        ${hasResults ? msg.count.toLocaleString() + " signals" : "none"}
+      </span>`;
+
+    log.appendChild(row);
+  }
+
+  // Update status line
+  const lt = document.getElementById("loadingText");
+  if (lt) lt.textContent = `Scanning ${msg.label}...`;
+}
 
             else if (msg.type === "analysing") {
-              const lineEl = document.createElement("div");
-              lineEl.style.cssText = "font-family:var(--mono);font-size:11px;color:var(--amber);padding:8px 0 2px;";
-              lineEl.textContent = "Generating intelligence briefing...";
-              progress.appendChild(lineEl);
-            }
+  const lt = document.getElementById("loadingText");
+  if (lt) lt.textContent = "Running pattern analysis and generating briefing...";
+}
             else if (msg.type === "agent_update") {
               // Agents 1-3 events
               handleAgentUpdate(msg);
@@ -901,6 +1070,8 @@
             }
 
             else if (msg.type === "complete") {
+              // Stop the elapsed timer when results arrive
+              if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
               // Main results done — render them
               loading.style.display = "none";
               progress.innerHTML = "";
@@ -1206,6 +1377,27 @@
 
 
     function resetAgentPanel() {
+      // ── Reset scan animation ──────────────────────────────────────────────
+      swRunningTotal = 0;
+      swSourcesDone  = 0;
+      swElapsedSecs  = 0;
+
+      // Clear the source log
+      const log = document.getElementById("swSourceLog");
+      if (log) log.innerHTML = "";
+
+      // Reset totals
+      const counter = document.getElementById("swTotalCounter");
+      if (counter) counter.textContent = "0";
+
+     // Reset elapsed timer display
+      const elapsed = document.getElementById("swElapsed");
+      if (elapsed) elapsed.textContent = "0s";
+
+      // Stop any previous timer
+      if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
+
+    // ... rest of existing resetAgentPanel code continues below
 
       // Hide and clear lead section on new search
       const leadSection = document.getElementById("leadSection");
