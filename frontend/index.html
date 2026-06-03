@@ -459,6 +459,12 @@
     margin-bottom: 0;
   }
 }
+
+@media(max-width:768px) {
+  .about-page [style*="max-width:680px"] { padding-left:0;padding-right:0; }
+  .about-page [style*="grid-template-columns:1fr 1fr 1fr"] { grid-template-columns:1fr!important; }
+  .about-page [style*="grid-template-columns:1fr 1fr 1fr"] > div { border-right:none!important;border-bottom:1px solid var(--border); }
+}
   </style>
 </head>
 <body>
@@ -729,367 +735,126 @@
   <!-- ABOUT PAGE -->
   <div class="about-page" id="aboutPage">
     <!-- ABOUT HERO — company focused, no personal information -->
-    <div class="about-hero">
-      <div class="about-inner" style="flex-direction:column;gap:0;max-width:720px;">
+    <!-- ABOUT HERO -->
+    <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 64px;">
+      <div style="max-width:680px;margin:0 auto;">
 
-        <!-- Eyebrow label -->
-        <div style="
-          font-family:var(--mono);
-          font-size:10px;
-          letter-spacing:2px;
-          text-transform:uppercase;
-          color:var(--teal);
-          margin-bottom:16px;
-        ">Brand Intelligence Platform</div>
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">About</div>
 
-        <!-- Headline -->
-        <h2 style="
-          font-family:var(--serif);
-          font-size:36px;
-          font-weight:800;
-          color:var(--ink);
-          line-height:1.1;
-          letter-spacing:-1px;
-          margin-bottom:20px;
-        ">What Signalwatch does</h2>
+        <h2 style="font-family:var(--serif);font-size:40px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:24px;">Brand intelligence that tells you what to do next.</h2>
 
-        <!-- One paragraph — what it is -->
-        <p style="
-  font-size:15px;
-  color:var(--text2);
-  line-height:1.85;
-  font-weight:300;
-  margin-bottom:16px;
-  max-width:600px;
-">Signalwatch pulls live mentions from 13 sources and tells you what to do about them. Not a summary. Not a chart. One specific action, backed by the signals that support it.</p>
+        <p style="font-size:16px;color:var(--text2);line-height:1.8;font-weight:300;margin-bottom:16px;">Most monitoring tools show you what people are saying. Signalwatch tells you what it means and what to do about it.</p>
 
-<p style="
-  font-size:15px;
-  color:var(--text2);
-  line-height:1.85;
-  font-weight:300;
-  max-width:600px;
-">It is built for brand managers, consultants, and agencies who need to know what is being said about a brand right now, and what it means commercially.</p>
+        <p style="font-size:16px;color:var(--text2);line-height:1.8;font-weight:300;margin-bottom:16px;">It pulls live mentions from 13 sources, runs pattern analysis across all of them, and produces a single briefing with one recommended action. No dashboard to interpret. No report to commission.</p>
+
+        <p style="font-size:16px;color:var(--text2);line-height:1.8;font-weight:300;">Built for brand managers, consultants, and agencies who need to move quickly.</p>
 
       </div>
     </div>
 
-    <!-- METHODOLOGY STRIP — how the system works, step by step -->
-    <div style="
-      background:var(--bg2);
-      border-top:1px solid var(--border);
-      border-bottom:1px solid var(--border);
-    ">
-      <div style="
-        max-width:1100px;
-        margin:0 auto;
-        padding:40px 40px;
-      ">
-        <!-- Section label -->
-        <div style="
-          font-family:var(--mono);
-          font-size:9px;
-          letter-spacing:2px;
-          text-transform:uppercase;
-          color:var(--text3);
-          margin-bottom:28px;
-        ">How it works</div>
+    <!-- HOW IT WORKS — four steps, plain language -->
+    <div style="border-bottom:1px solid var(--border);padding:56px 40px;">
+      <div style="max-width:680px;margin:0 auto;">
 
-        <!-- Four steps in a horizontal row on desktop, stacked on mobile -->
-        <div style="
-          display:grid;
-          grid-template-columns:repeat(4,1fr);
-          gap:0;
-        " id="methodologyGrid">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:32px;">How it works</div>
 
-          <!-- Step 1 -->
-          <div style="padding-right:32px;border-right:1px solid var(--border);margin-right:32px;">
-            <div style="
-              font-family:var(--mono);
-              font-size:9px;
-              letter-spacing:1.5px;
-              text-transform:uppercase;
-              color:var(--teal);
-              margin-bottom:10px;
-            ">01 — Collect</div>
-            <div style="
-              font-size:13px;
-              color:var(--text2);
-              line-height:1.7;
-              font-weight:300;
-            ">13 sources queried live. News, reviews, forums, video, academic, and regulatory. Last 90 days only.</div>
+        <div style="display:flex;flex-direction:column;gap:0;">
+
+          <div style="display:flex;gap:24px;padding:20px 0;border-bottom:1px solid var(--border);">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--teal);flex-shrink:0;padding-top:2px;width:24px;">01</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Collect</div>
+              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">13 sources queried simultaneously. News, reviews, forums, video, academic papers, and regulatory filings. Last 90 days only.</div>
+            </div>
           </div>
 
-          <!-- Step 2 -->
-          <div style="padding-right:32px;border-right:1px solid var(--border);margin-right:32px;">
-            <div style="
-              font-family:var(--mono);
-              font-size:9px;
-              letter-spacing:1.5px;
-              text-transform:uppercase;
-              color:var(--teal);
-              margin-bottom:10px;
-            ">02 — Filter</div>
-            <div style="
-              font-size:13px;
-              color:var(--text2);
-              line-height:1.7;
-              font-weight:300;
-            ">Results scored for relevance. Anything with no keyword match is removed before analysis begins.</div>
+          <div style="display:flex;gap:24px;padding:20px 0;border-bottom:1px solid var(--border);">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--teal);flex-shrink:0;padding-top:2px;width:24px;">02</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Filter</div>
+              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">Every result is scored for relevance. Anything with no keyword match is removed before analysis begins.</div>
+            </div>
           </div>
 
-          <!-- Step 3 -->
-          <div style="padding-right:32px;border-right:1px solid var(--border);margin-right:32px;">
-            <div style="
-              font-family:var(--mono);
-              font-size:9px;
-              letter-spacing:1.5px;
-              text-transform:uppercase;
-              color:var(--teal);
-              margin-bottom:10px;
-            ">03 — Analyse</div>
-            <div style="
-              font-size:13px;
-              color:var(--text2);
-              line-height:1.7;
-              font-weight:300;
-            ">Each result is checked for co-occurring commercial signals. Price and switching in the same mention carries more weight than either word alone.</div>
+          <div style="display:flex;gap:24px;padding:20px 0;border-bottom:1px solid var(--border);">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--teal);flex-shrink:0;padding-top:2px;width:24px;">03</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Analyse</div>
+              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">Each result is checked for co-occurring commercial signals. Price and switching mentioned together in the same post carries more weight than either word alone.</div>
+            </div>
           </div>
 
-          <!-- Step 4 -->
-          <div>
-            <div style="
-              font-family:var(--mono);
-              font-size:9px;
-              letter-spacing:1.5px;
-              text-transform:uppercase;
-              color:var(--teal);
-              margin-bottom:10px;
-            ">04 — Decide</div>
-            <div style="
-              font-size:13px;
-              color:var(--text2);
-              line-height:1.7;
-              font-weight:300;
-            ">The strongest patterns go to an AI layer that writes a two-sentence briefing and one recommended action for the next 48 hours. AI + algorithm interpret the pattern; the signal comes from the market.</div>
+          <div style="display:flex;gap:24px;padding:20px 0;">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--teal);flex-shrink:0;padding-top:2px;width:24px;">04</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Decide</div>
+              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">The strongest patterns go to an AI layer. It writes a two-sentence briefing and one specific action for the next 48 hours.</div>
+            </div>
           </div>
 
         </div>
       </div>
     </div>
 
-    <!-- DATA SOURCES TABLE — credibility through transparency -->
-    <div style="max-width:1100px;margin:0 auto;padding:40px 40px;">
+    <!-- VERSUS TABLE — tight and scannable -->
+    <div style="padding:56px 40px;border-bottom:1px solid var(--border);">
+      <div style="max-width:680px;margin:0 auto;">
 
-      <div style="
-        font-family:var(--mono);
-        font-size:9px;
-        letter-spacing:2px;
-        text-transform:uppercase;
-        color:var(--text3);
-        margin-bottom:24px;
-      ">Data sources</div>
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:28px;">How it differs</div>
 
-      <!-- Two-column grid of source categories -->
-      <div style="
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:0;
-        border:1px solid var(--border);
-        border-radius:5px;
-        overflow:hidden;
-      ">
+        <div style="border:1px solid var(--border);border-radius:5px;overflow:hidden;">
 
-        <!-- Row 1 -->
-        <div style="
-          display:flex;align-items:flex-start;gap:16px;
-          padding:16px 20px;
-          border-bottom:1px solid var(--border);
-          border-right:1px solid var(--border);
-          background:var(--white);
-        ">
-          <div style="min-width:90px;">
-            <span style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;">News</span>
+          <!-- Header -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--bg2);border-bottom:1px solid var(--border);">
+            <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);"></div>
+            <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);border-left:1px solid var(--border);">Other tools</div>
+            <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--teal);border-left:1px solid var(--border);">Signalwatch</div>
           </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;font-weight:300;">
-            NewsAPI, NewsData.io, Google News RSS, Bing News RSS, BBC, Guardian, Reuters, Al Jazeera, NY Times, Washington Post, TechCrunch, Wired, The Verge
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+            <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Output</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Charts</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--teal);">A briefing and one action</div>
           </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+            <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Detection</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Keyword frequency</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Concept co-occurrence</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+            <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Recency</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Often weeks old</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Live, last 90 days</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+            <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Competitors</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Manual search</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Auto-detected</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);">
+            <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Leads</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Not available</div>
+            <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Intent-scored, ready to send</div>
+          </div>
+
         </div>
-
-        <!-- Row 1 col 2 -->
-        <div style="
-          display:flex;align-items:flex-start;gap:16px;
-          padding:16px 20px;
-          border-bottom:1px solid var(--border);
-          background:var(--white);
-        ">
-          <div style="min-width:90px;">
-            <span style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;">Reviews</span>
-          </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;font-weight:300;">
-            Trustpilot, Apple App Store, Google Play Store
-          </div>
-        </div>
-
-        <!-- Row 2 -->
-        <div style="
-          display:flex;align-items:flex-start;gap:16px;
-          padding:16px 20px;
-          border-bottom:1px solid var(--border);
-          border-right:1px solid var(--border);
-          background:var(--white);
-        ">
-          <div style="min-width:90px;">
-            <span style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;">Forums</span>
-          </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;font-weight:300;">
-            Reddit, Hacker News, Mastodon
-          </div>
-        </div>
-
-        <!-- Row 2 col 2 -->
-        <div style="
-          display:flex;align-items:flex-start;gap:16px;
-          padding:16px 20px;
-          border-bottom:1px solid var(--border);
-          background:var(--white);
-        ">
-          <div style="min-width:90px;">
-            <span style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;">Video</span>
-          </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;font-weight:300;">
-            YouTube (last 90 days, sorted by date)
-          </div>
-        </div>
-
-        <!-- Row 3 -->
-        <div style="
-          display:flex;align-items:flex-start;gap:16px;
-          padding:16px 20px;
-          border-right:1px solid var(--border);
-          background:var(--white);
-        ">
-          <div style="min-width:90px;">
-            <span style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;">Research</span>
-          </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;font-weight:300;">
-            Semantic Scholar, CrossRef, Wikipedia (via agent layer)
-          </div>
-        </div>
-
-        <!-- Row 3 col 2 -->
-        <div style="
-          display:flex;align-items:flex-start;gap:16px;
-          padding:16px 20px;
-          background:var(--white);
-        ">
-          <div style="min-width:90px;">
-            <span style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;">Regulatory</span>
-          </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;font-weight:300;">
-            Companies House UK, SEC EDGAR, FDA Warning Letters (via agent layer)
-          </div>
-        </div>
-
       </div>
     </div>
 
-    <!-- DIFFERENTIATOR TABLE — replaces the three emoji cards -->
-    <div style="
-      background:var(--bg2);
-      border-top:1px solid var(--border);
-    ">
-      <div style="max-width:1100px;margin:0 auto;padding:40px 40px 60px;">
-
-        <div style="
-          font-family:var(--mono);
-          font-size:9px;
-          letter-spacing:2px;
-          text-transform:uppercase;
-          color:var(--text3);
-          margin-bottom:24px;
-        ">How Signalwatch differs</div>
-
-        <!-- Comparison table: conventional tools vs Signalwatch -->
-        <div style="
-          border:1px solid var(--border);
-          border-radius:5px;
-          overflow:hidden;
-        ">
-
-          <!-- Header row -->
-          <div style="
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  background:var(--bg2);
-  border-bottom:1px solid var(--border);
-">
-  <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);">Capability</div>
-  <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);border-left:1px solid var(--border);">Conventional tools</div>
-  <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal);border-left:1px solid var(--border);">Signalwatch</div>
-</div>
-
-          <!-- Row 1 -->
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Output</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Charts and volume data</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">A briefing and one action</div>
-</div>
-
-<!-- Row 2 -->
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Signal detection</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Keyword frequency</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Commercial concept co-occurrence</div>
-</div>
-
-<!-- Row 3 -->
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Data recency</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Often weeks old</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Live, last 90 days only</div>
-</div>
-
-<!-- Row 4 -->
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Competitor context</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Manual search</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Automatic via agent layer</div>
-</div>
-
-<!-- Row 5 -->
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Lead generation</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Not available</div>
-  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Intent-scored outreach, ready to send</div>
-</div>
-
+    <!-- CONTACT — minimal, no personal details in the copy -->
+    <div style="padding:48px 40px 72px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;margin-bottom:24px;">Signalwatch is in beta. If you work in brand, communications, or agencies and want to talk, get in touch.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <a href="mailto:wajidfarooq3@gmail.com" style="font-family:var(--sans);font-size:13px;font-weight:500;padding:9px 20px;border-radius:4px;text-decoration:none;border:1.5px solid var(--border2);color:var(--text2);transition:all 0.15s;"
+            onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
+            onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">Get in touch</a>
+          <a href="#" onclick="showPage('search');return false;" style="font-family:var(--sans);font-size:13px;font-weight:500;padding:9px 20px;border-radius:4px;text-decoration:none;background:var(--teal);color:white;border:1.5px solid var(--teal);">Try Signalwatch</a>
         </div>
-
-        <!-- Contact line — no personal name, just a channel -->
-        <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-          <a href="mailto:wajidfarooq3@gmail.com" style="
-            font-size:13px;font-weight:500;
-            padding:9px 20px;border-radius:4px;
-            text-decoration:none;
-            border:1.5px solid var(--border2);
-            color:var(--text2);
-            transition:all 0.15s;
-            font-family:var(--sans);
-          " onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
-             onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
-            Contact
-          </a>
-          <a href="#" onclick="showPage('search');return false;" style="
-            font-size:13px;font-weight:500;
-            padding:9px 20px;border-radius:4px;
-            text-decoration:none;
-            background:var(--teal);color:white;
-            border:1.5px solid var(--teal);
-            font-family:var(--sans);
-          ">Try Signalwatch</a>
-        </div>
-
       </div>
     </div>
     <footer class="site-footer">
