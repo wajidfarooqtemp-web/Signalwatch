@@ -368,16 +368,26 @@
   to   { opacity:1; transform:translateX(0); }
 }
 
-/* Source row inside the log */
-.sw-source-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--border);
-  animation: swRowIn 0.18s ease forwards;
+/* Source pill — appears when a source returns results -->
+/* No border, no count, just the name. Clean. */
+@keyframes swPillIn {
+  from { opacity:0; transform:scale(0.92); }
+  to   { opacity:1; transform:scale(1); }
 }
-.sw-source-row:last-child { border-bottom: none; }
+.sw-source-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--teal);
+  background: var(--teal-light);
+  border: 1px solid var(--teal-mid);
+  border-radius: 3px;
+  padding: 3px 9px;
+  animation: swPillIn 0.2s ease forwards;
+}
+.sw-source-tick { font-size: 9px; }
 
 /* Source name — left side */
 .sw-source-name {
@@ -583,77 +593,48 @@
     <div class="results-wrap">
       <div class="loading" id="loading">
 
-  <!-- SCAN HEADER — query name + elapsed timer -->
+  <!-- Single status line — tells the user what is happening right now -->
+  <!-- No list of sources with zero counts. Just the current one. -->
   <div style="
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:16px;
-    padding-bottom:12px;
-    border-bottom:1px solid var(--border);
-  ">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <!-- Steady green dot — not pulsing. Pulsing = uncertainty. Steady = running. -->
-      <span style="
-        width:6px;height:6px;border-radius:50%;
-        background:var(--teal);display:inline-block;
-        flex-shrink:0;
-      "></span>
-      <span style="
-        font-family:var(--mono);font-size:10px;
-        letter-spacing:1.5px;text-transform:uppercase;
-        color:var(--text3);
-      ">Scanning</span>
-      <span id="swQueryLabel" style="
-        font-family:var(--mono);font-size:10px;
-        color:var(--text2);font-weight:500;
-      "></span>
-    </div>
-    <!-- Elapsed timer — enterprise products show time, not fake progress -->
-    <span id="swElapsed" style="
-      font-family:var(--mono);font-size:10px;
-      color:var(--text3);
-    ">0s</span>
-  </div>
-
-  <!-- SOURCE LOG — each source appears as it completes, like a deployment log -->
-  <div id="swSourceLog" style="
     font-family:var(--mono);
     font-size:11px;
-    line-height:1;
-    max-height:220px;
-    overflow:hidden;
+    color:var(--text3);
+    letter-spacing:0.5px;
+    margin-bottom:28px;
+  " id="loadingText">Starting...</div>
+
+  <!-- The sketch grid — sources appear here as pencil marks -->
+  <!-- Each one is a small pill that fades in when the source returns data -->
+  <!-- Sources with zero results never appear — absence is not failure -->
+  <div id="swSourceLog" style="
+    display:flex;
+    flex-wrap:wrap;
+    gap:7px;
+    min-height:60px;
+    margin-bottom:28px;
+    align-content:flex-start;
   "></div>
 
-  <!-- TOTALS ROW — updates in real time as signals accumulate -->
-  <div style="
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-top:16px;
-    padding-top:12px;
-    border-top:1px solid var(--border);
-  ">
-    <span style="
-      font-family:var(--mono);font-size:10px;
-      letter-spacing:1px;text-transform:uppercase;
-      color:var(--text3);
-    ">Signals collected</span>
+  <!-- Running total — the only number shown during loading -->
+  <!-- Grows steadily which creates forward momentum -->
+  <div style="display:flex;align-items:baseline;gap:8px;">
     <span id="swTotalCounter" style="
-      font-family:var(--mono);font-size:13px;
-      font-weight:500;color:var(--teal);
-      letter-spacing:-0.5px;
+      font-family:var(--serif);
+      font-size:48px;
+      font-weight:700;
+      color:var(--teal);
+      line-height:1;
+      letter-spacing:-2px;
     ">0</span>
+    <span style="
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:2px;
+      text-transform:uppercase;
+      color:var(--text3);
+    ">mentions collected</span>
   </div>
 
-  <!-- STATUS LINE — changes based on phase -->
-  <div id="loadingText" style="
-    font-family:var(--mono);font-size:10px;
-    color:var(--text3);margin-top:8px;
-    letter-spacing:0.3px;
-  ">Initialising scan...</div>
-
-  <!-- Hidden — still needed for agent event plumbing -->
   <div id="liveProgress" style="display:none;"></div>
 </div>
       <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
@@ -774,22 +755,21 @@
 
         <!-- One paragraph — what it is -->
         <p style="
-          font-size:15px;
-          color:var(--text2);
-          line-height:1.85;
-          font-weight:300;
-          margin-bottom:16px;
-          max-width:640px;
-        ">Signalwatch monitors public conversations across news, review platforms, forums, video, and social channels in real time. It does not summarise what people are saying. It identifies the specific patterns that carry commercial weight — the complaint clusters, the unanswered questions, the switching triggers — and produces a single recommended action alongside the raw evidence that supports it.</p>
+  font-size:15px;
+  color:var(--text2);
+  line-height:1.85;
+  font-weight:300;
+  margin-bottom:16px;
+  max-width:600px;
+">Signalwatch pulls live mentions from 13 sources and tells you what to do about them. Not a summary. Not a chart. One specific action, backed by the signals that support it.</p>
 
-        <!-- Second paragraph — why it exists -->
-        <p style="
-          font-size:15px;
-          color:var(--text2);
-          line-height:1.85;
-          font-weight:300;
-          max-width:640px;
-        ">Most brand monitoring tools return data. Signalwatch returns a decision. The difference is not cosmetic. Dashboards require interpretation. Signalwatch removes that step by running pattern analysis on every result and using AI to translate the strongest patterns into a briefing a brand manager can act on in 48 hours.</p>
+<p style="
+  font-size:15px;
+  color:var(--text2);
+  line-height:1.85;
+  font-weight:300;
+  max-width:600px;
+">It is built for brand managers, consultants, and agencies who need to know what is being said about a brand right now, and what it means commercially.</p>
 
       </div>
     </div>
@@ -837,7 +817,7 @@
               color:var(--text2);
               line-height:1.7;
               font-weight:300;
-            ">13 sources are queried simultaneously including news APIs, RSS feeds, review platforms, video, forums, and academic indices. Results from the last 90 days only.</div>
+            ">13 sources queried live. News, reviews, forums, video, academic, and regulatory. Last 90 days only.</div>
           </div>
 
           <!-- Step 2 -->
@@ -855,7 +835,7 @@
               color:var(--text2);
               line-height:1.7;
               font-weight:300;
-            ">Every result is scored for relevance using keyword frequency and phrase matching. Results with no keyword match are removed. The top results by score are passed to analysis.</div>
+            ">Results scored for relevance. Anything with no keyword match is removed before analysis begins.</div>
           </div>
 
           <!-- Step 3 -->
@@ -873,7 +853,7 @@
               color:var(--text2);
               line-height:1.7;
               font-weight:300;
-            ">A co-occurrence algorithm scans each result for combinations of commercial concepts — price, switching, quality, trust, crisis. Results that hit multiple concept groups carry the highest signal weight.</div>
+            ">Each result is checked for co-occurring commercial signals. Price and switching in the same mention carries more weight than either word alone.</div>
           </div>
 
           <!-- Step 4 -->
@@ -891,7 +871,7 @@
               color:var(--text2);
               line-height:1.7;
               font-weight:300;
-            ">The highest-weight patterns are passed to an AI briefing layer that produces two outputs: a plain-English summary of what the data shows, and one specific recommended action for the next 48 hours.</div>
+            ">The strongest patterns go to an AI layer that writes a two-sentence briefing and one recommended action for the next 48 hours. AI + algorithm interpret the pattern; the signal comes from the market.</div>
           </div>
 
         </div>
@@ -1039,49 +1019,50 @@
 
           <!-- Header row -->
           <div style="
-            display:grid;
-            grid-template-columns:1fr 1fr 1fr;
-            background:var(--ink);
-          ">
-            <div style="padding:12px 20px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);">Capability</div>
-            <div style="padding:12px 20px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);border-left:1px solid rgba(255,255,255,0.08);">Conventional tools</div>
-            <div style="padding:12px 20px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#3de6c8;border-left:1px solid rgba(255,255,255,0.08);">Signalwatch</div>
-          </div>
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+">
+  <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);">Capability</div>
+  <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);border-left:1px solid var(--border);">Conventional tools</div>
+  <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal);border-left:1px solid var(--border);">Signalwatch</div>
+</div>
 
           <!-- Row 1 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-            <div style="padding:14px 20px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Output</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Charts and volume data</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--teal);font-weight:500;">A briefing with one recommended action</div>
-          </div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
+  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Output</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Charts and volume data</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">A briefing and one action</div>
+</div>
 
-          <!-- Row 2 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--bg2);border-top:1px solid var(--border);">
-            <div style="padding:14px 20px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Signal detection</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Keyword frequency across all results</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--teal);font-weight:500;">Co-occurrence of commercial concepts within the same mention</div>
-          </div>
+<!-- Row 2 -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
+  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Signal detection</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Keyword frequency</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Commercial concept co-occurrence</div>
+</div>
 
-          <!-- Row 3 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-            <div style="padding:14px 20px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Data recency</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Historical index, often weeks old</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--teal);font-weight:500;">Last 90 days only, queried live at search time</div>
-          </div>
+<!-- Row 3 -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
+  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Data recency</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Often weeks old</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Live, last 90 days only</div>
+</div>
 
-          <!-- Row 4 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--bg2);border-top:1px solid var(--border);">
-            <div style="padding:14px 20px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Competitor context</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Manual search required</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--teal);font-weight:500;">Automatic competitor identification and monitoring via agent layer</div>
-          </div>
+<!-- Row 4 -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
+  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Competitor context</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Manual search</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Automatic via agent layer</div>
+</div>
 
-          <!-- Row 5 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
-            <div style="padding:14px 20px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Lead generation</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Not available</div>
-            <div style="padding:14px 20px;font-size:12px;color:var(--teal);font-weight:500;">Mentions scored for buying intent with ready-to-send outreach</div>
-          </div>
+<!-- Row 5 -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-top:1px solid var(--border);">
+  <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Lead generation</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Not available</div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Intent-scored outreach, ready to send</div>
+</div>
 
         </div>
 
@@ -1351,41 +1332,32 @@
             // ping events are keepalives — ignore them silently
             if (msg.type === "ping") continue;
             if (msg.type === "progress") {
-  // Add count to running total
   swRunningTotal += (msg.count || 0);
   swSourcesDone  += 1;
 
-  // Update the totals counter
+  // Only show sources that returned something — zeros add no value
+  // The user does not need to know a source returned nothing
+  if ((msg.count || 0) > 0) {
+    const log = document.getElementById("swSourceLog");
+    if (log) {
+      const row = document.createElement("div");
+      row.className = "sw-source-row";
+      row.innerHTML = `
+        <span class="sw-source-name">
+          <span class="sw-source-tick" style="color:var(--teal)">✓</span>
+          ${msg.label || msg.source}
+        </span>`;
+      log.appendChild(row);
+    }
+  }
+
+  // Update the single running total — no per-source counts shown
   const counter = document.getElementById("swTotalCounter");
   if (counter) counter.textContent = swRunningTotal.toLocaleString();
 
-  // Append a row to the source log
-  const log = document.getElementById("swSourceLog");
-  if (log) {
-    const row = document.createElement("div");
-    row.className = "sw-source-row";
-
-    const hasResults = (msg.count || 0) > 0;
-
-    // Tick = results found. Dash = no results. Both are honest.
-    const tick = hasResults ? "✓" : "–";
-    const tickColor = hasResults ? "var(--teal)" : "var(--border2)";
-
-    row.innerHTML = `
-      <span class="sw-source-name">
-        <span class="sw-source-tick" style="color:${tickColor}">${tick}</span>
-        ${msg.label || msg.source}
-      </span>
-      <span class="sw-source-count ${hasResults ? 'has-results' : ''}">
-        ${hasResults ? msg.count.toLocaleString() + " signals" : "none"}
-      </span>`;
-
-    log.appendChild(row);
-  }
-
-  // Update status line
+  // Status line — just the current source name, no extra words
   const lt = document.getElementById("loadingText");
-  if (lt) lt.textContent = `Scanning ${msg.label}...`;
+  if (lt) lt.textContent = msg.label + "...";
 }
 
             else if (msg.type === "analysing") {
