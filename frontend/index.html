@@ -845,7 +845,7 @@
             <div style="font-family:var(--mono);font-size:11px;color:var(--teal);flex-shrink:0;padding-top:2px;width:24px;">04</div>
             <div>
               <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Decide</div>
-              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">The strongest patterns go to an AI layer. It writes a two-sentence briefing and one specific action for the next 48 hours.</div>
+              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">The strongest patterns go through an algorithm + AI layer. Together, they produce a two-sentence briefing and one specific action for the next 48 hours. The signal comes from real market activity.</div>
             </div>
           </div>
 
@@ -1091,7 +1091,10 @@
       
       container.innerHTML = "";
       progress.innerHTML = "";
-      document.getElementById("loadingText").textContent = "Scanning sources for " + query;
+      const loadingText = document.getElementById("loadingText");
+if (loadingText) {
+  loadingText.textContent = "Scanning sources for " + query;
+}
       if (signalChart) { signalChart.destroy(); signalChart = null; }
       resetAgentPanel(); // clear previous agent findings before new search
 
@@ -1224,7 +1227,10 @@
               // Main results done — render them
               loading.style.display = "none";
               progress.innerHTML = "";
-              document.getElementById("loadingText").textContent = "Scanning sources and analysing patterns";
+              const loadingText = document.getElementById("loadingText");
+if (loadingText) {
+  loadingText.textContent = "Scanning sources and analysing patterns";
+}
               btn.disabled = false;
               btn.textContent = "Analyse";
               renderResults(msg, query);
