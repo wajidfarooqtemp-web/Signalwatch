@@ -645,58 +645,24 @@
     </div>
 
     <div class="results-wrap">
-      <div class="loading" id="loading">
-
-  <!-- Query context — what is being run -->
-  <div style="
-    font-family:var(--mono);
-    font-size:10px;
-    color:var(--text3);
-    letter-spacing:1px;
-    text-transform:uppercase;
-    margin-bottom:20px;
-    display:flex;
-    align-items:center;
-    gap:8px;
-  ">
-    <!-- Steady dot — not pulsing. Pulsing communicates uncertainty. -->
-    <span style="width:5px;height:5px;border-radius:50%;background:var(--teal);display:inline-block;flex-shrink:0;"></span>
-    <span id="swQueryLabel">Running intelligence query</span>
+      <!-- Status line -->
+  <div style="font-family:var(--mono);font-size:10px;color:var(--text3);
+              letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;
+              display:flex;align-items:center;justify-content:center;gap:8px;">
+    <span style="width:5px;height:5px;border-radius:50%;background:var(--teal);
+                 display:inline-block;animation:pulse 1.5s ease-in-out infinite;
+                 flex-shrink:0;"></span>
+    <span id="swStatusLine">Preparing query...</span>
   </div>
 
-  <!-- Source grid — 13 cells, one per source -->
-  <!-- Each cell starts dim. Lights up when that source returns data. -->
-  <!-- Sources with zero results stay dim — no zeros shown, no failure communicated -->
-  <div id="swGrid" style="
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:6px;
-    margin-bottom:24px;
-  ">
-    <!-- These are pre-rendered. JS lights them up as sources return. -->
-    <div class="sw-cell" id="cell-reddit"     data-label="Reddit">Reddit</div>
-    <div class="sw-cell" id="cell-hackernews" data-label="Tech Forums">Tech Forums</div>
-    <div class="sw-cell" id="cell-newsapi"    data-label="News">News</div>
-    <div class="sw-cell" id="cell-newsdata"   data-label="Global News">Global News</div>
-    <div class="sw-cell" id="cell-rss"        data-label="RSS">RSS</div>
-    <div class="sw-cell" id="cell-youtube"    data-label="YouTube">YouTube</div>
-    <div class="sw-cell" id="cell-trustpilot" data-label="Trustpilot">Trustpilot</div>
-    <div class="sw-cell" id="cell-appstore"   data-label="App Store">App Store</div>
-    <div class="sw-cell" id="cell-playstore"  data-label="Play Store">Play Store</div>
-    <div class="sw-cell" id="cell-mastodon"   data-label="Mastodon">Mastodon</div>
-    <div class="sw-cell" id="cell-wikipedia"  data-label="Wikipedia">Wikipedia</div>
-    <div class="sw-cell" id="cell-googlenews" data-label="Google News">Google News</div>
-    <div class="sw-cell" id="cell-bingnews"   data-label="Bing News">Bing News</div>
-  </div>
+  <!-- Hub SVG — swHubInit() builds this on page load -->
+  <svg id="swHubSvg" viewBox="0 0 520 400"
+       style="max-width:460px;width:100%;display:block;margin:0 auto;"></svg>
 
-  <!-- Single summary line — total signals found so far -->
-  <!-- Only shows a number when it is meaningful (>0) -->
-  <div style="
-    font-family:var(--mono);
-    font-size:11px;
-    color:var(--text3);
-    letter-spacing:0.5px;
-  " id="swSummaryLine">Querying sources...</div>
+  <!-- Running total — only appears once signals arrive -->
+  <div id="swCountLine" style="font-family:var(--mono);font-size:11px;
+                                color:var(--text3);margin-top:16px;
+                                min-height:18px;letter-spacing:0.5px;"></div>
 
   <div id="liveProgress" style="display:none;"></div>
 </div>
@@ -965,6 +931,192 @@
       }
       return t;
     }
+    // ── HUB ANIMATION ────────────────────────────────────────────────────────
+    // Central circle with 13 source nodes around it, connected by curved lines.
+    // Uses only existing CSS variable colours — no black boxes, no dark theme.
+    // Nodes light up when their source returns results.
+    // Zero-result sources stay dim — no failure state, no zeros shown.
+
+    const SW_SOURCES = [
+      {id:"reddit",     label:"Reddit"},
+      {id:"hackernews", label:"HN"},
+      {id:"newsapi",    label:"News"},
+      {id:"newsdata",   label:"Global"},
+      {id:"rss",        label:"RSS"},
+      {id:"youtube",    label:"YouTube"},
+      {id:"trustpilot", label:"Reviews"},
+      {id:"appstore",   label:"App Store"},
+      {id:"playstore",  label:"Play Store"},
+      {id:"mastodon",   label:"Mastodon"},
+      {id:"wikipedia",  label:"Wiki"},
+      {id:"googlenews", label:"G.News"},
+      {id:"bingnews",   label:"Bing"},
+    ];
+
+    const SW_CX = 260, SW_CY = 200, SW_RAD = 148;
+
+    // Position of source node i on the circle around the hub
+    function swPos(i) {
+      const a = (-90 + i * (360 / SW_SOURCES.length)) * Math.PI / 180;
+      return { x: SW_CX + SW_RAD * Math.cos(a), y: SW_CY + SW_RAD * Math.sin(a) };
+    }
+
+    // Bezier control point — bows the line slightly to one side (the curve)
+    function swCtrl(px, py) {
+      const mx = (px + SW_CX) / 2, my = (py + SW_CY) / 2;
+      const dx = SW_CX - px, dy = SW_CY - py;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      return { x: mx + (-dy/len) * 26, y: my + (dx/len) * 26 };
+    }
+
+    function swHubInit() {
+      const svg = document.getElementById("swHubSvg");
+      if (!svg) return;
+      const NS = "http://www.w3.org/2000/svg";
+
+      // Draw curved paths first — they sit behind the nodes
+      SW_SOURCES.forEach((s, i) => {
+        const p = swPos(i), c = swCtrl(p.x, p.y);
+        const path = document.createElementNS(NS, "path");
+        path.setAttribute("d",
+          `M${p.x.toFixed(1)},${p.y.toFixed(1)} Q${c.x.toFixed(1)},${c.y.toFixed(1)} ${SW_CX},${SW_CY}`
+        );
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "#e8e4da");   // --border
+        path.setAttribute("stroke-width", "1");
+        path.setAttribute("stroke-dasharray", "3 5");
+        path.id = "swpath-" + s.id;
+        svg.appendChild(path);
+      });
+
+      // Hub centre — soft teal ring + white fill
+      const glow = document.createElementNS(NS, "circle");
+      glow.setAttribute("cx", SW_CX); glow.setAttribute("cy", SW_CY);
+      glow.setAttribute("r", "42");
+      glow.setAttribute("fill", "#e8f5f2");   // --teal-light
+      svg.appendChild(glow);
+
+      const hub = document.createElementNS(NS, "circle");
+      hub.setAttribute("cx", SW_CX); hub.setAttribute("cy", SW_CY);
+      hub.setAttribute("r", "32");
+      hub.setAttribute("fill", "#ffffff");
+      hub.setAttribute("stroke", "#0d7a6b");  // --teal
+      hub.setAttribute("stroke-width", "1.5");
+      svg.appendChild(hub);
+
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", SW_CX); label.setAttribute("y", SW_CY + 4);
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("font-family", "DM Mono, monospace");
+      label.setAttribute("font-size", "9");
+      label.setAttribute("font-weight", "700");
+      label.setAttribute("fill", "#0d7a6b");
+      label.setAttribute("letter-spacing", "1");
+      label.textContent = "SW";
+      svg.appendChild(label);
+
+      // Source nodes — dim by default, light up when source returns data
+      SW_SOURCES.forEach((s, i) => {
+        const p = swPos(i);
+        const g = document.createElementNS(NS, "g");
+        g.id = "swnode-" + s.id;
+        g.style.opacity = "0.3";
+        g.style.transition = "opacity 0.4s";
+
+        const c = document.createElementNS(NS, "circle");
+        c.setAttribute("cx", p.x); c.setAttribute("cy", p.y);
+        c.setAttribute("r", "18");
+        c.setAttribute("fill", "#f4f3ef");   // --bg2
+        c.setAttribute("stroke", "#d4cfc2"); // --border2
+        c.setAttribute("stroke-width", "1");
+
+        const t = document.createElementNS(NS, "text");
+        t.setAttribute("x", p.x); t.setAttribute("y", p.y + 3.5);
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("dominant-baseline", "middle");
+        t.setAttribute("font-family", "DM Mono, monospace");
+        t.setAttribute("font-size", "6.5");
+        t.setAttribute("font-weight", "600");
+        t.setAttribute("fill", "#9a9590");   // --text3
+        t.textContent = s.label;
+
+        g.appendChild(c);
+        g.appendChild(t);
+        svg.appendChild(g);
+      });
+    }
+
+    // Light up a source node and send a dot along its line to the hub
+    function swLightNode(sourceId) {
+      const node = document.getElementById("swnode-" + sourceId);
+      const path = document.getElementById("swpath-" + sourceId);
+
+      if (node) {
+        node.style.opacity = "1";
+        const c = node.querySelector("circle");
+        const t = node.querySelector("text");
+        if (c) { c.setAttribute("fill", "#e8f5f2"); c.setAttribute("stroke", "#b2ddd6"); }
+        if (t) t.setAttribute("fill", "#0d7a6b");
+      }
+
+      if (path) {
+        path.setAttribute("stroke", "#b2ddd6");       // --teal-mid
+        path.setAttribute("stroke-width", "1.5");
+        path.setAttribute("stroke-dasharray", "none");
+        path.setAttribute("opacity", "0.8");
+      }
+
+      // Animate a small dot travelling from node to hub along the curve
+      const svg = document.getElementById("swHubSvg");
+      if (!svg) return;
+      const idx = SW_SOURCES.findIndex(s => s.id === sourceId);
+      if (idx < 0) return;
+      const p = swPos(idx), cp = swCtrl(p.x, p.y);
+      const NS = "http://www.w3.org/2000/svg";
+      const dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("r", "3"); dot.setAttribute("fill", "#0d7a6b");
+      svg.appendChild(dot);
+      let t = 0;
+      const iv = setInterval(() => {
+        t += 0.04;
+        if (t >= 1) { clearInterval(iv); try { svg.removeChild(dot); } catch(e){} return; }
+        const it = 1 - t;
+        // Quadratic bezier point
+        const x = it*it*p.x + 2*it*t*cp.x + t*t*SW_CX;
+        const y = it*it*p.y + 2*it*t*cp.y + t*t*SW_CY;
+        dot.setAttribute("cx", x.toFixed(1));
+        dot.setAttribute("cy", y.toFixed(1));
+        dot.setAttribute("opacity", t < 0.8 ? "0.85" : (0.85*(1-t)/0.2).toFixed(2));
+      }, 16);
+    }
+
+    // Reset hub for a new search
+    function swResetHub() {
+      SW_SOURCES.forEach(s => {
+        const node = document.getElementById("swnode-" + s.id);
+        const path = document.getElementById("swpath-" + s.id);
+        if (node) {
+          node.style.opacity = "0.3";
+          const c = node.querySelector("circle");
+          const t = node.querySelector("text");
+          if (c) { c.setAttribute("fill","#f4f3ef"); c.setAttribute("stroke","#d4cfc2"); }
+          if (t) t.setAttribute("fill","#9a9590");
+        }
+        if (path) {
+          path.setAttribute("stroke","#e8e4da");
+          path.setAttribute("stroke-width","1");
+          path.setAttribute("stroke-dasharray","3 5");
+          path.setAttribute("opacity","1");
+        }
+      });
+      const cl = document.getElementById("swCountLine");
+      if (cl) cl.textContent = "";
+      const sl = document.getElementById("swStatusLine");
+      if (sl) sl.textContent = "Preparing query...";
+    }
+
+    // Build the hub immediately when the page loads
+    swHubInit();
     const SW_TOKEN = getToken();
     // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
     function signInWithGoogle() {
@@ -1165,35 +1317,32 @@ if (loadingText) {
             // ping events are keepalives — ignore them silently
             if (msg.type === "ping") continue;
             if (msg.type === "progress") {
-  swRunningTotal += (msg.count || 0);
-  swSourcesDone  += 1;
+              swRunningTotal += (msg.count || 0);
+              swSourcesDone  += 1;
 
-  // Light up the cell for this source only if it returned something
-  // If it returned zero, leave the cell dim — no failure state shown
-  if ((msg.count || 0) > 0) {
-    const cell = document.getElementById("cell-" + msg.source);
-    if (cell) cell.classList.add("active");
-  }
+              // Only light up nodes that returned results — zeros stay dim
+              if ((msg.count || 0) > 0) {
+                swLightNode(msg.source);
+              }
 
-  // Update summary line only when we have something worth saying
-  const summary = document.getElementById("swSummaryLine");
-  if (summary) {
-    summary.textContent = swRunningTotal > 0
-      ? swRunningTotal.toLocaleString() + " signals collected across "
-        + swSourcesDone + " sources"
-      : "Querying sources...";
-  }
-}
+              // Update status and count only when meaningful
+              const sl = document.getElementById("swStatusLine");
+              if (sl) sl.textContent = msg.label + "...";
+
+              const cl = document.getElementById("swCountLine");
+              if (cl && swRunningTotal > 0) {
+                cl.textContent = swRunningTotal.toLocaleString() + " signals collected";
+              }
+            }
 
             else if (msg.type === "analysing") {
-  // Dim all cells — sources phase is done, AI phase starting
-  document.querySelectorAll(".sw-cell.active").forEach(c => {
-    c.classList.remove("active");
-    c.classList.add("done");
-  });
-  const summary = document.getElementById("swSummaryLine");
-  if (summary) summary.textContent = "Analysing " + swRunningTotal.toLocaleString() + " signals...";
-}
+              const sl = document.getElementById("swStatusLine");
+              if (sl) sl.textContent = "Analysing patterns...";
+              const cl = document.getElementById("swCountLine");
+              if (cl && swRunningTotal > 0) {
+                cl.textContent = swRunningTotal.toLocaleString() + " signals · generating briefing";
+              }
+            }
             else if (msg.type === "agent_update") {
               // Agents 1-3 events
               handleAgentUpdate(msg);
@@ -1544,6 +1693,7 @@ if (loadingText) {
       swRunningTotal = 0;
       swSourcesDone  = 0;
       swElapsedSecs  = 0;
+      swResetHub();
 
       // Clear the source log
       const log = document.getElementById("swSourceLog");
