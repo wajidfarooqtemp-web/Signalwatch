@@ -465,6 +465,52 @@
   .about-page [style*="grid-template-columns:1fr 1fr 1fr"] { grid-template-columns:1fr!important; }
   .about-page [style*="grid-template-columns:1fr 1fr 1fr"] > div { border-right:none!important;border-bottom:1px solid var(--border); }
 }
+@media(max-width:600px) {
+  .differs-row {
+    grid-template-columns: 1fr !important;
+  }
+  .differs-row > div {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .differs-row > div:last-child {
+    border-bottom: none;
+  }
+}
+/* Source cell — dim by default, active when source returns data */
+.sw-cell {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--border2);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 7px 10px;
+  transition: color 0.3s, background 0.3s, border-color 0.3s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Active state — source returned results */
+.sw-cell.active {
+  color: var(--teal);
+  background: var(--teal-light);
+  border-color: var(--teal-mid);
+}
+
+/* Analysing state — all sources done, AI running */
+.sw-cell.done {
+  color: var(--text3);
+  background: var(--white);
+  border-color: var(--border);
+}
+
+@media(max-width:600px) {
+  #swGrid { grid-template-columns: repeat(3,1fr) !important; }
+}
   </style>
 </head>
 <body>
@@ -585,61 +631,72 @@
       <div class="search-label">Search any brand, topic or query</div>
       <div class="search-row">
         <input class="search-input" id="queryInput" type="text"
-          placeholder='e.g.  nike complaints NOT fake  ·  "battery drain" samsung  ·  tesla recall'
+          placeholder='e.g. (Salesforce OR Intercom) AND pricing NOT careers'
           autocomplete="off"/>
         <button class="search-btn" id="searchBtn" onclick="runSearch()">Analyse</button>
       </div>
       <div class="search-hints">
-        <span class="hint"><code>NOT word</code> exclude</span>
-        <span class="hint"><code>"phrase"</code> exact match</span>
-        <span class="hint"><code>word OR word</code> alternatives</span>
+        <span class="hint">Boolean search</span>
+        <span class="hint"><code>AND</code> combine</span>
+        <span class="hint"><code>OR</code> either</span>
+        <span class="hint"><code>NOT</code> exclude</span>
+        <span class="hint"><code>"..."</code> exact phrase</span>
       </div>
     </div>
 
     <div class="results-wrap">
       <div class="loading" id="loading">
 
-  <!-- Single status line — tells the user what is happening right now -->
-  <!-- No list of sources with zero counts. Just the current one. -->
+  <!-- Query context — what is being run -->
+  <div style="
+    font-family:var(--mono);
+    font-size:10px;
+    color:var(--text3);
+    letter-spacing:1px;
+    text-transform:uppercase;
+    margin-bottom:20px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  ">
+    <!-- Steady dot — not pulsing. Pulsing communicates uncertainty. -->
+    <span style="width:5px;height:5px;border-radius:50%;background:var(--teal);display:inline-block;flex-shrink:0;"></span>
+    <span id="swQueryLabel">Running intelligence query</span>
+  </div>
+
+  <!-- Source grid — 13 cells, one per source -->
+  <!-- Each cell starts dim. Lights up when that source returns data. -->
+  <!-- Sources with zero results stay dim — no zeros shown, no failure communicated -->
+  <div id="swGrid" style="
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:6px;
+    margin-bottom:24px;
+  ">
+    <!-- These are pre-rendered. JS lights them up as sources return. -->
+    <div class="sw-cell" id="cell-reddit"     data-label="Reddit">Reddit</div>
+    <div class="sw-cell" id="cell-hackernews" data-label="Tech Forums">Tech Forums</div>
+    <div class="sw-cell" id="cell-newsapi"    data-label="News">News</div>
+    <div class="sw-cell" id="cell-newsdata"   data-label="Global News">Global News</div>
+    <div class="sw-cell" id="cell-rss"        data-label="RSS">RSS</div>
+    <div class="sw-cell" id="cell-youtube"    data-label="YouTube">YouTube</div>
+    <div class="sw-cell" id="cell-trustpilot" data-label="Trustpilot">Trustpilot</div>
+    <div class="sw-cell" id="cell-appstore"   data-label="App Store">App Store</div>
+    <div class="sw-cell" id="cell-playstore"  data-label="Play Store">Play Store</div>
+    <div class="sw-cell" id="cell-mastodon"   data-label="Mastodon">Mastodon</div>
+    <div class="sw-cell" id="cell-wikipedia"  data-label="Wikipedia">Wikipedia</div>
+    <div class="sw-cell" id="cell-googlenews" data-label="Google News">Google News</div>
+    <div class="sw-cell" id="cell-bingnews"   data-label="Bing News">Bing News</div>
+  </div>
+
+  <!-- Single summary line — total signals found so far -->
+  <!-- Only shows a number when it is meaningful (>0) -->
   <div style="
     font-family:var(--mono);
     font-size:11px;
     color:var(--text3);
     letter-spacing:0.5px;
-    margin-bottom:28px;
-  " id="loadingText">Starting...</div>
-
-  <!-- The sketch grid — sources appear here as pencil marks -->
-  <!-- Each one is a small pill that fades in when the source returns data -->
-  <!-- Sources with zero results never appear — absence is not failure -->
-  <div id="swSourceLog" style="
-    display:flex;
-    flex-wrap:wrap;
-    gap:7px;
-    min-height:60px;
-    margin-bottom:28px;
-    align-content:flex-start;
-  "></div>
-
-  <!-- Running total — the only number shown during loading -->
-  <!-- Grows steadily which creates forward momentum -->
-  <div style="display:flex;align-items:baseline;gap:8px;">
-    <span id="swTotalCounter" style="
-      font-family:var(--serif);
-      font-size:48px;
-      font-weight:700;
-      color:var(--teal);
-      line-height:1;
-      letter-spacing:-2px;
-    ">0</span>
-    <span style="
-      font-family:var(--mono);
-      font-size:10px;
-      letter-spacing:2px;
-      text-transform:uppercase;
-      color:var(--text3);
-    ">mentions collected</span>
-  </div>
+  " id="swSummaryLine">Querying sources...</div>
 
   <div id="liveProgress" style="display:none;"></div>
 </div>
@@ -784,11 +841,19 @@
             </div>
           </div>
 
-          <div style="display:flex;gap:24px;padding:20px 0;">
+          <div style="display:flex;gap:24px;padding:20px 0;border-bottom:1px solid var(--border);">
             <div style="font-family:var(--mono);font-size:11px;color:var(--teal);flex-shrink:0;padding-top:2px;width:24px;">04</div>
             <div>
               <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Decide</div>
-              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">The strongest patterns first go through an algorithm and then go to an AI layer. It writes a two-sentence briefing and one specific action for the next 48 hours. The signal comes from real market activity.</div>
+              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">The strongest patterns go to an AI layer. It writes a two-sentence briefing and one specific action for the next 48 hours.</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:24px;padding:20px 0;">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--teal);flex-shrink:0;padding-top:2px;width:24px;">05</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Go deeper</div>
+              <div style="font-size:14px;color:var(--text2);line-height:1.7;font-weight:300;">Four specialist agents continue working after your results arrive. They investigate angles the initial scan missed, track competitor moves, check regulatory filings, and surface academic context. Findings stream in as they complete.</div>
             </div>
           </div>
 
@@ -805,37 +870,37 @@
         <div style="border:1px solid var(--border);border-radius:5px;overflow:hidden;">
 
           <!-- Header -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--bg2);border-bottom:1px solid var(--border);">
+          <div class="differs-row"style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--bg2);border-bottom:1px solid var(--border);">
             <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);"></div>
             <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);border-left:1px solid var(--border);">Other tools</div>
             <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--teal);border-left:1px solid var(--border);">Signalwatch</div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Output</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Charts</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">A briefing and one action</div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Detection</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Keyword frequency</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Concept co-occurrence</div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Recency</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Often weeks old</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Live, last 90 days</div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Competitors</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Manual search</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Auto-detected</div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);">
+          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Leads</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Not available</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Intent-scored, ready to send</div>
@@ -1012,6 +1077,8 @@
       btn.disabled = true;
       btn.textContent = "Analysing...";
       loading.style.display = "block";
+      const ql = document.getElementById("swQueryLabel");
+      if (ql) ql.textContent = '"' + query + '"';
       // Start elapsed timer — shows the user real time passing, not fake progress
       swElapsedTimer = setInterval(() => {
         swElapsedSecs++;
@@ -1021,9 +1088,7 @@
         : Math.floor(swElapsedSecs/60) + "m " + (swElapsedSecs%60) + "s";
       }, 1000);
 
-      // Set the query label in the scan header
-      const ql = document.getElementById("swQueryLabel");
-      if (ql) ql.textContent = '"' + query + '"';
+      
       container.innerHTML = "";
       progress.innerHTML = "";
       document.getElementById("loadingText").textContent = "Scanning sources for " + query;
@@ -1100,34 +1165,31 @@
   swRunningTotal += (msg.count || 0);
   swSourcesDone  += 1;
 
-  // Only show sources that returned something — zeros add no value
-  // The user does not need to know a source returned nothing
+  // Light up the cell for this source only if it returned something
+  // If it returned zero, leave the cell dim — no failure state shown
   if ((msg.count || 0) > 0) {
-    const log = document.getElementById("swSourceLog");
-    if (log) {
-      const row = document.createElement("div");
-      row.className = "sw-source-row";
-      row.innerHTML = `
-        <span class="sw-source-name">
-          <span class="sw-source-tick" style="color:var(--teal)">✓</span>
-          ${msg.label || msg.source}
-        </span>`;
-      log.appendChild(row);
-    }
+    const cell = document.getElementById("cell-" + msg.source);
+    if (cell) cell.classList.add("active");
   }
 
-  // Update the single running total — no per-source counts shown
-  const counter = document.getElementById("swTotalCounter");
-  if (counter) counter.textContent = swRunningTotal.toLocaleString();
-
-  // Status line — just the current source name, no extra words
-  const lt = document.getElementById("loadingText");
-  if (lt) lt.textContent = msg.label + "...";
+  // Update summary line only when we have something worth saying
+  const summary = document.getElementById("swSummaryLine");
+  if (summary) {
+    summary.textContent = swRunningTotal > 0
+      ? swRunningTotal.toLocaleString() + " signals collected across "
+        + swSourcesDone + " sources"
+      : "Querying sources...";
+  }
 }
 
             else if (msg.type === "analysing") {
-  const lt = document.getElementById("loadingText");
-  if (lt) lt.textContent = "Running pattern analysis and generating briefing...";
+  // Dim all cells — sources phase is done, AI phase starting
+  document.querySelectorAll(".sw-cell.active").forEach(c => {
+    c.classList.remove("active");
+    c.classList.add("done");
+  });
+  const summary = document.getElementById("swSummaryLine");
+  if (summary) summary.textContent = "Analysing " + swRunningTotal.toLocaleString() + " signals...";
 }
             else if (msg.type === "agent_update") {
               // Agents 1-3 events
@@ -1465,6 +1527,14 @@
 
     function resetAgentPanel() {
       // ── Reset scan animation ──────────────────────────────────────────────
+      // Reset all source cells to dim
+  document.querySelectorAll(".sw-cell").forEach(c => {
+    c.classList.remove("active","done");
+  });
+  const summary = document.getElementById("swSummaryLine");
+  if (summary) summary.textContent = "Querying sources...";
+  const ql = document.getElementById("swQueryLabel");
+  if (ql) ql.textContent = "Running intelligence query";
       swRunningTotal = 0;
       swSourcesDone  = 0;
       swElapsedSecs  = 0;

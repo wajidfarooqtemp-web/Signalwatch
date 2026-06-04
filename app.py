@@ -2526,14 +2526,19 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
 
         # Send pings while waiting for Agent 4 to complete
         # We check every 15 seconds if Agent 4 is done
-        for _ in range(6):
+        # Wait up to 120 seconds total, pinging every 10s
+        # Previously 6 x 15s = 90s which was not enough
+        for _ in range(12):
             if comp_task.done():
                 break
-            await asyncio.sleep(15)
+            await asyncio.sleep(10)
             yield f"data: {json.dumps({'type': 'ping'})}\n\n"
 
-        # Get the result (task is done by now or we wait for it)
-        competitive_result = await comp_task
+        # If still not done, wait for it — do not abandon
+        if not comp_task.done():
+            competitive_result = await asyncio.wait_for(comp_task, timeout=30)
+        else:
+            competitive_result = comp_task.result()
 
         if isinstance(competitive_result, dict):
             synthesis = competitive_result.get("synthesis", "")
