@@ -2501,10 +2501,10 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
         if loop_count < max_loops:
             next_num = loop_count + 1
             # Send the exact wait seconds so the frontend can show a live countdown
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {next_num} starting in 45 seconds...', 'loop': loop_count, 'wait_seconds': 45})}\n\n"
-            # Send a ping every 10 seconds during the 45 second wait
+            # Send a ping every 10 seconds during the 30 second wait (I have changed the timings)
             # This keeps the SSE connection alive on Render's free tier
-            for _ in range(4):
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {next_num} starting shortly...', 'loop': loop_count, 'wait_seconds': 30})}\n\n"
+            for _ in range(3):
                 await asyncio.sleep(10)
                 yield f"data: {json.dumps({'type': 'ping'})}\n\n"
             await asyncio.sleep(5)
