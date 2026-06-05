@@ -645,27 +645,39 @@
     </div>
 
     <div class="results-wrap">
-      <!-- Status line -->
-  <div style="font-family:var(--mono);font-size:10px;color:var(--text3);
-              letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;
-              display:flex;align-items:center;justify-content:center;gap:8px;">
-    <span style="width:5px;height:5px;border-radius:50%;background:var(--teal);
-                 display:inline-block;animation:pulse 1.5s ease-in-out infinite;
-                 flex-shrink:0;"></span>
-    <span id="swStatusLine">Preparing query...</span>
-  </div>
 
-  <!-- Hub SVG — swHubInit() builds this on page load -->
-  <svg id="swHubSvg" viewBox="0 0 520 400"
-       style="max-width:460px;width:100%;display:block;margin:0 auto;"></svg>
+      <!-- LOADING STATE — hidden by default, shown only when search runs -->
+      <!-- The .loading class has display:none in CSS — it only appears when
+           runSearch() sets loading.style.display = "block" -->
+      <div class="loading" id="loading" style="padding:48px 0;text-align:center;">
 
-  <!-- Running total — only appears once signals arrive -->
-  <div id="swCountLine" style="font-family:var(--mono);font-size:11px;
-                                color:var(--text3);margin-top:16px;
-                                min-height:18px;letter-spacing:0.5px;"></div>
+        <!-- Status line — updates as each source reports in -->
+        <div style="
+          font-family:var(--mono);font-size:10px;color:var(--text3);
+          letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;
+          display:flex;align-items:center;justify-content:center;gap:8px;
+        ">
+          <span style="
+            width:5px;height:5px;border-radius:50%;background:var(--teal);
+            display:inline-block;flex-shrink:0;
+          "></span>
+          <span id="swStatusLine">Preparing query...</span>
+        </div>
 
-  <div id="liveProgress" style="display:none;"></div>
-</div>
+        <!-- Hub SVG — built by swHubInit() below, nodes light up as sources return -->
+        <svg id="swHubSvg" viewBox="0 0 520 400"
+             style="max-width:460px;width:100%;display:block;margin:0 auto;"></svg>
+
+        <!-- Signal count line — only appears once signals start arriving -->
+        <div id="swCountLine" style="
+          font-family:var(--mono);font-size:11px;color:var(--text3);
+          margin-top:16px;min-height:18px;letter-spacing:0.5px;
+        "></div>
+
+        <!-- Hidden relay div — required for agent event wiring -->
+        <div id="liveProgress" style="display:none;"></div>
+      </div>
+      
       <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
          Hidden on page load. Becomes visible when the first agent event arrives.
          Agents 1-3 findings go into #agentFindings.
@@ -1229,16 +1241,12 @@
       btn.disabled = true;
       btn.textContent = "Analysing...";
       loading.style.display = "block";
-      const ql = document.getElementById("swQueryLabel");
-      if (ql) ql.textContent = '"' + query + '"';
-      // Start elapsed timer — shows the user real time passing, not fake progress
-      swElapsedTimer = setInterval(() => {
-        swElapsedSecs++;
-        const el = document.getElementById("swElapsed");
-        if (el) el.textContent = swElapsedSecs < 60
-        ? swElapsedSecs + "s"
-        : Math.floor(swElapsedSecs/60) + "m " + (swElapsedSecs%60) + "s";
-      }, 1000);
+
+      // Set the query label in the hub animation header
+      const _ql = document.getElementById("swStatusLine");
+      if (_ql) _ql.textContent = '"' + query + '"';
+
+      // No elapsed timer needed — hub animation communicates progress visually
 
       
       container.innerHTML = "";
@@ -1695,22 +1703,11 @@ if (loadingText) {
       swElapsedSecs  = 0;
       swResetHub();
 
-      // Clear the source log
-      const log = document.getElementById("swSourceLog");
-      if (log) log.innerHTML = "";
-
-      // Reset totals
-      const counter = document.getElementById("swTotalCounter");
-      if (counter) counter.textContent = "0";
-
-     // Reset elapsed timer display
-      const elapsed = document.getElementById("swElapsed");
-      if (elapsed) elapsed.textContent = "0s";
-
-      // Stop any previous timer
+      // Stop any previous elapsed timer
       if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
 
-    // ... rest of existing resetAgentPanel code continues below
+      // Reset hub animation — dims all nodes, clears count line
+      swResetHub();
 
       // Hide and clear lead section on new search
       const leadSection = document.getElementById("leadSection");
