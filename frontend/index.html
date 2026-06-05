@@ -495,6 +495,12 @@
   animation: swSpin 1.8s linear infinite;
 }
 
+/* Flowing dots circle — three overlapping dash-animated rings */
+/* Each ring moves at a different speed and direction, creating a water effect */
+@keyframes swDots1 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -289; } }
+@keyframes swDots2 { from { stroke-dashoffset: 0; } to { stroke-dashoffset:  289; } }
+@keyframes swDots3 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -193; } }
+
   </style>
 </head>
 <body>
@@ -633,40 +639,147 @@
       <!-- LOADING STATE — hidden by default, shown only when search runs -->
       <!-- The .loading class has display:none in CSS — it only appears when
            runSearch() sets loading.style.display = "block" -->
-      <div class="loading" id="loading" style="padding:80px 0;text-align:center;">
+      <div class="loading" id="loading" style="padding:48px 0;text-align:center;">
 
-  <!-- Fluid circle animation — CSS only, no JS, no gimmicks -->
-  <!-- A single circle with animated border colours and a morphing shape -->
-  <!-- The dot in the centre is static — the ring moves around it -->
-  <div style="position:relative;width:72px;height:72px;margin:0 auto 28px;display:flex;align-items:center;justify-content:center;">
+  <!--
+    Pre-built SVG hub:
+    — Flowing dots circle at centre (no fill, no dot in the middle)
+    — 6 source logos placed around it at radius 130
+    — Thin lines connecting hub edge to each logo
+    — Logos dim by default; swLightNode() lights them up when source returns data
+    — No Reddit shown (enterprise positioning)
+    — No source names, only recognisable logos
+  -->
+  <svg viewBox="0 0 480 380" width="100%"
+       style="max-width:460px;display:block;margin:0 auto;"
+       aria-hidden="true">
 
-    <!-- The fluid ring -->
-    <div id="swRing" style="
-      position:absolute;
-      inset:0;
-      border-radius:50%;
-      background:transparent;
-      border:2px solid transparent;
-      animation:swFluid 3s ease-in-out infinite, swColour 4s linear infinite;
-    "></div>
+    <!-- ── CONNECTION LINES — thin, dashed, dim until source lights up ── -->
+    <!-- Each line goes from the hub circle edge to just before the logo -->
 
-    <!-- Static centre dot — teal, always still -->
-    <div style="
-      width:6px;height:6px;border-radius:50%;
-      background:var(--teal);
-      flex-shrink:0;
-      position:relative;z-index:1;
-    "></div>
-  </div>
+    <!-- YouTube (top) -->
+    <line id="swline-youtube"
+      x1="240" y1="144" x2="240" y2="76"
+      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
 
-  <!-- Single word below — nothing else -->
+    <!-- HackerNews (top-right) -->
+    <line id="swline-hackernews"
+      x1="279" y1="167" x2="338" y2="131"
+      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
+
+    <!-- App Store (bottom-right) -->
+    <line id="swline-appstore"
+      x1="279" y1="213" x2="338" y2="249"
+      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
+
+    <!-- Google News (bottom) -->
+    <line id="swline-googlenews"
+      x1="240" y1="236" x2="240" y2="304"
+      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
+
+    <!-- Trustpilot (bottom-left) -->
+    <line id="swline-trustpilot"
+      x1="201" y1="213" x2="142" y2="249"
+      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
+
+    <!-- Bing News (top-left) -->
+    <line id="swline-bingnews"
+      x1="201" y1="167" x2="142" y2="131"
+      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
+
+    <!-- ── FLOWING DOTS CIRCLE ── -->
+    <!-- Three rings with different dash patterns, speeds, directions -->
+    <!-- Together they create a liquid/water movement of coloured dots -->
+    <!-- No fill, no centre dot — pure circle made of moving points -->
+    <g transform="translate(240,190)">
+
+      <!-- Primary ring: teal, larger dots, 3s -->
+      <circle r="46" fill="none"
+        stroke="#0d7a6b" stroke-width="2.5"
+        stroke-dasharray="3 9" stroke-linecap="round"
+        style="animation:swDots1 3s linear infinite"/>
+
+      <!-- Secondary ring: amber, smaller dots, 4.5s reverse -->
+      <circle r="46" fill="none"
+        stroke="#c4720a" stroke-width="2" opacity="0.55"
+        stroke-dasharray="2 13" stroke-linecap="round"
+        style="animation:swDots2 4.5s linear infinite"/>
+
+      <!-- Tertiary ring: purple, tiny dots, 6s -->
+      <circle r="46" fill="none"
+        stroke="#6d28d9" stroke-width="1.5" opacity="0.35"
+        stroke-dasharray="1.5 19" stroke-linecap="round"
+        style="animation:swDots3 6s linear infinite"/>
+
+    </g>
+
+    <!-- ── SOURCE LOGOS ── -->
+    <!-- Each group: opacity 0.2 default, 1.0 when lit by swLightNode() -->
+    <!-- Logo design: simple geometric shapes in brand colours -->
+    <!-- Enterprise-credible only — no Reddit, no Mastodon -->
+
+    <!-- YouTube — top, position (240, 60) -->
+    <g id="swlogo-youtube" opacity="0.2" style="transition:opacity 0.4s">
+      <rect x="220" y="48" width="40" height="25" rx="6" fill="#FF0000"/>
+      <polygon points="235,53 235,71 253,62" fill="white"/>
+    </g>
+
+    <!-- HackerNews — top right, position (353, 119) -->
+    <g id="swlogo-hackernews" opacity="0.2" style="transition:opacity 0.4s">
+      <rect x="339" y="105" width="28" height="28" rx="4" fill="#FF6600"/>
+      <text x="353" y="124" text-anchor="middle"
+        font-family="DM Mono,monospace" font-size="14"
+        font-weight="900" fill="white">Y</text>
+    </g>
+
+    <!-- App Store — bottom right, position (353, 249) -->
+    <g id="swlogo-appstore" opacity="0.2" style="transition:opacity 0.4s">
+      <rect x="339" y="235" width="28" height="28" rx="7" fill="#0D96F6"/>
+      <!-- Simple A shape -->
+      <text x="353" y="254" text-anchor="middle"
+        font-family="DM Sans,sans-serif" font-size="14"
+        font-weight="700" fill="white">A</text>
+    </g>
+
+    <!-- Google News — bottom, position (240, 318) -->
+    <g id="swlogo-googlenews" opacity="0.2" style="transition:opacity 0.4s">
+      <circle cx="240" cy="318" r="15" fill="#4285F4"/>
+      <text x="240" y="323" text-anchor="middle"
+        font-family="DM Sans,sans-serif" font-size="13"
+        font-weight="700" fill="white">G</text>
+    </g>
+
+    <!-- Trustpilot — bottom left, position (127, 249) -->
+    <g id="swlogo-trustpilot" opacity="0.2" style="transition:opacity 0.4s">
+      <circle cx="127" cy="249" r="15" fill="#00B67A"/>
+      <!-- Star represented as ★ -->
+      <text x="127" y="254" text-anchor="middle"
+        font-family="DM Sans,sans-serif" font-size="14"
+        fill="white">★</text>
+    </g>
+
+    <!-- Bing News — top left, position (127, 119) -->
+    <g id="swlogo-bingnews" opacity="0.2" style="transition:opacity 0.4s">
+      <rect x="113" y="105" width="28" height="28" rx="4" fill="#0078D4"/>
+      <text x="127" y="124" text-anchor="middle"
+        font-family="DM Mono,monospace" font-size="9"
+        font-weight="700" fill="white">BING</text>
+    </g>
+
+  </svg>
+
+  <!-- Query label — set to the search query by JS when search starts -->
+  <!-- Shows what is being searched, not a generic spinner message -->
+  <!-- Empty on page load — only visible during a search -->
   <div id="swStatusLine" style="
     font-family:var(--mono);
     font-size:11px;
-    letter-spacing:2px;
+    letter-spacing:1.5px;
     text-transform:uppercase;
     color:var(--text3);
-  ">Findings</div>
+    margin-top:4px;
+    min-height:16px;
+  "></div>
 
   <!-- Hidden — required for SSE wiring -->
   <div id="swCountLine" style="display:none;"></div>
@@ -976,154 +1089,45 @@
       return { x: mx + (-dy/len) * 26, y: my + (dx/len) * 26 };
     }
 
-    function swHubInit() {
-      const svg = document.getElementById("swHubSvg");
-      if (!svg) return;
-      const NS = "http://www.w3.org/2000/svg";
-
-      // Draw curved paths first — they sit behind the nodes
-      SW_SOURCES.forEach((s, i) => {
-        const p = swPos(i), c = swCtrl(p.x, p.y);
-        const path = document.createElementNS(NS, "path");
-        path.setAttribute("d",
-          `M${p.x.toFixed(1)},${p.y.toFixed(1)} Q${c.x.toFixed(1)},${c.y.toFixed(1)} ${SW_CX},${SW_CY}`
-        );
-        path.setAttribute("fill", "none");
-        path.setAttribute("stroke", "#e8e4da");   // --border
-        path.setAttribute("stroke-width", "1");
-        path.setAttribute("stroke-dasharray", "3 5");
-        path.id = "swpath-" + s.id;
-        svg.appendChild(path);
-      });
-
-      // Hub centre — soft teal ring + white fill
-      const glow = document.createElementNS(NS, "circle");
-      glow.setAttribute("cx", SW_CX); glow.setAttribute("cy", SW_CY);
-      glow.setAttribute("r", "42");
-      glow.setAttribute("fill", "#e8f5f2");   // --teal-light
-      svg.appendChild(glow);
-
-      const hub = document.createElementNS(NS, "circle");
-      hub.setAttribute("cx", SW_CX); hub.setAttribute("cy", SW_CY);
-      hub.setAttribute("r", "32");
-      hub.setAttribute("fill", "#ffffff");
-      hub.setAttribute("stroke", "#0d7a6b");  // --teal
-      hub.setAttribute("stroke-width", "1.5");
-      svg.appendChild(hub);
-
-      const label = document.createElementNS(NS, "text");
-      label.setAttribute("x", SW_CX); label.setAttribute("y", SW_CY + 4);
-      label.setAttribute("text-anchor", "middle");
-      label.setAttribute("font-family", "DM Mono, monospace");
-      label.setAttribute("font-size", "9");
-      label.setAttribute("font-weight", "700");
-      label.setAttribute("fill", "#0d7a6b");
-      label.setAttribute("letter-spacing", "1");
-      label.textContent = "SW";
-      svg.appendChild(label);
-
-      // Source nodes — dim by default, light up when source returns data
-      SW_SOURCES.forEach((s, i) => {
-        const p = swPos(i);
-        const g = document.createElementNS(NS, "g");
-        g.id = "swnode-" + s.id;
-        g.style.opacity = "0.3";
-        g.style.transition = "opacity 0.4s";
-
-        const c = document.createElementNS(NS, "circle");
-        c.setAttribute("cx", p.x); c.setAttribute("cy", p.y);
-        c.setAttribute("r", "18");
-        c.setAttribute("fill", "#f4f3ef");   // --bg2
-        c.setAttribute("stroke", "#d4cfc2"); // --border2
-        c.setAttribute("stroke-width", "1");
-
-        const t = document.createElementNS(NS, "text");
-        t.setAttribute("x", p.x); t.setAttribute("y", p.y + 3.5);
-        t.setAttribute("text-anchor", "middle");
-        t.setAttribute("dominant-baseline", "middle");
-        t.setAttribute("font-family", "DM Mono, monospace");
-        t.setAttribute("font-size", "6.5");
-        t.setAttribute("font-weight", "600");
-        t.setAttribute("fill", "#9a9590");   // --text3
-        t.textContent = s.label;
-
-        g.appendChild(c);
-        g.appendChild(t);
-        svg.appendChild(g);
-      });
-    }
-
     // Light up a source node and send a dot along its line to the hub
     function swLightNode(sourceId) {
-      const node = document.getElementById("swnode-" + sourceId);
-      const path = document.getElementById("swpath-" + sourceId);
+      // Light up the logo and its connecting line for this source
+      // Only called when a source returns results — never for zeros
+      const logo = document.getElementById("swlogo-" + sourceId);
+      const line = document.getElementById("swline-" + sourceId);
 
-      if (node) {
-        node.style.opacity = "1";
-        const c = node.querySelector("circle");
-        const t = node.querySelector("text");
-        if (c) { c.setAttribute("fill", "#e8f5f2"); c.setAttribute("stroke", "#b2ddd6"); }
-        if (t) t.setAttribute("fill", "#0d7a6b");
+      if (logo) logo.style.opacity = "1";
+
+      if (line) {
+        line.setAttribute("stroke", "#b2ddd6");       // --teal-mid
+        line.setAttribute("stroke-width", "1.5");
+        line.setAttribute("stroke-dasharray", "none");
       }
-
-      if (path) {
-        path.setAttribute("stroke", "#b2ddd6");       // --teal-mid
-        path.setAttribute("stroke-width", "1.5");
-        path.setAttribute("stroke-dasharray", "none");
-        path.setAttribute("opacity", "0.8");
-      }
-
-      // Animate a small dot travelling from node to hub along the curve
-      const svg = document.getElementById("swHubSvg");
-      if (!svg) return;
-      const idx = SW_SOURCES.findIndex(s => s.id === sourceId);
-      if (idx < 0) return;
-      const p = swPos(idx), cp = swCtrl(p.x, p.y);
-      const NS = "http://www.w3.org/2000/svg";
-      const dot = document.createElementNS(NS, "circle");
-      dot.setAttribute("r", "3"); dot.setAttribute("fill", "#0d7a6b");
-      svg.appendChild(dot);
-      let t = 0;
-      const iv = setInterval(() => {
-        t += 0.04;
-        if (t >= 1) { clearInterval(iv); try { svg.removeChild(dot); } catch(e){} return; }
-        const it = 1 - t;
-        // Quadratic bezier point
-        const x = it*it*p.x + 2*it*t*cp.x + t*t*SW_CX;
-        const y = it*it*p.y + 2*it*t*cp.y + t*t*SW_CY;
-        dot.setAttribute("cx", x.toFixed(1));
-        dot.setAttribute("cy", y.toFixed(1));
-        dot.setAttribute("opacity", t < 0.8 ? "0.85" : (0.85*(1-t)/0.2).toFixed(2));
-      }, 16);
     }
 
     // Reset hub for a new search
     function swResetHub() {
-      SW_SOURCES.forEach(s => {
-        const node = document.getElementById("swnode-" + s.id);
-        const path = document.getElementById("swpath-" + s.id);
-        if (node) {
-          node.style.opacity = "0.3";
-          const c = node.querySelector("circle");
-          const t = node.querySelector("text");
-          if (c) { c.setAttribute("fill","#f4f3ef"); c.setAttribute("stroke","#d4cfc2"); }
-          if (t) t.setAttribute("fill","#9a9590");
-        }
-        if (path) {
-          path.setAttribute("stroke","#e8e4da");
-          path.setAttribute("stroke-width","1");
-          path.setAttribute("stroke-dasharray","3 5");
-          path.setAttribute("opacity","1");
+      // Reset all logos and lines to dim state for a new search
+      const sourceIds = [
+        "youtube","hackernews","appstore",
+        "googlenews","trustpilot","bingnews"
+      ];
+      sourceIds.forEach(id => {
+        const logo = document.getElementById("swlogo-" + id);
+        const line = document.getElementById("swline-" + id);
+        if (logo) logo.style.opacity = "0.2";
+        if (line) {
+          line.setAttribute("stroke", "#e8e4da");
+          line.setAttribute("stroke-width", "1");
+          line.setAttribute("stroke-dasharray", "3 4");
         }
       });
-      const cl = document.getElementById("swCountLine");
-      if (cl) cl.textContent = "";
       const sl = document.getElementById("swStatusLine");
-      if (sl) sl.textContent = "Preparing query...";
+      if (sl) sl.textContent = "";
     }
 
     // Build the hub immediately when the page loads
-    swHubInit();
+    
     const SW_TOKEN = getToken();
     // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
     function signInWithGoogle() {
