@@ -1141,9 +1141,9 @@ def fetch_wikipedia(query):
 # ─── AI ───────────────────────────────────────────────────────────────────────
 
 def get_free_models():
-    # Fetches the current list of free AI models from OpenRouter
-    # We do this dynamically instead of hardcoding model names
-    # because free models change frequently — hardcoding causes breakage
+    # Fetches free models but prioritises ones that are less likely to be rate-limited.
+    # We shuffle the list so all models get used, not just the first few.
+    import random
     try:
         res = requests.get(
             "https://openrouter.ai/api/v1/models",
@@ -1154,23 +1154,29 @@ def get_free_models():
         free_models = []
 
         for model in data.get("data", []):
-            model_id   = model.get("id", "")
-            pricing    = model.get("pricing", {})
-            # prompt cost of 0 means free
+            model_id    = model.get("id", "")
+            pricing     = model.get("pricing", {})
             prompt_cost = float(pricing.get("prompt", "1") or "1")
             if ":free" in model_id or prompt_cost == 0:
+                # Skip models that are consistently unreliable
+                skip = ["owl-alpha", "laguna", "nemotron"]
+                if any(s in model_id for s in skip):
+                    continue
                 free_models.append(model_id)
 
+        # Shuffle so we spread load across models rather than hammering the same ones
+        random.shuffle(free_models)
         print(f"Found {len(free_models)} free models")
-        return free_models[:6]  # Use first 6 to avoid trying too many
+        return free_models[:8]  # Try up to 8
 
     except Exception as e:
         print("Could not fetch model list:", e)
-        # Fallback models if we cannot fetch the list
         return [
+            "meta-llama/llama-3.1-8b-instruct:free",
             "meta-llama/llama-3.2-3b-instruct:free",
+            "google/gemma-2-9b-it:free",
+            "mistralai/mistral-7b-instruct:free",
             "qwen/qwen-2-7b-instruct:free",
-            "google/gemma-2-9b-it:free"
         ]
 
 
@@ -1256,8 +1262,18 @@ def ai_call(prompt):
 
             print(f"Status {res.status_code} from {model}")
 
-            # 429 = rate limited, 502/503 = server error — try next model
-            if res.status_code in [429, 502, 503]:
+            # 429 = rate limited — wait briefly then try next model
+            if res.status_code == 429:
+                import time
+                time.sleep(1)
+                continue
+
+            # 502/503 = server error — try next model immediately
+            if res.status_code in [502, 503]:
+                continue
+
+            # 400 = bad request for this model — skip it
+            if res.status_code == 400:
                 continue
 
             # 401 = bad API key — no point trying other models
