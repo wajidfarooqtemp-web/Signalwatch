@@ -1464,7 +1464,16 @@ def extract_briefing_and_questions(raw_text):
         try:
             parsed    = json.loads(json_match.group())
             briefing  = parsed.get("briefing",  "")
+            # If the model snuck reasoning into the briefing value, take only the last 2 sentences
+            # Reasoning always appears first — the actual briefing is at the end
+            if len(briefing) > 400:
+                sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', briefing) if s.strip()]
+                briefing = ' '.join(sentences[-2:]) if len(sentences) >= 2 else sentences[-1] if sentences else briefing
             action    = parsed.get("action",    "")
+            # Same guard — take last sentence if model padded the action
+            if len(action) > 300:
+                sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', action) if s.strip()]
+                action = sentences[-1] if sentences else action
             questions = parsed.get("questions", [])
 
             # Clean internal algorithm labels from question reasons
