@@ -1446,6 +1446,10 @@ def extract_briefing_and_questions(raw_text):
 
     # Step 1: Aggressively remove all markdown formatting
     clean = raw_text.strip()
+    # If the model reasoned before returning JSON, discard everything before the first {
+    brace = clean.find('{')
+    if brace > 0:
+        clean = clean[brace:]
     clean = re.sub(r'```[a-zA-Z]*\n?', '', clean)  # Remove opening ```json or ```
     clean = re.sub(r'```',             '', clean)   # Remove any remaining ```
     clean = re.sub(r'^\s*`+\s*',      '', clean)   # Remove leading backticks
