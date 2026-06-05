@@ -477,39 +477,75 @@
     border-bottom: none;
   }
 }
-/* Source cell — dim by default, active when source returns data */
+
+@media(max-width:600px) {
+  #swGrid { grid-template-columns: repeat(2,1fr) !important; }
+  .differs-row { grid-template-columns: 1fr !important; }
+  .differs-row > div { border-right:none !important; border-bottom:1px solid var(--border); }
+  .differs-row > div:last-child { border-bottom:none; }
+  /* How it works steps — already flex column so just fix padding */
+  .about-page [style*="padding:72px 40px"],
+  .about-page [style*="padding:56px 40px"],
+  .about-page [style*="padding:48px 40px 72px"] {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+}
+/* ── SSE ANIMATION ───────────────────────────────────────────────────────── */
+
+/* The spinning ring of coloured dashes */
+@keyframes swSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Wrapper spins; each spoke is positioned absolutely around centre */
+.loading > div:first-child {
+  animation: swSpin 1.8s linear infinite;
+}
+
+/* Each spoke is a short rounded rectangle */
+/* --r is the rotation angle, set inline per spoke */
+.sw-spoke {
+  position: absolute;
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  /* Place at top-centre of the container, then rotate around centre */
+  top: 0;
+  left: 50%;
+  transform-origin: 50% 28px; /* 28px = half container height = pivot at centre */
+  transform: translateX(-50%) rotate(var(--r));
+}
+
+/* Source cell grid */
 .sw-cell {
   font-family: var(--mono);
   font-size: 9px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
   color: var(--border2);
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 7px 10px;
-  transition: color 0.3s, background 0.3s, border-color 0.3s;
+  padding: 5px 8px;
+  text-align: center;
+  transition: color 0.25s, background 0.25s, border-color 0.25s;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Active state — source returned results */
 .sw-cell.active {
   color: var(--teal);
   background: var(--teal-light);
   border-color: var(--teal-mid);
 }
 
-/* Analysing state — all sources done, AI running */
 .sw-cell.done {
   color: var(--text3);
   background: var(--white);
   border-color: var(--border);
-}
-
-@media(max-width:600px) {
-  #swGrid { grid-template-columns: repeat(3,1fr) !important; }
 }
   </style>
 </head>
@@ -649,34 +685,67 @@
       <!-- LOADING STATE — hidden by default, shown only when search runs -->
       <!-- The .loading class has display:none in CSS — it only appears when
            runSearch() sets loading.style.display = "block" -->
-      <div class="loading" id="loading" style="padding:48px 0;text-align:center;">
+      <div class="loading" id="loading">
 
-        <!-- Status line — updates as each source reports in -->
-        <div style="
-          font-family:var(--mono);font-size:10px;color:var(--text3);
-          letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;
-          display:flex;align-items:center;justify-content:center;gap:8px;
-        ">
-          <span style="
-            width:5px;height:5px;border-radius:50%;background:var(--teal);
-            display:inline-block;flex-shrink:0;
-          "></span>
-          <span id="swStatusLine">Preparing query...</span>
-        </div>
+  <!-- Rotating spokes — 8 dashes in a circle, each a Signalwatch colour -->
+  <!-- Rotates steadily. No pulse. No bounce. Just quiet, confident motion. -->
+  <div style="position:relative;width:56px;height:56px;margin:0 auto 24px;">
+    <!-- Each span is one spoke. Positioned by rotation around the centre. -->
+    <!-- Colours: teal, amber, purple, red — all from the Signalwatch palette -->
+    <span class="sw-spoke" style="--r:0deg;   background:#0d7a6b;"></span>
+    <span class="sw-spoke" style="--r:45deg;  background:#c4720a;"></span>
+    <span class="sw-spoke" style="--r:90deg;  background:#6d28d9;"></span>
+    <span class="sw-spoke" style="--r:135deg; background:#c0392b;"></span>
+    <span class="sw-spoke" style="--r:180deg; background:#0d7a6b;"></span>
+    <span class="sw-spoke" style="--r:225deg; background:#c4720a;"></span>
+    <span class="sw-spoke" style="--r:270deg; background:#6d28d9;"></span>
+    <span class="sw-spoke" style="--r:315deg; background:#c0392b;"></span>
+  </div>
 
-        <!-- Hub SVG — built by swHubInit() below, nodes light up as sources return -->
-        <svg id="swHubSvg" viewBox="0 0 520 400"
-             style="max-width:460px;width:100%;display:block;margin:0 auto;"></svg>
+  <!-- Query name — what is being searched -->
+  <div style="
+    font-family:var(--serif);
+    font-size:18px;
+    font-weight:700;
+    color:var(--ink);
+    letter-spacing:-0.3px;
+    margin-bottom:4px;
+  " id="swQueryLabel">Signalwatch</div>
 
-        <!-- Signal count line — only appears once signals start arriving -->
-        <div id="swCountLine" style="
-          font-family:var(--mono);font-size:11px;color:var(--text3);
-          margin-top:16px;min-height:18px;letter-spacing:0.5px;
-        "></div>
+  <!-- Phase label — updates as sources report in -->
+  <div style="
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text3);
+    letter-spacing:0.5px;
+    margin-bottom:20px;
+  " id="swSummaryLine">Findings</div>
 
-        <!-- Hidden relay div — required for agent event wiring -->
-        <div id="liveProgress" style="display:none;"></div>
-      </div>
+  <!-- Source grid — lights up as each source returns data -->
+  <div id="swGrid" style="
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:5px;
+    max-width:360px;
+    margin:0 auto;
+  ">
+    <div class="sw-cell" id="cell-reddit">Reddit</div>
+    <div class="sw-cell" id="cell-hackernews">Tech Forums</div>
+    <div class="sw-cell" id="cell-newsapi">News</div>
+    <div class="sw-cell" id="cell-newsdata">Global News</div>
+    <div class="sw-cell" id="cell-rss">RSS</div>
+    <div class="sw-cell" id="cell-youtube">YouTube</div>
+    <div class="sw-cell" id="cell-trustpilot">Trustpilot</div>
+    <div class="sw-cell" id="cell-appstore">App Store</div>
+    <div class="sw-cell" id="cell-playstore">Play Store</div>
+    <div class="sw-cell" id="cell-mastodon">Mastodon</div>
+    <div class="sw-cell" id="cell-wikipedia">Wikipedia</div>
+    <div class="sw-cell" id="cell-googlenews">Google News</div>
+    <div class="sw-cell" id="cell-bingnews">Bing News</div>
+  </div>
+
+  <div id="liveProgress" style="display:none;"></div>
+</div>
       
       <!-- ── AGENT INTELLIGENCE PANEL ──────────────────────────────────────────
          Hidden on page load. Becomes visible when the first agent event arrives.
