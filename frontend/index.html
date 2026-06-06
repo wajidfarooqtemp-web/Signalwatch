@@ -468,26 +468,7 @@
     padding-right: 20px !important;
   }
 }
-/* ── FLUID CIRCLE ANIMATION ──────────────────────────────────────────────── */
 
-/* The shape morphs slightly — gives a water/liquid feeling */
-@keyframes swFluid {
-  0%   { border-radius: 50%; transform: scale(1)    rotate(0deg);   }
-  25%  { border-radius: 46% 54% 52% 48% / 48% 52% 54% 46%; transform: scale(1.04) rotate(90deg);  }
-  50%  { border-radius: 50%; transform: scale(0.97) rotate(180deg); }
-  75%  { border-radius: 54% 46% 48% 52% / 52% 48% 46% 54%; transform: scale(1.03) rotate(270deg); }
-  100% { border-radius: 50%; transform: scale(1)    rotate(360deg); }
-}
-
-/* The border colour cycles through Signalwatch brand colours */
-/* conic-gradient gives the split-colour ring effect */
-@keyframes swColour {
-  0%   { border-image: none; box-shadow: 0 0 0 1.5px var(--teal),   inset 0 0 0 1.5px transparent; border: 2px solid var(--teal);   }
-  25%  { border: 2px solid var(--amber);  }
-  50%  { border: 2px solid #6d28d9;       }
-  75%  { border: 2px solid var(--red);    }
-  100% { border: 2px solid var(--teal);   }
-}
 /* ── SSE ANIMATION ───────────────────────────────────────────────────────── */
 
 /* Wrapper spins; each spoke is positioned absolutely around centre */
@@ -500,7 +481,28 @@
 @keyframes swDots1 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -289; } }
 @keyframes swDots2 { from { stroke-dashoffset: 0; } to { stroke-dashoffset:  289; } }
 @keyframes swDots3 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -193; } }
-
+@keyframes swBreathe {
+  0%,100% { transform:scale(1);   opacity:0.4; }
+  50%      { transform:scale(2.2); opacity:1;   }
+}
+.differs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+@media(max-width:600px) {
+  .differs-row {
+    grid-template-columns: 1fr !important;
+    display: block !important;
+  }
+  .differs-row > div {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    display: block;
+  }
+  .differs-row > div:last-child {
+    border-bottom: none;
+  }
+}
   </style>
 </head>
 <body>
@@ -563,21 +565,21 @@
           <div class="hero-kicker">Brand Intelligence Platform</div>
           <h1>Raw signal.<br><span class="accent">Clear</span> <span class="warm">decision.</span></h1>
           <p class="hero-sub">Signalwatch scans Reddit, news, YouTube, reviews and more in real time. Then tells you exactly what it means and what to do about it. Not a dashboard. A decision engine.</p>
-          <div class="source-pills">
-            <span class="source-pill"><span class="source-pill-dot"></span>Reddit</span>
-            <span class="source-pill"><span class="source-pill-dot"></span>News</span>
-            <span class="source-pill"><span class="source-pill-dot"></span>YouTube</span>
-            <span class="source-pill"><span class="source-pill-dot"></span>App Store</span>
-            <span class="source-pill"><span class="source-pill-dot"></span>Trustpilot</span>
-            <span class="source-pill"><span class="source-pill-dot"></span>Tech Forums</span>
-            <span class="source-pill"><span class="source-pill-dot"></span>RSS Feeds</span>
+          <div style="
+            font-family:var(--mono);
+            font-size:11px;
+            color:var(--text3);
+            letter-spacing:0.5px;
+            line-height:1.8;
+          ">
+            13 live sources &nbsp;·&nbsp; last 90 days &nbsp;·&nbsp; one recommended action
           </div>
         </div>
         <div class="hero-panel">
-          <div class="panel-header">
-            <span class="panel-title">Live signal feed</span>
-            <span class="panel-status"><span class="panel-status-dot"></span>Active</span>
-          </div>
+          <div class="panel-header" style="background:var(--bg2);border-bottom:1px solid var(--border);">
+          <span class="panel-title" style="color:var(--text3);">Signal feed</span>
+          <span class="panel-status" style="color:var(--teal);"><span class="panel-status-dot" style="background:var(--teal);"></span>Live</span>
+        </div>
           <div class="panel-body">
             <div class="panel-bars">
               <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
@@ -639,149 +641,25 @@
       <!-- LOADING STATE — hidden by default, shown only when search runs -->
       <!-- The .loading class has display:none in CSS — it only appears when
            runSearch() sets loading.style.display = "block" -->
-      <div class="loading" id="loading" style="padding:48px 0;text-align:center;">
+      <div class="loading" id="loading" style="padding:100px 0;text-align:center;">
 
-  <!--
-    Pre-built SVG hub:
-    — Flowing dots circle at centre (no fill, no dot in the middle)
-    — 6 source logos placed around it at radius 130
-    — Thin lines connecting hub edge to each logo
-    — Logos dim by default; swLightNode() lights them up when source returns data
-    — No Reddit shown (enterprise positioning)
-    — No source names, only recognisable logos
-  -->
-  <svg viewBox="0 0 480 380" width="100%"
-       style="max-width:460px;display:block;margin:0 auto;"
-       aria-hidden="true">
+  <!-- Single breathing dot — the most confident loading state possible -->
+  <!-- Enterprise products do not perform. They wait with authority. -->
+  <div style="
+    width:10px;height:10px;border-radius:50%;
+    background:var(--teal);
+    margin:0 auto 32px;
+    animation:swBreathe 2.4s ease-in-out infinite;
+  "></div>
 
-    <!-- ── CONNECTION LINES — thin, dashed, dim until source lights up ── -->
-    <!-- Each line goes from the hub circle edge to just before the logo -->
-
-    <!-- YouTube (top) -->
-    <line id="swline-youtube"
-      x1="240" y1="144" x2="240" y2="76"
-      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
-
-    <!-- HackerNews (top-right) -->
-    <line id="swline-hackernews"
-      x1="279" y1="167" x2="338" y2="131"
-      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
-
-    <!-- App Store (bottom-right) -->
-    <line id="swline-appstore"
-      x1="279" y1="213" x2="338" y2="249"
-      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
-
-    <!-- Google News (bottom) -->
-    <line id="swline-googlenews"
-      x1="240" y1="236" x2="240" y2="304"
-      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
-
-    <!-- Trustpilot (bottom-left) -->
-    <line id="swline-trustpilot"
-      x1="201" y1="213" x2="142" y2="249"
-      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
-
-    <!-- Bing News (top-left) -->
-    <line id="swline-bingnews"
-      x1="201" y1="167" x2="142" y2="131"
-      stroke="#e8e4da" stroke-width="1" stroke-dasharray="3 4"/>
-
-    <!-- ── FLOWING DOTS CIRCLE ── -->
-    <!-- Three rings with different dash patterns, speeds, directions -->
-    <!-- Together they create a liquid/water movement of coloured dots -->
-    <!-- No fill, no centre dot — pure circle made of moving points -->
-    <g transform="translate(240,190)">
-
-      <!-- Primary ring: teal, larger dots, 3s -->
-      <circle r="46" fill="none"
-        stroke="#0d7a6b" stroke-width="2.5"
-        stroke-dasharray="3 9" stroke-linecap="round"
-        style="animation:swDots1 3s linear infinite"/>
-
-      <!-- Secondary ring: amber, smaller dots, 4.5s reverse -->
-      <circle r="46" fill="none"
-        stroke="#c4720a" stroke-width="2" opacity="0.55"
-        stroke-dasharray="2 13" stroke-linecap="round"
-        style="animation:swDots2 4.5s linear infinite"/>
-
-      <!-- Tertiary ring: purple, tiny dots, 6s -->
-      <circle r="46" fill="none"
-        stroke="#6d28d9" stroke-width="1.5" opacity="0.35"
-        stroke-dasharray="1.5 19" stroke-linecap="round"
-        style="animation:swDots3 6s linear infinite"/>
-
-    </g>
-
-    <!-- ── SOURCE LOGOS ── -->
-    <!-- Each group: opacity 0.2 default, 1.0 when lit by swLightNode() -->
-    <!-- Logo design: simple geometric shapes in brand colours -->
-    <!-- Enterprise-credible only — no Reddit, no Mastodon -->
-
-    <!-- YouTube — top, position (240, 60) -->
-    <g id="swlogo-youtube" opacity="0.2" style="transition:opacity 0.4s">
-      <rect x="220" y="48" width="40" height="25" rx="6" fill="#FF0000"/>
-      <polygon points="235,53 235,71 253,62" fill="white"/>
-    </g>
-
-    <!-- HackerNews — top right, position (353, 119) -->
-    <g id="swlogo-hackernews" opacity="0.2" style="transition:opacity 0.4s">
-      <rect x="339" y="105" width="28" height="28" rx="4" fill="#FF6600"/>
-      <text x="353" y="124" text-anchor="middle"
-        font-family="DM Mono,monospace" font-size="14"
-        font-weight="900" fill="white">Y</text>
-    </g>
-
-    <!-- App Store — bottom right, position (353, 249) -->
-    <g id="swlogo-appstore" opacity="0.2" style="transition:opacity 0.4s">
-      <rect x="339" y="235" width="28" height="28" rx="7" fill="#0D96F6"/>
-      <!-- Simple A shape -->
-      <text x="353" y="254" text-anchor="middle"
-        font-family="DM Sans,sans-serif" font-size="14"
-        font-weight="700" fill="white">A</text>
-    </g>
-
-    <!-- Google News — bottom, position (240, 318) -->
-    <g id="swlogo-googlenews" opacity="0.2" style="transition:opacity 0.4s">
-      <circle cx="240" cy="318" r="15" fill="#4285F4"/>
-      <text x="240" y="323" text-anchor="middle"
-        font-family="DM Sans,sans-serif" font-size="13"
-        font-weight="700" fill="white">G</text>
-    </g>
-
-    <!-- Trustpilot — bottom left, position (127, 249) -->
-    <g id="swlogo-trustpilot" opacity="0.2" style="transition:opacity 0.4s">
-      <circle cx="127" cy="249" r="15" fill="#00B67A"/>
-      <!-- Star represented as ★ -->
-      <text x="127" y="254" text-anchor="middle"
-        font-family="DM Sans,sans-serif" font-size="14"
-        fill="white">★</text>
-    </g>
-
-    <!-- Bing News — top left, position (127, 119) -->
-    <g id="swlogo-bingnews" opacity="0.2" style="transition:opacity 0.4s">
-      <rect x="113" y="105" width="28" height="28" rx="4" fill="#0078D4"/>
-      <text x="127" y="124" text-anchor="middle"
-        font-family="DM Mono,monospace" font-size="9"
-        font-weight="700" fill="white">BING</text>
-    </g>
-
-  </svg>
-
-  <!-- Query label — set to the search query by JS when search starts -->
-  <!-- Shows what is being searched, not a generic spinner message -->
-  <!-- Empty on page load — only visible during a search -->
   <div id="swStatusLine" style="
     font-family:var(--mono);
     font-size:11px;
-    letter-spacing:1.5px;
+    letter-spacing:2px;
     text-transform:uppercase;
     color:var(--text3);
-    margin-top:4px;
-    min-height:16px;
-  "></div>
+  ">Findings</div>
 
-  <!-- Hidden — required for SSE wiring -->
   <div id="swCountLine" style="display:none;"></div>
   <div id="liveProgress" style="display:none;"></div>
 </div>
@@ -956,37 +834,37 @@
         <div style="border:1px solid var(--border);border-radius:5px;overflow:hidden;">
 
           <!-- Header -->
-          <div class="differs-row"style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--bg2);border-bottom:1px solid var(--border);">
+          <div class="differs-row"style="background:var(--bg2);border-bottom:1px solid var(--border);">
             <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);"></div>
             <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);border-left:1px solid var(--border);">Other tools</div>
             <div style="padding:10px 16px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--teal);border-left:1px solid var(--border);">Signalwatch</div>
           </div>
 
-          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Output</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Charts</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">A briefing and one action</div>
           </div>
 
-          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Detection</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Keyword frequency</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Concept co-occurrence</div>
           </div>
 
-          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Recency</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Often weeks old</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Live, last 90 days</div>
           </div>
 
-          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);border-bottom:1px solid var(--border);">
+          <div class="differs-row" style="background:var(--white);border-bottom:1px solid var(--border);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Competitors</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Manual search</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Auto-detected</div>
           </div>
 
-          <div class="differs-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--white);">
+          <div class="differs-row" style="background:var(--white);">
             <div style="padding:12px 16px;font-size:12px;font-weight:500;color:var(--text);border-right:1px solid var(--border);">Leads</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--text3);border-right:1px solid var(--border);">Not available</div>
             <div style="padding:12px 16px;font-size:12px;color:var(--teal);">Intent-scored, ready to send</div>
