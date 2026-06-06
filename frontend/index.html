@@ -565,15 +565,7 @@
           <div class="hero-kicker">Brand Intelligence Platform</div>
           <h1>Raw signal.<br><span class="accent">Clear</span> <span class="warm">decision.</span></h1>
           <p class="hero-sub">Signalwatch scans Reddit, news, YouTube, reviews and more in real time. Then tells you exactly what it means and what to do about it. Not a dashboard. A decision engine.</p>
-          <div style="
-            font-family:var(--mono);
-            font-size:11px;
-            color:var(--text3);
-            letter-spacing:0.5px;
-            line-height:1.8;
-          ">
-            13 live sources &nbsp;·&nbsp; last 90 days &nbsp;·&nbsp; one recommended action
-          </div>
+          
         </div>
         <div class="hero-panel">
           <div class="panel-header" style="background:var(--bg2);border-bottom:1px solid var(--border);">
@@ -658,6 +650,7 @@
     letter-spacing:2px;
     text-transform:uppercase;
     color:var(--text3);
+    min-height:18px;
   ">Findings</div>
 
   <div id="swCountLine" style="display:none;"></div>
@@ -1006,6 +999,26 @@
 
     // Build the hub immediately when the page loads
     
+    // Rotating words during search — calm, purposeful, enterprise
+    const swWords = ["Findings","Signals","Patterns","Intelligence","Analysis","Context"];
+    let swWordIdx = 0;
+    let swWordTimer = null;
+
+    function swStartWords() {
+      // Changes the status word every 2.2 seconds while search runs
+      swWordTimer = setInterval(() => {
+        swWordIdx = (swWordIdx + 1) % swWords.length;
+        const el = document.getElementById("swStatusLine");
+        if (el) el.textContent = swWords[swWordIdx];
+      }, 2200);
+    }
+
+    function swStopWords() {
+      // Stops the rotation and resets to default word
+      if (swWordTimer) { clearInterval(swWordTimer); swWordTimer = null; }
+      swWordIdx = 0;
+    }
+
     const SW_TOKEN = getToken();
     // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
     function signInWithGoogle() {
@@ -1118,10 +1131,7 @@
       btn.disabled = true;
       btn.textContent = "Analysing...";
       loading.style.display = "block";
-
-      // Set the query label in the hub animation header
-      const _ql = document.getElementById("swStatusLine");
-      if (_ql) _ql.textContent = '"' + query + '"';
+      swStartWords();
 
       // No elapsed timer needed — hub animation communicates progress visually
 
@@ -1240,6 +1250,7 @@ if (loadingText) {
             }
 
             else if (msg.type === "complete") {
+              swStopWords();
               // Stop the elapsed timer when results arrive
               if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
               // Main results done — render them
@@ -1553,18 +1564,14 @@ if (loadingText) {
       // ── Reset scan animation ──────────────────────────────────────────────
       // Reset all source cells to dim
   // Reset status line only — no source grid exists anymore
-  const sl = document.getElementById("swStatusLine");
-  if (sl) sl.textContent = "Findings";
-      swRunningTotal = 0;
+  swRunningTotal = 0;
       swSourcesDone  = 0;
       swElapsedSecs  = 0;
+      swStopWords();
       swResetHub();
-
-      // Stop any previous elapsed timer
+      const sl = document.getElementById("swStatusLine");
+      if (sl) sl.textContent = "Findings";
       if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
-
-      // Reset hub animation — dims all nodes, clears count line
-      swResetHub();
 
       // Hide and clear lead section on new search
       const leadSection = document.getElementById("leadSection");

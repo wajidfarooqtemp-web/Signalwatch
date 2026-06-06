@@ -1484,7 +1484,7 @@ def extract_briefing_and_questions(raw_text):
             # Reasoning always appears first — the actual briefing is at the end
             if len(briefing) > 400:
                 sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', briefing) if s.strip()]
-                briefing = ' '.join(sentences[-2:]) if len(sentences) >= 2 else sentences[-1] if sentences else briefing
+                briefing = ' '.join(sentences[:2]) if len(sentences) >= 2 else sentences[0] if sentences else briefing
             action    = parsed.get("action",    "")
             # Same guard — take last sentence if model padded the action
             if len(action) > 300:
@@ -1529,10 +1529,20 @@ def extract_briefing_and_questions(raw_text):
         # Unescape JSON string escapes
         briefing = briefing.replace('\\"', '"').replace('\\n', ' ').replace('\\\\', '\\')
     else:
-        # Last resort: use the cleaned text as the briefing
-        # But only if it does not look like raw JSON
+        # Last resort — but strip any question/action sections first
+        # The AI sometimes returns a flat text with "Briefing:", "Action:", "Questions:"
         if not clean.startswith('{') and not clean.startswith('"briefing"'):
-            briefing = clean
+            # Try to extract just the briefing section if the AI used labels
+            labelled = re.search(
+                r'(?:briefing|summary)[:\s]+(.+?)(?:action|questions|$)',
+                clean, re.IGNORECASE | re.DOTALL
+            )
+            if labelled:
+                briefing = labelled.group(1).strip()
+            else:
+                # Take only the first 2 sentences — questions always come after
+                sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', clean) if s.strip()]
+                briefing = ' '.join(sentences[:2]) if sentences else clean
         else:
             # Strip the JSON structure and take just the text content
             briefing = re.sub(r'[{}":\[\]]', ' ', clean)
