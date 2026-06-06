@@ -2575,7 +2575,7 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
 
         # If still not done, wait for it — do not abandon
         if not comp_task.done():
-            competitive_result = await asyncio.wait_for(comp_task, timeout=30)
+            competitive_result = await asyncio.wait_for(comp_task, timeout=90)
         else:
             competitive_result = comp_task.result()
 

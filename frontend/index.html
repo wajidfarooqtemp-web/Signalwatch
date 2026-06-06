@@ -488,6 +488,9 @@
   0%,100% { opacity:0.25; }
   50%     { opacity:1;    }
 }
+/* Spins the entire ring while loading */
+@keyframes swSpinRing { to { transform: rotate(360deg); } }
+.sw-ring-active { animation: swSpinRing 2s linear infinite; }
 .differs-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -656,6 +659,7 @@
   </div>
 
   <!-- Status text with fade transition -->
+  <!-- Two spans: word fades in/out, dots change in fixed-width box so text never shifts -->
   <div id="swStatusLine" style="
     font-family:var(--mono);
     font-size:10px;
@@ -664,7 +668,7 @@
     color:var(--text3);
     min-height:16px;
     transition:opacity 0.4s ease;
-  ">Findings</div>
+  "><span id="swStatusWord">Findings</span><span id="swStatusDots" style="display:inline-block;width:18px;text-align:left;overflow:hidden;"></span></div>
 
   <div id="swCountLine" style="display:none;"></div>
   <div id="liveProgress" style="display:none;"></div>
@@ -1083,11 +1087,17 @@
       if (swRingFrame) cancelAnimationFrame(swRingFrame);
       swRingStart = null;
       swRingFrame = requestAnimationFrame(swRingTick);
+      // Add CSS spin to the ring wrapper — gives clear visual rotation
+      const wrap = document.getElementById("swRingWrap");
+      if (wrap) wrap.classList.add("sw-ring-active");
     }
 
     function swRingStop() {
       if (swRingFrame) { cancelAnimationFrame(swRingFrame); swRingFrame = null; }
-      // Reset all dashes to full opacity
+      // Remove CSS spin
+      const wrap = document.getElementById("swRingWrap");
+      if (wrap) wrap.classList.remove("sw-ring-active");
+      // Reset all dashes to rest state
       for (let i = 0; i < SW_DASH_COUNT; i++) {
         const el = document.getElementById("swd" + i);
         if (el) {
@@ -1111,23 +1121,27 @@
       swBaseWord = word;
       if (swDotTimer) { clearInterval(swDotTimer); swDotTimer = null; }
 
-      const el = document.getElementById("swStatusLine");
-      if (!el) return;
+      const wordEl = document.getElementById("swStatusWord");
+      const dotsEl = document.getElementById("swStatusDots");
+      const lineEl = document.getElementById("swStatusLine");
+      if (!wordEl || !dotsEl) return;
 
-      // Fade out
-      el.style.opacity = "0";
+      // Fade the whole line out, change word, fade back in
+      // Dots live in a fixed-width span so the word never shifts position
+      if (lineEl) lineEl.style.opacity = "0";
       setTimeout(() => {
+        wordEl.textContent = word;
+        dotsEl.textContent = "";
+        if (lineEl) lineEl.style.opacity = "1";
+
         if (animated) {
           swDotCount = 0;
-          el.textContent = word + ".";
-          el.style.opacity = "1";
+          dotsEl.textContent = ".";
           swDotTimer = setInterval(() => {
             swDotCount = (swDotCount + 1) % 3;
-            el.textContent = word + ".".repeat(swDotCount + 1);
+            // Only the dots span changes — word span never moves
+            dotsEl.textContent = ".".repeat(swDotCount + 1);
           }, 300);
-        } else {
-          el.textContent = word;
-          el.style.opacity = "1";
         }
       }, 200);
     }
@@ -1263,19 +1277,11 @@
       btn.disabled = true;
       btn.textContent = "Analysing...";
       loading.style.display = "block";
-      swStartWords();
-
-      // No elapsed timer needed — hub animation communicates progress visually
-
-      
       container.innerHTML = "";
       progress.innerHTML = "";
-      const loadingText = document.getElementById("loadingText");
-if (loadingText) {
-  loadingText.textContent = "Scanning sources for " + query;
-}
       if (signalChart) { signalChart.destroy(); signalChart = null; }
-      resetAgentPanel(); // clear previous agent findings before new search
+      resetAgentPanel(); // clear previous search — must come BEFORE swStartWords
+      swStartWords();    // start animation AFTER reset so words are not wiped
 
       const url = `${API_BASE}/search-stream?query=${encodeURIComponent(query)}&token=${encodeURIComponent(getToken())}`;
 
