@@ -481,9 +481,12 @@
 @keyframes swDots1 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -289; } }
 @keyframes swDots2 { from { stroke-dashoffset: 0; } to { stroke-dashoffset:  289; } }
 @keyframes swDots3 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -193; } }
-@keyframes swBreathe {
-  0%,100% { transform:scale(1);   opacity:0.4; }
-  50%      { transform:scale(2.2); opacity:1;   }
+/* ── WAVE RING ANIMATION ─────────────────────────────────────────────────── */
+/* Dashes are positioned via JS transform-origin trick in swRingInit()        */
+/* The wave travels around the ring — each dash offset by 45deg phase         */
+@keyframes swWave {
+  0%,100% { opacity:0.25; }
+  50%     { opacity:1;    }
 }
 .differs-row {
   display: grid;
@@ -633,24 +636,34 @@
       <!-- LOADING STATE — hidden by default, shown only when search runs -->
       <!-- The .loading class has display:none in CSS — it only appears when
            runSearch() sets loading.style.display = "block" -->
-      <div class="loading" id="loading" style="padding:100px 0;text-align:center;">
+      <div class="loading" id="loading" style="padding:80px 0 100px;text-align:center;">
 
-  <!-- Single breathing dot — the most confident loading state possible -->
-  <!-- Enterprise products do not perform. They wait with authority. -->
-  <div style="
-    width:10px;height:10px;border-radius:50%;
-    background:var(--teal);
-    margin:0 auto 32px;
-    animation:swBreathe 2.4s ease-in-out infinite;
-  "></div>
+  <!-- Wave-ring loader — 8 pill dashes in a circle with organic deformation -->
+  <div id="swRingWrap" style="position:relative;width:64px;height:64px;margin:0 auto 28px;">
+    <svg id="swRingSvg" viewBox="0 0 64 64" width="64" height="64" style="overflow:visible;">
+      <!-- 8 pill dashes positioned around a circle of radius 22px -->
+      <!-- Each dash is a rounded rect, rotated around the centre -->
+      <!-- Colors reuse existing Signalwatch palette variables -->
+      <rect id="swd0" x="30" y="6"  width="4" height="10" rx="2" fill="var(--teal)"/>
+      <rect id="swd1" x="30" y="6"  width="4" height="10" rx="2" fill="var(--teal-mid)"/>
+      <rect id="swd2" x="30" y="6"  width="4" height="10" rx="2" fill="var(--amber)"/>
+      <rect id="swd3" x="30" y="6"  width="4" height="10" rx="2" fill="var(--amber-mid)"/>
+      <rect id="swd4" x="30" y="6"  width="4" height="10" rx="2" fill="var(--teal)"/>
+      <rect id="swd5" x="30" y="6"  width="4" height="10" rx="2" fill="var(--teal-mid)"/>
+      <rect id="swd6" x="30" y="6"  width="4" height="10" rx="2" fill="var(--amber)"/>
+      <rect id="swd7" x="30" y="6"  width="4" height="10" rx="2" fill="var(--amber-mid)"/>
+    </svg>
+  </div>
 
+  <!-- Status text with fade transition -->
   <div id="swStatusLine" style="
     font-family:var(--mono);
-    font-size:11px;
-    letter-spacing:2px;
+    font-size:10px;
+    letter-spacing:2.5px;
     text-transform:uppercase;
     color:var(--text3);
-    min-height:18px;
+    min-height:16px;
+    transition:opacity 0.4s ease;
   ">Findings</div>
 
   <div id="swCountLine" style="display:none;"></div>
@@ -1000,24 +1013,143 @@
     // Build the hub immediately when the page loads
     
     // Rotating words during search — calm, purposeful, enterprise
-    const swWords = ["Findings","Signals","Patterns","Intelligence","Analysis","Context"];
-    let swWordIdx = 0;
-    let swWordTimer = null;
+    // ── WAVE RING ANIMATION ──────────────────────────────────────────────────
+    // 8 dashes arranged in a circle. A wave of opacity travels around them.
+    // No rotation. No scaling. No pulsing. Just a slow, organic wave.
+    // Deformation is achieved by slightly varying each dash's distance from
+    // centre on a sine cycle — only 2-3px movement, barely perceptible.
 
+    const SW_DASH_COUNT = 8;
+    const SW_RING_R     = 22;   // radius of the ring (px from centre)
+    const SW_CX_RING    = 32;   // centre x of the 64px viewBox
+    const SW_CY_RING    = 32;   // centre y of the 64px viewBox
+
+    // Place each dash at its correct angle using transform-origin
+    function swRingInit() {
+      for (let i = 0; i < SW_DASH_COUNT; i++) {
+        const el  = document.getElementById("swd" + i);
+        if (!el) continue;
+        const deg = i * (360 / SW_DASH_COUNT);
+        // Rotate around the centre of the viewBox
+        el.setAttribute("transform", `rotate(${deg} ${SW_CX_RING} ${SW_CY_RING})`);
+      }
+    }
+
+    // Animate: wave of opacity travels around the ring
+    // Each dash peaks at a different phase, creating a travelling highlight
+    let swRingFrame = null;
+    let swRingStart = null;
+
+    function swRingTick(ts) {
+      if (!swRingStart) swRingStart = ts;
+      const elapsed = ts - swRingStart;
+
+      // Full wave cycle: 2400ms — slow and calm
+      const cycle = 2400;
+      // Deformation cycle: slightly different period for organic feel
+      const defCycle = 3700;
+
+      for (let i = 0; i < SW_DASH_COUNT; i++) {
+        const el = document.getElementById("swd" + i);
+        if (!el) continue;
+
+        const phase    = (i / SW_DASH_COUNT);
+        const wavePos  = ((elapsed / cycle) - phase + 10) % 1;
+        // Opacity: peak at wavePos=0.5, trough at 0 and 1
+        const opacity  = 0.2 + 0.8 * Math.pow(Math.sin(wavePos * Math.PI), 2);
+
+        // Subtle radial deformation — moves dash ±2px along its radius
+        const defPhase = ((elapsed / defCycle) - phase + 10) % 1;
+        const defR     = SW_RING_R + 2 * Math.sin(defPhase * 2 * Math.PI);
+
+        // Reposition dash at new radius — recompute y offset from centre
+        // Original rect is at y=6 (top of 64px box) with 32px centre = 26px above centre
+        // We adjust translate to shift it inward/outward
+        const deg      = i * (360 / SW_DASH_COUNT);
+        const radShift = defR - SW_RING_R;   // how much to shift (positive = outward)
+
+        el.setAttribute("opacity", opacity.toFixed(3));
+        // Combine rotation with tiny radial nudge via translateY before rotation
+        el.setAttribute("transform",
+          `rotate(${deg} ${SW_CX_RING} ${SW_CY_RING}) translate(0 ${(-radShift).toFixed(2)})`
+        );
+      }
+
+      swRingFrame = requestAnimationFrame(swRingTick);
+    }
+
+    function swRingStart_anim() {
+      swRingInit();
+      if (swRingFrame) cancelAnimationFrame(swRingFrame);
+      swRingStart = null;
+      swRingFrame = requestAnimationFrame(swRingTick);
+    }
+
+    function swRingStop() {
+      if (swRingFrame) { cancelAnimationFrame(swRingFrame); swRingFrame = null; }
+      // Reset all dashes to full opacity
+      for (let i = 0; i < SW_DASH_COUNT; i++) {
+        const el = document.getElementById("swd" + i);
+        if (el) {
+          el.setAttribute("opacity", "0.3");
+          el.setAttribute("transform",
+            `rotate(${i * 45} ${SW_CX_RING} ${SW_CY_RING})`
+          );
+        }
+      }
+    }
+
+    // ── STATUS TEXT WITH ELLIPSIS ────────────────────────────────────────────
+    // Status changes are driven by SSE events, not a timer.
+    // Ellipsis animates only while active (querying/analyzing/synthesizing).
+
+    let swDotTimer  = null;
+    let swDotCount  = 0;
+    let swBaseWord  = "FINDINGS";
+
+    function swSetStatus(word, animated) {
+      swBaseWord = word;
+      if (swDotTimer) { clearInterval(swDotTimer); swDotTimer = null; }
+
+      const el = document.getElementById("swStatusLine");
+      if (!el) return;
+
+      // Fade out
+      el.style.opacity = "0";
+      setTimeout(() => {
+        if (animated) {
+          swDotCount = 0;
+          el.textContent = word + ".";
+          el.style.opacity = "1";
+          swDotTimer = setInterval(() => {
+            swDotCount = (swDotCount + 1) % 3;
+            el.textContent = word + ".".repeat(swDotCount + 1);
+          }, 300);
+        } else {
+          el.textContent = word;
+          el.style.opacity = "1";
+        }
+      }, 200);
+    }
+
+    function swStopStatus() {
+      if (swDotTimer) { clearInterval(swDotTimer); swDotTimer = null; }
+      swSetStatus("FINDINGS", false);
+    }
+
+    // ── LEGACY COMPAT — swStartWords / swStopWords map to new system ─────────
     function swStartWords() {
-      // Changes the status word every 2.2 seconds while search runs
-      swWordTimer = setInterval(() => {
-        swWordIdx = (swWordIdx + 1) % swWords.length;
-        const el = document.getElementById("swStatusLine");
-        if (el) el.textContent = swWords[swWordIdx];
-      }, 2200);
+      swRingStart_anim();
+      swSetStatus("QUERYING", true);
     }
 
     function swStopWords() {
-      // Stops the rotation and resets to default word
-      if (swWordTimer) { clearInterval(swWordTimer); swWordTimer = null; }
-      swWordIdx = 0;
+      swRingStop();
+      swStopStatus();
     }
+
+    // Initialise ring positions on page load (static, no animation yet)
+    swRingInit();
 
     const SW_TOKEN = getToken();
     // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
@@ -1220,7 +1352,7 @@ if (loadingText) {
             }
 
             else if (msg.type === "analysing") {
-              // Circle keeps moving — no text change needed
+              swSetStatus("ANALYSING", true);
             }
             else if (msg.type === "agent_update") {
               // Agents 1-3 events
@@ -1250,6 +1382,8 @@ if (loadingText) {
             }
 
             else if (msg.type === "complete") {
+              swSetStatus("SYNTHESIZING", true);
+              await new Promise(r => setTimeout(r, 900));
               swStopWords();
               // Stop the elapsed timer when results arrive
               if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
