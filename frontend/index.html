@@ -484,24 +484,17 @@
   grid-template-columns: 1fr 1fr 1fr;
 }
 @media(max-width:600px) {
-  /*
-    Why display:block on both the row and children:
-    CSS grid ignores border-right on children when they stack.
-    But inline style="border-right:..." cannot be overridden by a class rule
-    unless we use !important. This is the one legitimate use of !important —
-    overriding inline styles you cannot edit (in this case they are in HTML).
-  */
   .differs-row {
-    display: block !important;
-    grid-template-columns: unset !important;
+    display: block !important;      /* overrides inline display:grid */
+    grid-template-columns: 1fr !important;
   }
   .differs-row > div {
     display: block !important;
     width: 100% !important;
-    border-right: none !important;       /* overrides inline style="border-right:..." */
+    border-right: none !important;
     border-left: none !important;
     border-bottom: 1px solid var(--border) !important;
-    padding: 12px 16px !important;
+    box-sizing: border-box;
   }
   .differs-row > div:last-child {
     border-bottom: none !important;
@@ -1008,8 +1001,10 @@
           line.setAttribute("stroke-dasharray", "3 4");
         }
       });
-      const sl = document.getElementById("swStatusLine");
-      if (sl) sl.textContent = "";
+      const wordEl = document.getElementById("swStatusWord");
+      const dotsEl = document.getElementById("swStatusDots");
+      if (wordEl) wordEl.textContent = "";
+      if (dotsEl) dotsEl.textContent = "";
     }
 
     // Build the hub immediately when the page loads
@@ -1124,8 +1119,6 @@
       const lineEl = document.getElementById("swStatusLine");
       if (!wordEl || !dotsEl) return;
 
-      // Fade the whole line out, change word, fade back in
-      // Dots live in a fixed-width span so the word never shifts position
       if (lineEl) lineEl.style.opacity = "0";
       setTimeout(() => {
         wordEl.textContent = word;
@@ -1707,8 +1700,10 @@ if (loadingText) {
       swElapsedSecs  = 0;
       swStopWords();
       swResetHub();
-      const sl = document.getElementById("swStatusLine");
-      if (sl) sl.textContent = "Findings";
+      const wordEl2 = document.getElementById("swStatusWord");
+      const dotsEl2 = document.getElementById("swStatusDots");
+      if (wordEl2) wordEl2.textContent = "";
+      if (dotsEl2) dotsEl2.textContent = "";
       if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
 
       // Hide and clear lead section on new search
