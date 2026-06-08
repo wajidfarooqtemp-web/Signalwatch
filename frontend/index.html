@@ -442,18 +442,6 @@
   .about-page [style*="grid-template-columns:1fr 1fr 1fr"] { grid-template-columns:1fr!important; }
   .about-page [style*="grid-template-columns:1fr 1fr 1fr"] > div { border-right:none!important;border-bottom:1px solid var(--border); }
 }
-@media(max-width:600px) {
-  .differs-row {
-    grid-template-columns: 1fr !important;
-  }
-  .differs-row > div {
-    border-right: none !important;
-    border-bottom: 1px solid var(--border);
-  }
-  .differs-row > div:last-child {
-    border-bottom: none;
-  }
-}
 
 @media(max-width:600px) {
   #swGrid { grid-template-columns: repeat(2,1fr) !important; }
@@ -496,17 +484,27 @@
   grid-template-columns: 1fr 1fr 1fr;
 }
 @media(max-width:600px) {
+  /*
+    Why display:block on both the row and children:
+    CSS grid ignores border-right on children when they stack.
+    But inline style="border-right:..." cannot be overridden by a class rule
+    unless we use !important. This is the one legitimate use of !important —
+    overriding inline styles you cannot edit (in this case they are in HTML).
+  */
   .differs-row {
-    grid-template-columns: 1fr !important;
     display: block !important;
+    grid-template-columns: unset !important;
   }
   .differs-row > div {
-    border-right: none !important;
-    border-bottom: 1px solid var(--border);
-    display: block;
+    display: block !important;
+    width: 100% !important;
+    border-right: none !important;       /* overrides inline style="border-right:..." */
+    border-left: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 12px 16px !important;
   }
   .differs-row > div:last-child {
-    border-bottom: none;
+    border-bottom: none !important;
   }
 }
   </style>

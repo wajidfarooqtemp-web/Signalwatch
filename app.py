@@ -41,11 +41,11 @@ app.add_middleware(
     # If a domain is not on this list, the browser blocks the request entirely.
     # "*" means everyone — we are replacing that with only our actual domains.
     allow_origins=[
-        "https://signalwatch.vercel.app",   # Your Vercel frontend (production)
-        "https://www.signalwatch.in",       # Your custom domain when you get it
-        "https://signalwatch.in",           # Without www
-        "http://localhost:5500",             # VS Code Live Server (your local dev)
-        "http://127.0.0.1:5500",             # Same — different way to write localhost
+        "https://signalwatch.vercel.app",   # Vercel deployment (keep as fallback)
+        "https://www.signalwatch.in",       # Your live domain WITH www
+        "https://signalwatch.in",           # Your live domain WITHOUT www
+        "http://localhost:5500",            # VS Code Live Server
+        "http://127.0.0.1:5500",            # Same, different notation
     ],
 
     allow_methods=["GET", "POST", "OPTIONS"],  # Only the methods your app actually uses
@@ -2791,9 +2791,24 @@ async def add_security_headers(request: Request, call_next):
     Strict-Transport-Security: forces HTTPS, prevents SSL stripping
     """
     # Allow Vercel frontend to stream data from this Render backend
+    # OPTIONS = CORS preflight check the browser sends before the real request.
+    # The browser asks: "is this origin allowed?"
+    # We must respond with the EXACT origin that made the request, not a hardcoded one.
+    # If we return "signalwatch.vercel.app" when the request came from "signalwatch.in",
+    # the browser blocks it. So we read the incoming Origin header and echo it back,
+    # but only if it is on our approved list.
+    ALLOWED_ORIGINS = {
+        "https://signalwatch.vercel.app",
+        "https://www.signalwatch.in",
+        "https://signalwatch.in",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    }
     if request.method == "OPTIONS":
+        incoming_origin = request.headers.get("origin", "")
+        allowed = incoming_origin if incoming_origin in ALLOWED_ORIGINS else "https://signalwatch.vercel.app"
         response = await call_next(request)
-        response.headers["Access-Control-Allow-Origin"] = "https://signalwatch.vercel.app"
+        response.headers["Access-Control-Allow-Origin"] = allowed
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
         return response
