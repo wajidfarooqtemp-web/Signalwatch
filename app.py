@@ -1811,7 +1811,7 @@ Signal data (concept labels show what themes appear together in the same result)
 
 Return a JSON object with exactly THREE keys: "briefing", "action", and "questions".
 
-"briefing": Exactly 2 sentences. Plain British English. Conversational. No labels, no asterisks, no dashes, no brand name in quotes. No hedging words like suggests, indicates, appears, seems. Start with a specific observation from the data. Second sentence says why it matters commercially.
+"briefing": 2 to 3 sentences. Plain British English. Conversational. No labels, no asterisks, no dashes, no brand name in quotes. No hedging words like suggests, indicates, appears, seems. Start with a specific observation from the data. Second sentence says why it matters commercially.
 
 "action": One sentence. The single most important thing a brand manager should do in the next 48 hours. Start with a verb. Be specific. Not "monitor" or "consider" — an actual action like "Contact the App Store reviewers complaining about refunds and offer direct resolution" or "Publish a clear comparison page addressing the three most common competitor questions in the data."
 
@@ -2271,7 +2271,15 @@ No markdown. No explanation. Raw JSON only."""
 
         if not competitors:
             print("Competitive agent: could not identify competitors")
-            return {"agent": "competitive", "findings": [], "count": 0}
+            # Return a structured response so frontend shows a clear message
+            # rather than silently hiding the container
+            return {
+                "agent":     "competitive",
+                "findings":  [],
+                "count":     0,
+                "synthesis": "",
+                "no_competitors_found": True
+            }
 
         print(f"Competitive agent: tracking {competitors}")
 
@@ -2322,11 +2330,22 @@ No hedging. No dashes. Plain English."""
         else:
             synthesis = None
 
+        # If we found competitors but no news about them, still return a useful message
+        # "No news" is itself signal — it means competitors are quiet right now
+        if not findings and competitors:
+            return {
+                "agent":       "competitive",
+                "findings":    [],
+                "count":       0,
+                "synthesis":   f"No significant public activity found for {' or '.join(competitors)} in the last 90 days.",
+                "competitors": competitors
+            }
+
         return {
-            "agent":     "competitive",
-            "findings":  findings[:5],
-            "synthesis": synthesis or "",
-            "count":     len(findings),
+            "agent":       "competitive",
+            "findings":    findings[:5],
+            "synthesis":   synthesis or "",
+            "count":       len(findings),
             "competitors": competitors
         }
 
