@@ -24,6 +24,9 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%230f172a'/><circle cx='16' cy='16' r='6' fill='none' stroke='%2322d3ee' stroke-width='2.5'/><circle cx='16' cy='16' r='2.5' fill='%23f59e0b'/><line x1='20' y1='20' x2='25' y2='25' stroke='%2322d3ee' stroke-width='2.2' stroke-linecap='round'/><circle cx='9' cy='9' r='1.8' fill='%23a78bfa'/><circle cx='23' cy='9' r='1.8' fill='%2334d399'/><circle cx='9' cy='23' r='1.8' fill='%23f87171'/></svg>">
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%230f172a'/><circle cx='16' cy='16' r='6' fill='none' stroke='%2322d3ee' stroke-width='2.5'/><circle cx='16' cy='16' r='2.5' fill='%23f59e0b'/><line x1='20' y1='20' x2='25' y2='25' stroke='%2322d3ee' stroke-width='2.2' stroke-linecap='round'/><circle cx='9' cy='9' r='1.8' fill='%23a78bfa'/><circle cx='23' cy='9' r='1.8' fill='%2334d399'/><circle cx='9' cy='23' r='1.8' fill='%23f87171'/></svg>">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Razorpay checkout SDK — loads their secure payment popup -->
+  <!-- Hosted by Razorpay — always up to date, no version to manage -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     :root {
@@ -569,6 +572,27 @@
     <div class="nav-right">
       <div class="live-badge"><div class="live-dot"></div>Live</div>
       <div class="searches-left" id="searchesLeft"><span id="searchesCount">3</span> left today</div>
+
+      <!-- Upgrade button — hidden after user pays (see checkProStatus below) -->
+      <button
+        id="navUpgradeBtn"
+        onclick="openUpgradeCheckout('nav')"
+        style="
+          font-family:var(--mono);
+          font-size:11px;
+          font-weight:600;
+          color:var(--teal);
+          background:var(--teal-light);
+          border:1px solid var(--teal-mid);
+          border-radius:20px;
+          padding:4px 12px;
+          cursor:pointer;
+          letter-spacing:0.3px;
+          white-space:nowrap;
+          display:none;
+        ">
+        Upgrade ↗
+      </button>
     </div>
     <div class="hamburger" id="hamburger" onclick="toggleMenu()">
       <span></span><span></span><span></span>
@@ -1249,11 +1273,42 @@
 
     // ── LIMIT MESSAGE ─────────────────────────────────────────────────────
     function showLimitMessage(container) {
+      // This is your highest-converting moment — the user has searched 3 times
+      // They are not a tyre-kicker. Show them a reason to pay, not a dead end.
       container.innerHTML = `
         <div class="limit-wrap">
           <div class="limit-icon">◎</div>
-          <div class="limit-title">That is your three for today</div>
-          <p class="limit-sub">Signalwatch runs on live APIs with daily limits. Your searches reset at midnight. See you tomorrow.</p>
+          <div class="limit-title">You have used your 3 free searches</div>
+          <p class="limit-sub" style="margin-bottom:28px;">
+            Unlimited searches. All 4 intelligence agents running continuously.
+            Lead generation and competitive scans on every search. No daily cap.
+          </p>
+
+          <!-- Upgrade button — calls openUpgradeCheckout() defined below -->
+          <button
+            onclick="openUpgradeCheckout('limit')"
+            style="
+              background:var(--teal);
+              color:white;
+              font-family:var(--sans);
+              font-size:14px;
+              font-weight:600;
+              padding:14px 36px;
+              border-radius:5px;
+              border:none;
+              cursor:pointer;
+              letter-spacing:0.2px;
+              margin-bottom:16px;
+              display:block;
+              margin-left:auto;
+              margin-right:auto;
+            ">
+            Upgrade to Pro — $19/month
+          </button>
+
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:4px;">
+            Or wait — free searches reset at midnight
+          </div>
         </div>`;
     }
 
@@ -2013,17 +2068,43 @@ if (loadingText) {
         const data  = await res.json();
 
         if (data.error === "used") {
-          // Token has already used their one free lead scan
-          // Hide the button entirely — no point showing it again
+          // User has seen lead gen work — hottest conversion moment on the page
           const btnWrap = document.getElementById("leadBtnWrap");
           if (btnWrap) btnWrap.style.display = "none";
           results.innerHTML = `
-            <div style="font-family:var(--mono);font-size:11px;
-                        color:var(--text3);padding:12px 0;
-                        border-left:2px solid var(--border);padding-left:12px;">
-              You have used your one free lead scan.
-              Each account gets one — it keeps the results fresh and the
-              signal honest.
+            <div style="
+              background:var(--teal-light);
+              border:1px solid var(--teal-mid);
+              border-radius:5px;
+              padding:20px 24px;
+            ">
+              <div style="font-family:var(--mono);font-size:10px;color:var(--teal);
+                          letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">
+                Lead Intelligence
+              </div>
+              <div style="font-size:14px;color:var(--text);font-weight:500;margin-bottom:6px;">
+                You have used your free lead scan
+              </div>
+              <div style="font-size:13px;color:var(--text2);font-weight:300;
+                          line-height:1.6;margin-bottom:20px;">
+                Pro gives you unlimited lead scans on every search —
+                intent scoring, outreach copy, ready to send.
+              </div>
+              <button
+                onclick="openUpgradeCheckout('leads')"
+                style="
+                  background:var(--teal);
+                  color:white;
+                  font-family:var(--sans);
+                  font-size:13px;
+                  font-weight:600;
+                  padding:10px 24px;
+                  border-radius:4px;
+                  border:none;
+                  cursor:pointer;
+                ">
+                Upgrade to Pro — $19/month
+              </button>
             </div>`;
           return;
         }
@@ -2184,6 +2265,163 @@ if (loadingText) {
     // We need to store the query and show the lead section after results render.
     // This hooks into renderResults — find the line container.innerHTML = html;
     // and add the two lines below it.
+
+
+    // ── PAYMENT FUNCTIONS ─────────────────────────────────────────────────
+    // These handle the Razorpay checkout flow entirely on the frontend.
+    //
+    // Flow:
+    // 1. User clicks any Upgrade button → openUpgradeCheckout() runs
+    // 2. We call /create-order on our backend → get an order_id
+    // 3. We open Razorpay's popup with that order_id
+    // 4. User pays inside the popup (card, UPI, netbanking, or PayPal when live)
+    // 5. Razorpay calls our handler with cryptographic payment proof
+    // 6. We POST that proof to /verify-payment on our backend
+    // 7. Backend verifies and marks the token as Pro
+    // 8. We update the UI and remove limits
+
+    async function openUpgradeCheckout(source) {
+      // source = "nav", "limit", or "leads" — tracks which CTA converted
+      // Useful for knowing where to put upgrade prompts
+
+      // Track the click in Umami (your existing analytics — already loaded)
+      if (typeof umami !== "undefined") {
+        umami.track("upgrade-click", { from: source });
+      }
+
+      // Step 1: Ask our backend to create a Razorpay order
+      // We cannot do this in the browser — price must come from the server
+      let order;
+      try {
+        const res = await fetch(
+          `${API_BASE}/create-order?token=${encodeURIComponent(getToken())}`
+        );
+        order = await res.json();
+
+        if (order.error) {
+          alert("Could not start checkout: " + order.error);
+          return;
+        }
+      } catch (e) {
+        alert("Could not reach the server. Please try again.");
+        return;
+      }
+
+      // Step 2: Configure and open the Razorpay checkout popup
+      // window.Razorpay is provided by the SDK script we added to <head>
+      const options = {
+        key:         order.key_id,        // Your public Razorpay key — safe in frontend
+        amount:      order.amount,        // In paise — set by server, not modifiable here
+        currency:    order.currency,      // "INR"
+        name:        "Signalwatch",       // Shown at top of checkout popup
+        description: order.description,  // Plan description
+        order_id:    order.order_id,      // The server-created order ID
+
+        // Your brand colour in the popup
+        theme: { color: "#0d7a6b" },
+
+        // Step 3: Razorpay calls this function after successful payment
+        // response contains the three values we need to verify server-side
+        handler: async function(response) {
+          // Send the payment proof to our backend for verification
+          // We never grant Pro access based on frontend state alone —
+          // the backend must verify the cryptographic signature first
+          try {
+            const verify = await fetch(`${API_BASE}/verify-payment`, {
+              method:  "POST",
+              headers: { "Content-Type": "application/json" },
+              body:    JSON.stringify({
+                razorpay_order_id:   response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature:  response.razorpay_signature,
+                token:               getToken()
+              })
+            });
+
+            const result = await verify.json();
+
+            if (result.success) {
+              // Store Pro status in localStorage so UI updates before next server check
+              localStorage.setItem("sw_pro", "true");
+
+              // Track the conversion
+              if (typeof umami !== "undefined") {
+                umami.track("upgrade-success", { from: source });
+              }
+
+              // Show success and reload so all limits disappear
+              showProSuccessMessage();
+
+            } else {
+              alert(
+                "Payment received but activation failed. " +
+                "Please email support@signalwatch.in with your payment ID: " +
+                response.razorpay_payment_id
+              );
+            }
+
+          } catch (e) {
+            alert(
+              "Payment received but we could not reach the server to activate. " +
+              "Email support@signalwatch.in — your payment ID: " +
+              response.razorpay_payment_id
+            );
+          }
+        }
+      };
+
+      // Open the checkout popup
+      const rzp = new window.Razorpay(options);
+
+      // Handle payment failure inside the popup (wrong card details etc.)
+      // We do not alert here — Razorpay shows its own error inside the popup
+      rzp.on("payment.failed", function(response) {
+        console.log("Payment failed:", response.error.description);
+      });
+
+      rzp.open();
+    }
+
+
+    function showProSuccessMessage() {
+      // Replace whatever is in the results area with a clean success state
+      const container = document.getElementById("resultsContainer");
+      if (container) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:80px 24px;max-width:420px;margin:0 auto;">
+            <div style="font-family:var(--serif);font-size:28px;font-weight:700;
+                        color:var(--teal);margin-bottom:16px;letter-spacing:-0.5px;">
+              Welcome to Pro ◎
+            </div>
+            <div style="font-size:15px;color:var(--text2);font-weight:300;
+                        line-height:1.7;margin-bottom:8px;">
+              Unlimited searches. All agents. Lead intelligence. No limits.
+            </div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);">
+              Refreshing now...
+            </div>
+          </div>`;
+      }
+      // Reload after 2 seconds so the new Pro state takes full effect
+      setTimeout(() => window.location.reload(), 2000);
+    }
+
+
+    function checkProStatus() {
+      // Called on page load — if user is already Pro, hide the upgrade button
+      // and show their remaining searches as unlimited
+      if (localStorage.getItem("sw_pro") === "true") {
+        const btn = document.getElementById("navUpgradeBtn");
+        if (btn) btn.style.display = "none";
+        return;
+      }
+      // Not Pro — show the upgrade button
+      const btn = document.getElementById("navUpgradeBtn");
+      if (btn) btn.style.display = "block";
+    }
+
+    // Run on page load
+    checkProStatus();
 
   </script>
 </body>

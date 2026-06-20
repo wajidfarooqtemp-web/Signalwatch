@@ -25,6 +25,13 @@ import re         # Tool for finding patterns in text (regex)
 import xml.etree.ElementTree as ET  # Tool for reading XML files (used for RSS feeds)
 import os         # Tool for reading environment variables (our API keys)
 import json       # Tool for reading and writing JSON data
+# Import payment functions from payments.py (same folder — Python finds it automatically)
+from payments import (
+    create_razorpay_order,    # Creates a Razorpay order server-side
+    verify_razorpay_signature, # Verifies payment is genuine before granting Pro
+    mark_token_as_pro,         # Writes token to pro_users table after payment
+    is_pro                     # Checks if a token has active Pro access
+)
 
 # Create the FastAPI application object
 # Think of this as turning on the server engine
@@ -2732,8 +2739,10 @@ async def find_leads(query: str, request: Request, token: str = ""):
     # One lead generation per token. Ever. Not per day — ever.
     # This prevents abuse and creates urgency to pay for more.
     # We store used tokens in a separate table so it survives server restarts.
-    if not try_consume_lead_allowance(resolved_token):
-        return {"error": "used", "leads": [], "message": "You have used your one free lead scan."}
+    # Pro users get unlimited lead scans — skip the one-time allowance check
+    if not is_pro(resolved_token):
+        if not try_consume_lead_allowance(resolved_token):
+            return {"error": "used", "leads": [], "message": "You have used your one free lead scan."}
 
     try:
         # Fetch from the three fastest sources in parallel
@@ -2911,7 +2920,67 @@ async def add_security_headers(request: Request, call_next):
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 # Endpoints are the URLs your frontend can call
 # @app.get("/") means: when someone visits / run this function
+# ── PAYMENT ROUTES ────────────────────────────────────────────────────────────
 
+@app.get("/create-order")
+async def create_order(token: str = ""):
+    """
+    Step 1 of the payment flow.
+    Frontend calls this first to get a Razorpay order_id.
+    The price is set here on the server — never trust the browser with pricing.
+    """
+    # Validate token format — same pattern as search endpoint
+    if not token or (not token.startswith("sw_") and not token.startswith("g_")):
+        return {"error": "invalid token"}
+
+    # create_razorpay_order lives in payments.py
+    # Returns order details the frontend needs to open the Razorpay popup
+    result = create_razorpay_order(token)
+    return result
+
+
+@app.post("/verify-payment")
+async def verify_payment(request: Request):
+    """
+    Step 2 of the payment flow.
+    Called by the frontend immediately after Razorpay confirms payment.
+    We verify the signature cryptographically before granting Pro access.
+
+    The frontend sends JSON with:
+      razorpay_order_id   — the order we created in /create-order
+      razorpay_payment_id — Razorpay's unique ID for this payment
+      razorpay_signature  — cryptographic proof the payment is real
+      token               — the user's browser token
+    """
+    try:
+        body = await request.json()
+
+        order_id   = body.get("razorpay_order_id", "")
+        payment_id = body.get("razorpay_payment_id", "")
+        signature  = body.get("razorpay_signature", "")
+        token      = body.get("token", "")
+
+        # Reject if any field is missing
+        if not all([order_id, payment_id, signature, token]):
+            return {"success": False, "error": "missing fields"}
+
+        # Verify the cryptographic signature — proves Razorpay sent this, not a fake request
+        if not verify_razorpay_signature(order_id, payment_id, signature):
+            print(f"Signature mismatch for order {order_id}")
+            return {"success": False, "error": "payment verification failed"}
+
+        # Signature is valid — mark this token as Pro in the database
+        activated = mark_token_as_pro(token)
+
+        if activated:
+            return {"success": True, "message": "Pro activated"}
+        else:
+            return {"success": False, "error": "database error — contact support@signalwatch.in"}
+
+    except Exception as e:
+        print(f"verify_payment error: {e}")
+        return {"success": False, "error": "server error"}
+    
 @app.get("/")
 def home():
     # Simple health check — tells us the server is running
@@ -2969,14 +3038,22 @@ async def search_stream(query: str, request: Request, token: str = ""):
 
     token = resolved_token  # Use the resolved token for rate limiting below
 
-    current_count = get_count(token)
-    if current_count >= DAILY_LIMIT:
-        async def limited():
-            yield f"data: {json.dumps({'type': 'limit', 'limit_reached': True})}\n\n"
-        return StreamingResponse(limited(), media_type="text/event-stream")
+    # Pro users bypass the daily limit entirely
+    # is_pro() does a single fast DB row lookup
+    _user_is_pro = is_pro(token)
 
-    new_count = increment_count(token)
-    remaining = max(0, DAILY_LIMIT - new_count)
+    if not _user_is_pro:
+        # Only check and increment the count for free users
+        current_count = get_count(token)
+        if current_count >= DAILY_LIMIT:
+            async def limited():
+                yield f"data: {json.dumps({'type': 'limit', 'limit_reached': True})}\n\n"
+            return StreamingResponse(limited(), media_type="text/event-stream")
+        new_count = increment_count(token)
+        remaining = max(0, DAILY_LIMIT - new_count)
+    else:
+        # Pro user — no limit, always show as unlimited in the UI
+        remaining = 999
 
     async def generate():
         # async generator — each source runs in a thread via asyncio.to_thread()
