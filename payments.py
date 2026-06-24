@@ -101,6 +101,20 @@ def setup_payment_tables():
             )
         """)
 
+        # Add missing columns if they do not exist yet.
+        # This handles the case where pro_users was created by an older version
+        # of the code that did not have these columns.
+        # ALTER TABLE ... ADD COLUMN IF NOT EXISTS is safe to run repeatedly.
+        for column_sql in [
+            "ALTER TABLE pro_users ADD COLUMN IF NOT EXISTS expires_at  TIMESTAMPTZ",
+            "ALTER TABLE pro_users ADD COLUMN IF NOT EXISTS plan        TEXT DEFAULT 'pro_monthly'",
+            "ALTER TABLE pro_users ADD COLUMN IF NOT EXISTS payment_ref TEXT",
+        ]:
+            try:
+                cur.execute(column_sql)
+            except Exception:
+                pass  # Column already exists — safe to ignore
+
         # Monthly search counter for Pro users.
         # month_key is a string like "2026-06" — resets automatically
         # because we insert a new row each month.
