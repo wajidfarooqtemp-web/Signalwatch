@@ -1,180 +1,481 @@
 # payments.py
-# Handles all Razorpay payment logic for Signalwatch Pro.
+# All payment logic for Signalwatch Pro.
+# Handles Razorpay orders, PayPal subscription verification,
+# promo code generation and redemption, and Pro status checks.
 #
-# Sits next to app.py — Python finds it automatically via "from payments import ..."
-# One responsibility: create orders, verify payments, check Pro status.
+# Imported by app.py using: from payments import ...
+# Sits in the same folder as app.py — Python finds it automatically.
 
-import hmac        # Cryptographic message authentication — used to verify Razorpay signatures
-import hashlib     # SHA256 hashing algorithm — used inside the signature check
-import os          # Read environment variables from Render
-import razorpay    # Official Razorpay Python SDK — pip install razorpay
+import os
+import hmac
+import hashlib
+import secrets     # Python built-in — generates cryptographically secure random strings
+import string      # Python built-in — gives us character sets for code generation
+import razorpay    # pip install razorpay — add to requirements.txt
+import requests    # Already in your requirements.txt — used for PayPal API calls
+from datetime import datetime, timedelta
 
 # ── CREDENTIALS ───────────────────────────────────────────────────────────────
-# Set these in Render → your service → Environment:
-#   RAZORPAY_KEY_ID     = rzp_live_xxxxxxxxxx   (from Razorpay dashboard → Settings → API Keys)
-#   RAZORPAY_KEY_SECRET = your_secret_here
-#
-# During testing use rzp_test_ keys — no real money moves.
-RAZORPAY_KEY_ID     = os.getenv("RAZORPAY_KEY_ID", "")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+# Set all of these in Render → your service → Environment.
+# Never hardcode them here.
 
-# ── PLAN DETAILS ──────────────────────────────────────────────────────────────
-# Razorpay always works in the smallest currency unit.
-# For INR: 1 rupee = 100 paise. ₹1,900 = 190000 paise.
-# We use INR as the base currency. International customers
-# will be handled via a second provider (tomorrow's task).
-PLAN_AMOUNT_PAISE = 190000   # ₹1,900/month — approximately $19 at current rates
-PLAN_CURRENCY     = "INR"
-PLAN_NAME         = "Signalwatch Pro"
-PLAN_DESCRIPTION  = "Unlimited searches · All 4 agents · Lead intelligence · No daily cap"
+RAZORPAY_KEY_ID       = os.getenv("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET   = os.getenv("RAZORPAY_KEY_SECRET", "")
 
+# PayPal credentials — get from PayPal Developer Dashboard → My Apps
+# App Client ID and Secret are different from what you put in the frontend.
+# The frontend uses Client ID only (public).
+# The backend uses Client ID + Secret to verify payments server-side.
+PAYPAL_CLIENT_ID      = os.getenv("PAYPAL_CLIENT_ID", "")
+PAYPAL_CLIENT_SECRET  = os.getenv("PAYPAL_CLIENT_SECRET", "")
 
-def get_razorpay_client():
-    """
-    Creates and returns an authenticated Razorpay client.
-    Called once per request — lightweight, no persistent connection needed.
-    auth= takes a tuple of (key_id, key_secret) — Razorpay uses HTTP Basic Auth.
-    """
-    return razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+# PayPal runs two environments — sandbox for testing, live for real payments.
+# Set PAYPAL_ENV=sandbox in Render while testing, then change to live.
+PAYPAL_ENV            = os.getenv("PAYPAL_ENV", "live")
+PAYPAL_BASE           = (
+    "https://api-m.sandbox.paypal.com"
+    if PAYPAL_ENV == "sandbox"
+    else "https://api-m.paypal.com"
+)
 
+# Your PayPal Plan ID — the one starting with P-
+PAYPAL_PLAN_ID        = "P-3UF45014YT058942NNI5XTCA"
 
-def create_razorpay_order(token: str) -> dict:
-    """
-    Creates a Razorpay order server-side and returns the details the
-    frontend needs to open the checkout popup.
+# Secret salt for promo code generation — set this in Render environment.
+# Any random string works. Example: openssl rand -hex 32
+# This makes codes impossible to guess without knowing this value.
+PROMO_SECRET          = os.getenv("PROMO_SECRET", "change-this-to-a-random-string")
 
-    Why server-side:
-    If the browser created orders, anyone could tamper with the amount.
-    The server sets the price — the browser just pays it.
+# Admin password — protects your /admin/generate-code endpoint.
+# Set ADMIN_SECRET in Render environment. Pick something strong.
+ADMIN_SECRET          = os.getenv("ADMIN_SECRET", "")
 
-    Returns a dict with order_id, amount, currency, key_id.
-    Returns {"error": "..."} if anything fails.
-    """
-    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
-        return {"error": "Payments not configured. Contact support@signalwatch.in"}
-
-    try:
-        client = get_razorpay_client()
-
-        order = client.order.create({
-            "amount":   PLAN_AMOUNT_PAISE,      # Amount in paise
-            "currency": PLAN_CURRENCY,          # "INR"
-            "receipt":  f"sw_{token[:12]}",     # Your internal reference — short token prefix
-            "notes": {
-                # Store the full token in Razorpay's notes so you can look it up later
-                # if needed for manual support queries
-                "token": token,
-                "plan":  PLAN_NAME
-            }
-        })
-
-        return {
-            "order_id":    order["id"],          # e.g. "order_ABCxyz123"
-            "amount":      PLAN_AMOUNT_PAISE,
-            "currency":    PLAN_CURRENCY,
-            "key_id":      RAZORPAY_KEY_ID,      # Frontend needs this to init checkout
-            "description": PLAN_DESCRIPTION
-        }
-
-    except Exception as e:
-        print(f"create_razorpay_order error: {e}")
-        return {"error": "Could not create payment order. Please try again."}
+# Pro plan limits
+PRO_MONTHLY_LIMIT     = 1000   # Searches per calendar month
+PLAN_AMOUNT_PAISE     = 190000  # ₹1,900 — approximately $19
+PLAN_CURRENCY         = "INR"
+PLAN_DESCRIPTION      = "Unlimited searches · All agents · Lead intelligence"
 
 
-def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) -> bool:
-    """
-    Verifies the payment signature Razorpay sends after a successful payment.
+# ── DATABASE HELPER ───────────────────────────────────────────────────────────
+# Reuses your existing DATABASE_URL — no new connection setup needed.
 
-    Why this matters:
-    Without this, anyone could send a fake POST to /verify-payment and get Pro for free.
-    The signature is a cryptographic proof that Razorpay generated — only someone
-    with your secret key can produce it.
-
-    How it works:
-    Razorpay signs "order_id|payment_id" using your secret key via HMAC-SHA256.
-    We compute the same signature ourselves and compare.
-    If they match, the payment is genuine.
-    """
-    if not RAZORPAY_KEY_SECRET:
-        return False
-
-    # Build the exact string Razorpay signed
-    message = f"{order_id}|{payment_id}"
-
-    # Compute our own HMAC-SHA256 signature
-    # hmac.new(key, message, algorithm) — all arguments must be bytes, not strings
-    expected_signature = hmac.new(
-        RAZORPAY_KEY_SECRET.encode("utf-8"),  # Secret key as bytes
-        message.encode("utf-8"),              # Message as bytes
-        hashlib.sha256                        # The hashing algorithm
-    ).hexdigest()   # Convert binary hash to lowercase hex string
-
-    # hmac.compare_digest is timing-safe — prevents timing attacks
-    # (a normal == comparison leaks information via response time differences)
-    return hmac.compare_digest(expected_signature, signature)
-
-
-def mark_token_as_pro(token: str) -> bool:
-    """
-    Writes the token into the pro_users table after payment is verified.
-    From this point on, is_pro(token) returns True and limits are skipped.
-
-    Uses INSERT ... ON CONFLICT DO UPDATE so it is safe to call multiple times
-    (e.g. if Razorpay sends a webhook twice — idempotent means no duplicate rows).
-    """
-    # Import here to avoid circular imports — database.py does not exist yet
-    # so we reuse the get_db pattern from app.py directly
+def _get_conn():
+    """Opens a database connection. Returns None if unavailable."""
     try:
         import psycopg2
-        database_url = os.getenv("DATABASE_URL", "")
-        conn = psycopg2.connect(database_url, connect_timeout=5)
+        return psycopg2.connect(os.getenv("DATABASE_URL", ""), connect_timeout=5)
+    except Exception as e:
+        print(f"DB connection error: {e}")
+        return None
+
+
+def setup_payment_tables():
+    """
+    Creates the three tables needed for payments.
+    Called once when app.py starts — safe to call repeatedly
+    because of IF NOT EXISTS.
+
+    Tables:
+    - pro_users:     tokens that have active Pro access
+    - pro_searches:  monthly search counter per Pro token
+    - promo_codes:   generated codes and their redemption status
+    """
+    conn = _get_conn()
+    if not conn:
+        print("Payments: DB unavailable — tables not created")
+        return
+    try:
         cur = conn.cursor()
 
-        # Create the table if it does not exist yet
-        # This means you do not need a separate migration step
+        # Stores every token that has paid or redeemed a promo code.
+        # expires_at is NULL for real subscriptions (managed by PayPal/Razorpay)
+        # and set to 30 days from now for promo code redemptions.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS pro_users (
                 token        TEXT PRIMARY KEY,
                 activated_at TIMESTAMPTZ DEFAULT NOW(),
-                plan         TEXT DEFAULT 'pro_monthly'
+                expires_at   TIMESTAMPTZ,
+                plan         TEXT DEFAULT 'pro_monthly',
+                payment_ref  TEXT
             )
         """)
 
-        # Insert the token — if already exists, update the timestamp
+        # Monthly search counter for Pro users.
+        # month_key is a string like "2026-06" — resets automatically
+        # because we insert a new row each month.
         cur.execute("""
-            INSERT INTO pro_users (token, activated_at, plan)
-            VALUES (%s, NOW(), 'pro_monthly')
-            ON CONFLICT (token) DO UPDATE SET activated_at = NOW()
-        """, (token,))
+            CREATE TABLE IF NOT EXISTS pro_searches (
+                token      TEXT NOT NULL,
+                month_key  TEXT NOT NULL,
+                count      INTEGER DEFAULT 0,
+                PRIMARY KEY (token, month_key)
+            )
+        """)
+
+        # Promo codes you generate and share with customers.
+        # Each code is single-use and gives one month of Pro access.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS promo_codes (
+                code         TEXT PRIMARY KEY,
+                created_at   TIMESTAMPTZ DEFAULT NOW(),
+                redeemed_at  TIMESTAMPTZ,
+                redeemed_by  TEXT,
+                is_used      BOOLEAN DEFAULT FALSE,
+                note         TEXT
+            )
+        """)
 
         conn.commit()
         cur.close()
         conn.close()
-        print(f"Pro activated: {token[:12]}...")
-        return True
+        print("Payment tables ready")
+    except Exception as e:
+        print(f"setup_payment_tables error: {e}")
 
+
+# ── PRO STATUS ────────────────────────────────────────────────────────────────
+
+def is_pro(token: str) -> bool:
+    """
+    Checks if a token has active Pro access.
+
+    For subscription users: checks the pro_users table.
+    For promo code users: also checks that expires_at has not passed.
+
+    Returns True = Pro access granted.
+    Returns False = treat as free user.
+    """
+    conn = _get_conn()
+    if not conn:
+        return False
+    try:
+        cur = conn.cursor()
+        # Check for active Pro — either no expiry (real subscription)
+        # or expiry in the future (promo code)
+        cur.execute("""
+            SELECT 1 FROM pro_users
+            WHERE token = %s
+              AND (expires_at IS NULL OR expires_at > NOW())
+        """, (token,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row is not None
+    except Exception as e:
+        print(f"is_pro error: {e}")
+        return False
+
+
+def mark_token_as_pro(token: str, payment_ref: str = "", expires_at=None) -> bool:
+    """
+    Writes a token into pro_users after a verified payment.
+
+    payment_ref: Razorpay payment ID or PayPal subscription ID — stored for
+                 your records so you can look up any token's payment history.
+    expires_at:  None for real subscriptions (PayPal/Razorpay manage renewal).
+                 Set to 30 days from now for promo code redemptions.
+    """
+    conn = _get_conn()
+    if not conn:
+        return False
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO pro_users (token, activated_at, expires_at, payment_ref)
+            VALUES (%s, NOW(), %s, %s)
+            ON CONFLICT (token) DO UPDATE
+                SET activated_at = NOW(),
+                    expires_at   = EXCLUDED.expires_at,
+                    payment_ref  = EXCLUDED.payment_ref
+        """, (token, expires_at, payment_ref))
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"Pro activated: {token[:12]}... ref={payment_ref}")
+        return True
     except Exception as e:
         print(f"mark_token_as_pro error: {e}")
         return False
 
 
-def is_pro(token: str) -> bool:
+# ── MONTHLY SEARCH COUNTER FOR PRO USERS ─────────────────────────────────────
+
+def get_pro_search_count(token: str) -> int:
     """
-    Fast lookup: is this token in the pro_users table?
-    Called on every search request before the rate limit check.
-    Returns True = unlimited searches. Returns False = apply daily limit.
+    Returns how many searches this Pro token has done in the current calendar month.
+    month_key example: "2026-06"
     """
+    month_key = datetime.now().strftime("%Y-%m")
+    conn = _get_conn()
+    if not conn:
+        return 0
     try:
-        import psycopg2
-        database_url = os.getenv("DATABASE_URL", "")
-        conn = psycopg2.connect(database_url, connect_timeout=5)
         cur = conn.cursor()
-        cur.execute("SELECT 1 FROM pro_users WHERE token = %s", (token,))
+        cur.execute("""
+            SELECT count FROM pro_searches
+            WHERE token = %s AND month_key = %s
+        """, (token, month_key))
         row = cur.fetchone()
         cur.close()
         conn.close()
-        return row is not None   # True if a row exists, False if not
+        return row[0] if row else 0
+    except Exception as e:
+        print(f"get_pro_search_count error: {e}")
+        return 0
+
+
+def increment_pro_search_count(token: str) -> int:
+    """
+    Adds 1 to this token's monthly search count and returns the new total.
+    Creates a new row automatically at the start of each month.
+    """
+    month_key = datetime.now().strftime("%Y-%m")
+    conn = _get_conn()
+    if not conn:
+        return 1
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO pro_searches (token, month_key, count)
+            VALUES (%s, %s, 1)
+            ON CONFLICT (token, month_key)
+            DO UPDATE SET count = pro_searches.count + 1
+            RETURNING count
+        """, (token, month_key))
+        count = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return count
+    except Exception as e:
+        print(f"increment_pro_search_count error: {e}")
+        return 1
+
+
+# ── RAZORPAY ──────────────────────────────────────────────────────────────────
+
+def create_razorpay_order(token: str) -> dict:
+    """
+    Creates a Razorpay order server-side.
+    The frontend uses the returned order_id to open the checkout popup.
+    Price is set here — the browser cannot modify it.
+    """
+    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+        return {"error": "Razorpay not configured"}
+    try:
+        client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        order = client.order.create({
+            "amount":   PLAN_AMOUNT_PAISE,
+            "currency": PLAN_CURRENCY,
+            "receipt":  f"sw_{token[:12]}",
+            "notes":    {"token": token}
+        })
+        return {
+            "order_id":    order["id"],
+            "amount":      PLAN_AMOUNT_PAISE,
+            "currency":    PLAN_CURRENCY,
+            "key_id":      RAZORPAY_KEY_ID,
+            "description": PLAN_DESCRIPTION
+        }
+    except Exception as e:
+        print(f"create_razorpay_order error: {e}")
+        return {"error": "Could not create order"}
+
+
+def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) -> bool:
+    """
+    Verifies the cryptographic signature Razorpay sends after payment.
+    Proves the payment is genuine — not a fake POST request.
+    """
+    if not RAZORPAY_KEY_SECRET:
+        return False
+    message  = f"{order_id}|{payment_id}"
+    expected = hmac.new(
+        RAZORPAY_KEY_SECRET.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+# ── PAYPAL ────────────────────────────────────────────────────────────────────
+
+def get_paypal_access_token() -> str:
+    """
+    Gets a short-lived OAuth access token from PayPal.
+    Required for all PayPal API calls.
+    PayPal uses Client ID + Secret to issue this token — server-side only.
+    Token expires in ~9 hours but we fetch a fresh one per verification.
+    """
+    res = requests.post(
+        f"{PAYPAL_BASE}/v1/oauth2/token",
+        auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
+        data={"grant_type": "client_credentials"},
+        timeout=10
+    )
+    res.raise_for_status()
+    return res.json()["access_token"]
+
+
+def verify_paypal_subscription(subscription_id: str) -> bool:
+    """
+    Verifies a PayPal subscription ID server-side.
+
+    Why server-side:
+    The frontend receives the subscription ID from PayPal after approval.
+    Anyone could send a fake subscription ID hoping to get Pro for free.
+    We call PayPal's API directly to confirm:
+      - The subscription exists
+      - Its status is ACTIVE
+      - It belongs to our plan ID
+
+    Returns True only if all three checks pass.
+    """
+    try:
+        token = get_paypal_access_token()
+        res = requests.get(
+            f"{PAYPAL_BASE}/v1/billing/subscriptions/{subscription_id}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type":  "application/json"
+            },
+            timeout=10
+        )
+        if res.status_code != 200:
+            print(f"PayPal subscription lookup failed: {res.status_code}")
+            return False
+
+        data   = res.json()
+        status  = data.get("status", "")
+        plan_id = data.get("plan_id", "")
+
+        # Both must match — status must be ACTIVE and plan must be ours
+        if status != "ACTIVE":
+            print(f"PayPal subscription not active: {status}")
+            return False
+        if plan_id != PAYPAL_PLAN_ID:
+            print(f"PayPal plan ID mismatch: {plan_id}")
+            return False
+
+        return True
 
     except Exception as e:
-        print(f"is_pro check error: {e}")
-        return False  # Fail closed — if DB is down, treat as free user
+        print(f"verify_paypal_subscription error: {e}")
+        return False
+
+
+# ── PROMO CODES ───────────────────────────────────────────────────────────────
+
+def generate_promo_code(note: str = "") -> str:
+    """
+    Generates a new promo code and stores it in the database.
+    Called only from your private /admin/generate-code endpoint.
+
+    Format: SW-XXXX-XXXX where X is an uppercase letter or digit.
+    Example: SW-K7M2-P9QR
+
+    note: optional internal note — e.g. "for customer John who lost access"
+          Stored in DB for your records, never shown to customers.
+
+    Returns the code string, or empty string if DB write fails.
+    """
+    # Generate 8 random uppercase alphanumeric characters
+    # secrets.choice is cryptographically secure — cannot be predicted
+    alphabet = string.ascii_uppercase + string.digits
+    part1    = "".join(secrets.choice(alphabet) for _ in range(4))
+    part2    = "".join(secrets.choice(alphabet) for _ in range(4))
+    code     = f"SW-{part1}-{part2}"
+
+    conn = _get_conn()
+    if not conn:
+        return ""
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO promo_codes (code, note)
+            VALUES (%s, %s)
+        """, (code, note))
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"Promo code generated: {code} note={note}")
+        return code
+    except Exception as e:
+        print(f"generate_promo_code error: {e}")
+        return ""
+
+
+def redeem_promo_code(code: str, token: str) -> dict:
+    """
+    Validates and redeems a promo code for a user token.
+
+    Checks:
+    1. Code exists in the database
+    2. Code has not already been used
+    3. Marks it as used atomically — prevents two people redeeming simultaneously
+
+    On success: grants one month of Pro access to the token.
+    Returns {"success": True} or {"success": False, "error": "..."}
+    """
+    # Normalise — uppercase, strip whitespace
+    # So "sw-k7m2-p9qr" and "SW-K7M2-P9QR" both work
+    code = code.strip().upper()
+
+    conn = _get_conn()
+    if not conn:
+        return {"success": False, "error": "Service temporarily unavailable"}
+    try:
+        cur = conn.cursor()
+
+        # Fetch the code record
+        cur.execute("""
+            SELECT is_used FROM promo_codes WHERE code = %s
+        """, (code,))
+        row = cur.fetchone()
+
+        if not row:
+            # Code does not exist — do not reveal this specifically
+            # Just say invalid so people cannot probe for valid codes
+            cur.close()
+            conn.close()
+            return {"success": False, "error": "Invalid code"}
+
+        if row[0]:
+            # Code already used
+            cur.close()
+            conn.close()
+            return {"success": False, "error": "This code has already been used"}
+
+        # Mark as used atomically
+        cur.execute("""
+            UPDATE promo_codes
+            SET is_used     = TRUE,
+                redeemed_at = NOW(),
+                redeemed_by = %s
+            WHERE code = %s AND is_used = FALSE
+        """, (token, code))
+
+        if cur.rowcount == 0:
+            # Race condition — someone else redeemed it in the same instant
+            cur.close()
+            conn.close()
+            return {"success": False, "error": "This code has already been used"}
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # Grant one month of Pro access
+        # expires_at = exactly 30 days from now
+        expires_at = datetime.now() + timedelta(days=30)
+        activated  = mark_token_as_pro(token, payment_ref=f"promo:{code}", expires_at=expires_at)
+
+        if activated:
+            return {"success": True, "message": "Pro access activated for 30 days"}
+        else:
+            return {"success": False, "error": "Could not activate — contact support@signalwatch.in"}
+
+    except Exception as e:
+        print(f"redeem_promo_code error: {e}")
+        return {"success": False, "error": "Service error — please try again"}

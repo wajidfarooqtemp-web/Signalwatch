@@ -25,12 +25,19 @@ import re         # Tool for finding patterns in text (regex)
 import xml.etree.ElementTree as ET  # Tool for reading XML files (used for RSS feeds)
 import os         # Tool for reading environment variables (our API keys)
 import json       # Tool for reading and writing JSON data
-# Import payment functions from payments.py (same folder — Python finds it automatically)
+# Import all payment functions from payments.py (same folder)
 from payments import (
-    create_razorpay_order,    # Creates a Razorpay order server-side
-    verify_razorpay_signature, # Verifies payment is genuine before granting Pro
-    mark_token_as_pro,         # Writes token to pro_users table after payment
-    is_pro                     # Checks if a token has active Pro access
+    setup_payment_tables,
+    is_pro,
+    mark_token_as_pro,
+    get_pro_search_count,
+    increment_pro_search_count,
+    create_razorpay_order,
+    verify_razorpay_signature,
+    verify_paypal_subscription,
+    generate_promo_code,
+    redeem_promo_code,
+    ADMIN_SECRET
 )
 
 # Create the FastAPI application object
@@ -246,6 +253,9 @@ def increment_count(token):
 # Run setup_db() once when the server starts
 # This creates the table if it does not exist
 setup_db()
+
+# Creates pro_users, pro_searches, and promo_codes tables if they do not exist
+setup_payment_tables()
 
 def try_consume_lead_allowance(token: str) -> bool:
     """
@@ -2739,7 +2749,7 @@ async def find_leads(query: str, request: Request, token: str = ""):
     # One lead generation per token. Ever. Not per day — ever.
     # This prevents abuse and creates urgency to pay for more.
     # We store used tokens in a separate table so it survives server restarts.
-    # Pro users get unlimited lead scans — skip the one-time allowance check
+    # Pro users get unlimited lead scans
     if not is_pro(resolved_token):
         if not try_consume_lead_allowance(resolved_token):
             return {"error": "used", "leads": [], "message": "You have used your one free lead scan."}
@@ -2876,7 +2886,9 @@ async def add_security_headers(request: Request, call_next):
         "https://cdnjs.cloudflare.com "
         "https://cdn.jsdelivr.net "
         "https://cloud.umami.is "
-        "https://accounts.google.com; "
+        "https://accounts.google.com "
+        "https://www.paypal.com "
+        "https://checkout.razorpay.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src https://fonts.gstatic.com; "
         "connect-src 'self' "
@@ -2884,7 +2896,11 @@ async def add_security_headers(request: Request, call_next):
         "https://signalwatch-production.up.railway.app "
         "https://accounts.google.com "
         "https://oauth2.googleapis.com "
-        "https://api-gateway.umami.dev; "
+        "https://api-gateway.umami.dev "
+        "https://www.paypal.com "
+        "https://api-m.paypal.com "
+        "https://lrb.razorpay.com "
+        "https://checkout.razorpay.com; "
         "frame-src https://accounts.google.com; "
         "img-src 'self' data: https:; "
         "frame-ancestors 'none'"
@@ -2925,61 +2941,119 @@ async def add_security_headers(request: Request, call_next):
 @app.get("/create-order")
 async def create_order(token: str = ""):
     """
-    Step 1 of the payment flow.
-    Frontend calls this first to get a Razorpay order_id.
-    The price is set here on the server — never trust the browser with pricing.
+    Razorpay flow step 1.
+    Creates a server-side order so the price cannot be tampered with.
+    Returns order details the frontend needs to open the checkout popup.
     """
-    # Validate token format — same pattern as search endpoint
     if not token or (not token.startswith("sw_") and not token.startswith("g_")):
         return {"error": "invalid token"}
-
-    # create_razorpay_order lives in payments.py
-    # Returns order details the frontend needs to open the Razorpay popup
-    result = create_razorpay_order(token)
-    return result
+    return create_razorpay_order(token)
 
 
-@app.post("/verify-payment")
-async def verify_payment(request: Request):
+@app.post("/verify-razorpay")
+async def verify_razorpay(request: Request):
     """
-    Step 2 of the payment flow.
-    Called by the frontend immediately after Razorpay confirms payment.
-    We verify the signature cryptographically before granting Pro access.
-
-    The frontend sends JSON with:
-      razorpay_order_id   — the order we created in /create-order
-      razorpay_payment_id — Razorpay's unique ID for this payment
-      razorpay_signature  — cryptographic proof the payment is real
-      token               — the user's browser token
+    Razorpay flow step 2.
+    Verifies the cryptographic signature after payment completes.
+    Only grants Pro if signature is valid — prevents fake payment requests.
     """
     try:
-        body = await request.json()
-
+        body       = await request.json()
         order_id   = body.get("razorpay_order_id", "")
         payment_id = body.get("razorpay_payment_id", "")
         signature  = body.get("razorpay_signature", "")
         token      = body.get("token", "")
 
-        # Reject if any field is missing
         if not all([order_id, payment_id, signature, token]):
             return {"success": False, "error": "missing fields"}
 
-        # Verify the cryptographic signature — proves Razorpay sent this, not a fake request
         if not verify_razorpay_signature(order_id, payment_id, signature):
-            print(f"Signature mismatch for order {order_id}")
+            print(f"Razorpay signature mismatch — order {order_id}")
             return {"success": False, "error": "payment verification failed"}
 
-        # Signature is valid — mark this token as Pro in the database
-        activated = mark_token_as_pro(token)
-
-        if activated:
-            return {"success": True, "message": "Pro activated"}
-        else:
-            return {"success": False, "error": "database error — contact support@signalwatch.in"}
+        activated = mark_token_as_pro(token, payment_ref=payment_id)
+        return {"success": activated}
 
     except Exception as e:
-        print(f"verify_payment error: {e}")
+        print(f"verify_razorpay error: {e}")
         return {"success": False, "error": "server error"}
+
+
+@app.post("/verify-paypal")
+async def verify_paypal(request: Request):
+    """
+    PayPal flow — server-side verification.
+    Frontend sends the subscription ID PayPal returns after approval.
+    We call PayPal's API directly to confirm it is real and active.
+    Never trust the frontend alone for payment confirmation.
+    """
+    try:
+        body            = await request.json()
+        subscription_id = body.get("subscription_id", "")
+        token           = body.get("token", "")
+
+        if not subscription_id or not token:
+            return {"success": False, "error": "missing fields"}
+
+        # verify_paypal_subscription calls PayPal API — server-side only
+        if not verify_paypal_subscription(subscription_id):
+            print(f"PayPal subscription invalid: {subscription_id}")
+            return {"success": False, "error": "subscription could not be verified"}
+
+        activated = mark_token_as_pro(token, payment_ref=subscription_id)
+        return {"success": activated}
+
+    except Exception as e:
+        print(f"verify_paypal error: {e}")
+        return {"success": False, "error": "server error"}
+
+
+@app.post("/redeem-code")
+async def redeem_code_route(request: Request):
+    """
+    Promo code redemption.
+    Validates and marks the code as used atomically.
+    Grants 30 days of Pro access on success.
+    """
+    try:
+        body  = await request.json()
+        code  = body.get("code", "")
+        token = body.get("token", "")
+
+        if not code or not token:
+            return {"success": False, "error": "missing fields"}
+
+        return redeem_promo_code(code, token)
+
+    except Exception as e:
+        print(f"redeem_code error: {e}")
+        return {"success": False, "error": "server error"}
+
+
+@app.get("/admin/generate-code")
+async def admin_generate_code(secret: str = "", note: str = ""):
+    """
+    Private endpoint — only you use this.
+    Generates a promo code and returns it.
+    Protected by ADMIN_SECRET environment variable.
+
+    Usage: https://signalwatch-r6s8.onrender.com/admin/generate-code?secret=YOUR_SECRET&note=customer+john
+    Returns the code to paste into your email.
+    """
+    if not secret or secret != ADMIN_SECRET:
+        # Return 404 not 403 — do not reveal the endpoint exists
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
+
+    code = generate_promo_code(note=note)
+    if not code:
+        return {"error": "Could not generate code — check DB connection"}
+
+    return {
+        "code":    code,
+        "note":    note,
+        "message": f"Share this code with the customer. It gives 30 days of Pro access and can only be used once."
+    }
     
 @app.get("/")
 def home():
@@ -3039,11 +3113,26 @@ async def search_stream(query: str, request: Request, token: str = ""):
     token = resolved_token  # Use the resolved token for rate limiting below
 
     # Pro users bypass the daily limit entirely
-    # is_pro() does a single fast DB row lookup
+    # Check Pro status first — Pro users skip the daily free limit
     _user_is_pro = is_pro(token)
 
-    if not _user_is_pro:
-        # Only check and increment the count for free users
+    if _user_is_pro:
+        # Pro user — check monthly limit of 1000 searches
+        pro_count = increment_pro_search_count(token)
+        remaining = max(0, 1000 - pro_count)
+
+        if pro_count > 1000:
+            # Over monthly limit — soft message, not a hard block
+            # Paying customers must never hit a wall with no explanation
+            async def pro_limited():
+                yield f"data: {json.dumps({'type': 'pro_limit', 'count': pro_count})}\n\n"
+            return StreamingResponse(pro_limited(), media_type="text/event-stream")
+
+        # Warning at 900 — sent as a normal SSE event so the frontend can show it
+        # The search still proceeds — warning only
+        _pro_warning = pro_count >= 900
+    else:
+        # Free user — apply daily limit as before
         current_count = get_count(token)
         if current_count >= DAILY_LIMIT:
             async def limited():
@@ -3051,9 +3140,7 @@ async def search_stream(query: str, request: Request, token: str = ""):
             return StreamingResponse(limited(), media_type="text/event-stream")
         new_count = increment_count(token)
         remaining = max(0, DAILY_LIMIT - new_count)
-    else:
-        # Pro user — no limit, always show as unlimited in the UI
-        remaining = 999
+        _pro_warning = False
 
     async def generate():
         # async generator — each source runs in a thread via asyncio.to_thread()
@@ -3128,6 +3215,7 @@ async def search_stream(query: str, request: Request, token: str = ""):
 
         final = {
             "type":                "complete",
+            "pro_warning":         _pro_warning,   # True if Pro user is near monthly limit
             "query":               query,
             "total":               len(ranked),
             "searches_remaining":  remaining,
