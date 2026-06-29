@@ -2388,72 +2388,67 @@ if (loadingText) {
     // ── RAZORPAY CHECKOUT ─────────────────────────────────────────────────
 
     async function openRazorpayCheckout() {
-      // Step 1: Create an order server-side — price is set on the server
-      let order;
+  let sub;
+  try {
+    const res = await fetch(
+      `${API_BASE}/create-order?token=${encodeURIComponent(getToken())}`
+    );
+    sub = await res.json();
+    if (sub.error) {
+      alert("Could not start checkout: " + sub.error);
+      return;
+    }
+  } catch (e) {
+    alert("Could not reach the server. Please try again.");
+    return;
+  }
+
+  const options = {
+    key:             sub.key_id,
+    subscription_id: sub.subscription_id,
+    name:            "Signalwatch",
+    description:     sub.description,
+    theme:           { color: "#0d7a6b" },
+
+    handler: async function(response) {
       try {
-        const res = await fetch(
-          `${API_BASE}/create-order?token=${encodeURIComponent(getToken())}`
-        );
-        order = await res.json();
-        if (order.error) {
-          alert("Could not start checkout: " + order.error);
-          return;
+        const verify = await fetch(`${API_BASE}/verify-razorpay`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            razorpay_subscription_id: response.razorpay_subscription_id,
+            razorpay_payment_id:      response.razorpay_payment_id,
+            razorpay_signature:       response.razorpay_signature,
+            token:                    getToken()
+          })
+        });
+        const result = await verify.json();
+        if (result.success) {
+          onPaymentSuccess("razorpay");
+        } else {
+          alert(
+            "Payment received but activation failed. " +
+            "Email support@signalwatch.in with payment ID: " +
+            response.razorpay_payment_id
+          );
         }
       } catch (e) {
-        alert("Could not reach the server. Please try again.");
-        return;
+        alert(
+          "Payment received but server unreachable. " +
+          "Email support@signalwatch.in with payment ID: " +
+          response.razorpay_payment_id
+        );
       }
-
-      // Step 2: Open Razorpay popup with the server-created order
-      const options = {
-        key:         order.key_id,
-        amount:      order.amount,
-        currency:    order.currency,
-        name:        "Signalwatch",
-        description: order.description,
-        order_id:    order.order_id,
-        theme:       { color: "#0d7a6b" },
-
-        // Step 3: After payment, send proof to our backend for verification
-        handler: async function(response) {
-          try {
-            const verify = await fetch(`${API_BASE}/verify-razorpay`, {
-              method:  "POST",
-              headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify({
-                razorpay_order_id:   response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature:  response.razorpay_signature,
-                token:               getToken()
-              })
-            });
-            const result = await verify.json();
-            if (result.success) {
-              onPaymentSuccess("razorpay");
-            } else {
-              alert(
-                "Payment received but activation failed. " +
-                "Email support@signalwatch.in with payment ID: " +
-                response.razorpay_payment_id
-              );
-            }
-          } catch (e) {
-            alert(
-              "Payment received but server unreachable. " +
-              "Email support@signalwatch.in with payment ID: " +
-              response.razorpay_payment_id
-            );
-          }
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", function(r) {
-        console.log("Razorpay payment failed:", r.error.description);
-      });
-      closePaymentModal();
-      rzp.open();
     }
+  };
+
+  const rzp = new window.Razorpay(options);
+  rzp.on("payment.failed", function(r) {
+    console.log("Razorpay payment failed:", r.error.description);
+  });
+  closePaymentModal();
+  rzp.open();
+}
 
 
     // ── PAYPAL BUTTON ─────────────────────────────────────────────────────

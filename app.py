@@ -2959,16 +2959,16 @@ async def verify_razorpay(request: Request):
     """
     try:
         body       = await request.json()
-        order_id   = body.get("razorpay_order_id", "")
-        payment_id = body.get("razorpay_payment_id", "")
-        signature  = body.get("razorpay_signature", "")
-        token      = body.get("token", "")
+        subscription_id = body.get("razorpay_subscription_id", "")
+        payment_id      = body.get("razorpay_payment_id", "")
+        signature       = body.get("razorpay_signature", "")
+        token           = body.get("token", "")
 
-        if not all([order_id, payment_id, signature, token]):
+        if not all([subscription_id, payment_id, signature, token]):
             return {"success": False, "error": "missing fields"}
 
-        if not verify_razorpay_signature(order_id, payment_id, signature):
-            print(f"Razorpay signature mismatch — order {order_id}")
+        if not verify_razorpay_signature(subscription_id, payment_id, signature):
+            print(f"Razorpay signature mismatch — subscription {subscription_id}")
             return {"success": False, "error": "payment verification failed"}
 
         activated = mark_token_as_pro(token, payment_ref=payment_id)
