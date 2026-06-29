@@ -39,7 +39,7 @@ PAYPAL_BASE           = (
 )
 
 # Your PayPal Plan ID — the one starting with P-
-PAYPAL_PLAN_ID        = "P-3UF45014YT058942NNI5XTCA"
+PAYPAL_PLAN_ID = "P-9YX43303NP195600ANI6B6QQ"
 
 # Secret salt for promo code generation — set this in Render environment.
 # Any random string works. Example: openssl rand -hex 32
