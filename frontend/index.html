@@ -572,6 +572,7 @@
     <div class="nav-center">
       <button class="nav-btn active" id="navSearch" onclick="showPage('search')">Search</button>
       <button class="nav-btn" id="navAbout" onclick="showPage('about')">About</button>
+      <button class="nav-btn" id="navHelp" onclick="showPage('help')">Help</button>
     </div>
     <div class="nav-right">
       <div class="live-badge"><div class="live-dot"></div>Live</div>
@@ -597,6 +598,7 @@
   <div class="mobile-menu" id="mobileMenu">
     <div class="mobile-btn active" id="mNavSearch" onclick="showPage('search');toggleMenu()">Search</div>
     <div class="mobile-btn" id="mNavAbout" onclick="showPage('about');toggleMenu()">About</div>
+    <div class="mobile-btn" id="mNavHelp" onclick="showPage('help');toggleMenu()">Help</div>
   </div>
 
   <!-- ── PAYMENT MODAL ──────────────────────────────────────────────────────
@@ -1058,13 +1060,156 @@
       <div style="max-width:680px;margin:0 auto;">
         <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;margin-bottom:24px;">Signalwatch is in beta. If you work in brand, communications, or agencies and want to talk, get in touch.</p>
         <div style="display:flex;gap:12px;flex-wrap:wrap;">
-          <a href="mailto:wajidfarooq@signalwatch.in" style="font-family:var(--sans);font-size:13px;font-weight:500;padding:9px 20px;border-radius:4px;text-decoration:none;border:1.5px solid var(--border2);color:var(--text2);transition:all 0.15s;"
+          <a href="#" onclick="showPage('contact');return false;" style="font-family:var(--sans);font-size:13px;font-weight:500;padding:9px 20px;border-radius:4px;text-decoration:none;border:1.5px solid var(--border2);color:var(--text2);transition:all 0.15s;"
             onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
-            onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">Get in touch</a>
+            onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">Contact us</a>
           <a href="#" onclick="showPage('search');return false;" style="font-family:var(--sans);font-size:13px;font-weight:500;padding:9px 20px;border-radius:4px;text-decoration:none;background:var(--teal);color:white;border:1.5px solid var(--teal);">Try Signalwatch</a>
         </div>
       </div>
     </div>
+    <footer class="site-footer">
+      <span>© 2026 Signalwatch</span>
+      <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
+    </footer>
+  </div>
+
+  <!-- CONTACT PAGE -->
+  <div class="about-page" id="contactPage">
+    <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">Contact</div>
+        <h2 style="font-family:var(--serif);font-size:36px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:16px;">Get in touch</h2>
+        <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;">Reach the right team directly. We read every message ourselves — Signalwatch is a small team.</p>
+      </div>
+    </div>
+
+    <div style="padding:48px 40px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Founder</div>
+              <div style="font-size:13px;color:var(--text2);font-weight:300;">Product questions, partnerships you'd rather discuss directly, press</div>
+            </div>
+            <a href="mailto:wajidfarooq@signalwatch.in" style="font-family:var(--mono);font-size:13px;color:var(--teal);text-decoration:none;">wajidfarooq@signalwatch.in</a>
+          </div>
+
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Support</div>
+              <div style="font-size:13px;color:var(--text2);font-weight:300;">Account issues, technical problems, search not working as expected</div>
+            </div>
+            <a href="mailto:support@signalwatch.in" style="font-family:var(--mono);font-size:13px;color:var(--teal);text-decoration:none;">support@signalwatch.in</a>
+          </div>
+
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Billing</div>
+              <div style="font-size:13px;color:var(--text2);font-weight:300;">Subscriptions, invoices, refunds, payment method changes</div>
+            </div>
+            <a href="mailto:billing@signalwatch.in" style="font-family:var(--mono);font-size:13px;color:var(--teal);text-decoration:none;">billing@signalwatch.in</a>
+          </div>
+
+          <div style="padding:20px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Partnerships</div>
+              <div style="font-size:13px;color:var(--text2);font-weight:300;">Agencies, integrations, reseller and affiliate enquiries</div>
+            </div>
+            <a href="mailto:partnerships@signalwatch.in" style="font-family:var(--mono);font-size:13px;color:var(--teal);text-decoration:none;">partnerships@signalwatch.in</a>
+          </div>
+
+        </div>
+
+        <div style="margin-top:24px;display:flex;align-items:center;gap:12px;">
+          <a href="https://www.linkedin.com/company/signalwatch" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border:1.5px solid var(--border2);border-radius:4px;padding:8px 16px;transition:all 0.15s;"
+            onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
+            onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+            LinkedIn
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <footer class="site-footer">
+      <span>© 2026 Signalwatch</span>
+      <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
+    </footer>
+  </div>
+
+  <!-- HELP CENTRE PAGE -->
+  <div class="about-page" id="helpPage">
+    <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">Help Centre</div>
+        <h2 style="font-family:var(--serif);font-size:36px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:16px;">How to use Signalwatch</h2>
+        <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;">Written by the team, not generated. If something here doesn't answer your question, email support@signalwatch.in and a person will reply.</p>
+      </div>
+    </div>
+
+    <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Boolean search</div>
+
+        <div style="margin-bottom:24px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AND — combine two terms</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Both words must appear. Use this to narrow a search to a specific overlap.</div>
+          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce AND pricing</code>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">OR — search for either</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Either word can appear. Use this to track multiple brands or terms at once. Wrap in brackets when combining with AND.</div>
+          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">(Salesforce OR HubSpot) AND pricing</code>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">NOT — exclude a word</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Removes results containing that word. Useful for filtering out noise like job postings.</div>
+          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce NOT careers</code>
+        </div>
+
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">"..." — exact phrase</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Matches the exact phrase only, not the words separately.</div>
+          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">"customer service" AND Salesforce</code>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Account and billing</div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">How do free searches reset?</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Free accounts get 3 searches per day. The count resets at midnight in your local time zone.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">What does Pro include?</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Unlimited searches up to 1,000 per month, all 4 intelligence agents, unlimited lead generation scans, and no daily cap.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">I have a promo code — where do I use it?</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Click Upgrade in the navigation bar, then "Have a promo code?" on the payment screen.</div>
+        </div>
+
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">How do I cancel or get a refund?</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Email billing@signalwatch.in — a person will action it, no automated flows.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:48px 40px 72px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">Still stuck? <a href="#" onclick="showPage('contact');return false;" style="color:var(--teal);">Contact us</a> directly — no chatbots, no ticket numbers.</p>
+      </div>
+    </div>
+
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
       <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
@@ -1448,6 +1593,13 @@
       document.getElementById("navAbout").className    = "nav-btn" + (page==="about"  ? " active" : "");
       document.getElementById("mNavSearch").className  = "mobile-btn" + (page==="search" ? " active" : "");
       document.getElementById("mNavAbout").className   = "mobile-btn" + (page==="about"  ? " active" : "");
+
+      // Contact and Help pages reuse the .about-page styling but are separate sections
+      const contactPage = document.getElementById("contactPage");
+      const helpPage    = document.getElementById("helpPage");
+      if (contactPage) contactPage.className = page==="contact" ? "about-page active" : "about-page";
+      if (helpPage)    helpPage.className    = page==="help"    ? "about-page active" : "about-page";
+
       window.scrollTo(0, 0);
     }
 
