@@ -22,6 +22,27 @@ from datetime import datetime, timedelta
 RAZORPAY_KEY_ID       = os.getenv("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET   = os.getenv("RAZORPAY_KEY_SECRET", "")
 
+# ── WEBHOOK VERIFICATION ──────────────────────────────────────────────────
+# Razorpay calls your server automatically after a successful payment.
+# This function checks the request really came from Razorpay and was not
+# faked by someone else hitting your URL directly.
+
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+
+def verify_webhook_signature(raw_body: bytes, signature: str) -> bool:
+    """
+    Recomputes the expected signature using your webhook secret and
+    compares it to the one Razorpay sent. If they match, it's genuine.
+    """
+    if not RAZORPAY_WEBHOOK_SECRET:
+        return False
+    expected = hmac.new(
+        RAZORPAY_WEBHOOK_SECRET.encode("utf-8"),
+        raw_body,
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
 # PayPal credentials — get from PayPal Developer Dashboard → My Apps
 # App Client ID and Secret are different from what you put in the frontend.
 # The frontend uses Client ID only (public).
@@ -271,44 +292,31 @@ def increment_pro_search_count(token: str) -> int:
 
 def create_razorpay_order(token: str) -> dict:
     """
-    Creates a Razorpay subscription server-side.
-    The frontend uses the returned subscription_id to open the checkout popup.
-    Plan ID is set here — the browser cannot modify it.
+    Creates a one-time Razorpay order server-side.
+    The frontend uses the returned order_id to open the Checkout.js popup.
+    The token is attached as a note — the webhook reads it later to know
+    who to activate. Price is set here — the browser cannot modify it.
     """
     if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
         return {"error": "Razorpay not configured"}
     try:
         client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-        subscription = client.subscription.create({
-            "plan_id":         "plan_T7N3z4XILzMR8h",
-            "total_count":     120,   # Max billing cycles — 120 months = 10 years
-            "quantity":        1,
-            "notes":           {"token": token}
+        order = client.order.create({
+            "amount":   PLAN_AMOUNT_PAISE,
+            "currency": PLAN_CURRENCY,
+            "receipt":  f"sw_{token[:12]}",
+            "notes":    {"token": token}
         })
         return {
-            "subscription_id": subscription["id"],
-            "key_id":          RAZORPAY_KEY_ID,
-            "description":     PLAN_DESCRIPTION
+            "order_id":    order["id"],
+            "amount":      PLAN_AMOUNT_PAISE,
+            "currency":    PLAN_CURRENCY,
+            "key_id":      RAZORPAY_KEY_ID,
+            "description": PLAN_DESCRIPTION
         }
     except Exception as e:
-        print(f"create_razorpay_subscription error: {e}")
-        return {"error": "Could not create subscription"}
-
-
-def verify_razorpay_signature(subscription_id: str, payment_id: str, signature: str) -> bool:
-    """
-    Verifies the cryptographic signature Razorpay sends after subscription payment.
-    For subscriptions the message is payment_id|subscription_id (note the order).
-    """
-    if not RAZORPAY_KEY_SECRET:
-        return False
-    message  = f"{payment_id}|{subscription_id}"
-    expected = hmac.new(
-        RAZORPAY_KEY_SECRET.encode("utf-8"),
-        message.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
+        print(f"create_razorpay_order error: {e}")
+        return {"error": "Could not create order"}
 
 
 # ── PAYPAL ────────────────────────────────────────────────────────────────────

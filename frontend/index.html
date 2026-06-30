@@ -2388,14 +2388,14 @@ if (loadingText) {
     // ── RAZORPAY CHECKOUT ─────────────────────────────────────────────────
 
     async function openRazorpayCheckout() {
-  let sub;
+  let order;
   try {
     const res = await fetch(
       `${API_BASE}/create-order?token=${encodeURIComponent(getToken())}`
     );
-    sub = await res.json();
-    if (sub.error) {
-      alert("Could not start checkout: " + sub.error);
+    order = await res.json();
+    if (order.error) {
+      alert("Could not start checkout: " + order.error);
       return;
     }
   } catch (e) {
@@ -2404,41 +2404,18 @@ if (loadingText) {
   }
 
   const options = {
-    key:             sub.key_id,
-    subscription_id: sub.subscription_id,
-    name:            "Signalwatch",
-    description:     sub.description,
-    theme:           { color: "#0d7a6b" },
+    key:         order.key_id,
+    amount:      order.amount,
+    currency:    order.currency,
+    name:        "Signalwatch",
+    description: order.description,
+    order_id:    order.order_id,
+    theme:       { color: "#0d7a6b" },
 
-    handler: async function(response) {
-      try {
-        const verify = await fetch(`${API_BASE}/verify-razorpay`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({
-            razorpay_subscription_id: response.razorpay_subscription_id,
-            razorpay_payment_id:      response.razorpay_payment_id,
-            razorpay_signature:       response.razorpay_signature,
-            token:                    getToken()
-          })
-        });
-        const result = await verify.json();
-        if (result.success) {
-          onPaymentSuccess("razorpay");
-        } else {
-          alert(
-            "Payment received but activation failed. " +
-            "Email support@signalwatch.in with payment ID: " +
-            response.razorpay_payment_id
-          );
-        }
-      } catch (e) {
-        alert(
-          "Payment received but server unreachable. " +
-          "Email support@signalwatch.in with payment ID: " +
-          response.razorpay_payment_id
-        );
-      }
+    // Activation happens via webhook on our backend, not here.
+    // This just shows a friendly message — Pro unlocks within seconds.
+    handler: function(response) {
+      onPaymentSuccess("razorpay");
     }
   };
 

@@ -33,7 +33,7 @@ from payments import (
     get_pro_search_count,
     increment_pro_search_count,
     create_razorpay_order,
-    verify_razorpay_signature,
+    verify_webhook_signature,
     verify_paypal_subscription,
     generate_promo_code,
     redeem_promo_code,
@@ -2950,33 +2950,45 @@ async def create_order(token: str = ""):
     return create_razorpay_order(token)
 
 
-@app.post("/verify-razorpay")
-async def verify_razorpay(request: Request):
+@app.post("/razorpay-webhook")
+async def razorpay_webhook(request: Request):
     """
-    Razorpay flow step 2.
-    Verifies the cryptographic signature after payment completes.
-    Only grants Pro if signature is valid — prevents fake payment requests.
+    Razorpay calls this automatically when a payment succeeds in the
+    Checkout.js popup. We verify it's genuine, find the token attached
+    in the order notes, and grant 30 days of Pro access.
+
+    This is the ONLY source of truth for activation — the frontend
+    never grants Pro on its own.
     """
+    raw_body  = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+
+    if not verify_webhook_signature(raw_body, signature):
+        print("Webhook signature invalid — rejecting")
+        return {"status": "invalid signature"}
+
     try:
-        body       = await request.json()
-        subscription_id = body.get("razorpay_subscription_id", "")
-        payment_id      = body.get("razorpay_payment_id", "")
-        signature       = body.get("razorpay_signature", "")
-        token           = body.get("token", "")
+        data  = json.loads(raw_body)
+        event = data.get("event", "")
 
-        if not all([subscription_id, payment_id, signature, token]):
-            return {"success": False, "error": "missing fields"}
+        if event == "payment.captured":
+            payment_entity = data.get("payload", {}).get("payment", {}).get("entity", {})
+            payment_id = payment_entity.get("id", "")
+            notes      = payment_entity.get("notes", {})
+            token      = notes.get("token", "")
 
-        if not verify_razorpay_signature(subscription_id, payment_id, signature):
-            print(f"Razorpay signature mismatch — subscription {subscription_id}")
-            return {"success": False, "error": "payment verification failed"}
+            if token:
+                expires = datetime.now() + timedelta(days=30)
+                mark_token_as_pro(token, payment_ref=payment_id, expires_at=expires)
+                print(f"Webhook: activated 30-day Pro for {token[:12]}... payment {payment_id}")
+            else:
+                print("Webhook: payment captured but no token found in notes")
 
-        activated = mark_token_as_pro(token, payment_ref=payment_id)
-        return {"success": activated}
+        return {"status": "ok"}
 
     except Exception as e:
-        print(f"verify_razorpay error: {e}")
-        return {"success": False, "error": "server error"}
+        print(f"Webhook processing error: {e}")
+        return {"status": "error"}
 
 
 @app.post("/verify-paypal")
