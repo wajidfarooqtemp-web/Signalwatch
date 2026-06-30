@@ -73,7 +73,7 @@ ADMIN_SECRET          = os.getenv("ADMIN_SECRET", "")
 
 # Pro plan limits
 PRO_MONTHLY_LIMIT     = 1000   # Searches per calendar month
-PLAN_AMOUNT_PAISE     = 190000  # ₹1,900 — approximately $19
+PLAN_AMOUNT_PAISE     = 100  # TEST ONLY — ₹1, revert to 190000 after testing
 PLAN_CURRENCY         = "INR"
 PLAN_DESCRIPTION      = "Unlimited searches · All agents · Lead intelligence"
 
