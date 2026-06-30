@@ -567,6 +567,7 @@
         <span style="color:#22d3ee">S</span><span style="color:#a78bfa">i</span><span style="color:#34d399">g</span><span style="color:#f59e0b">n</span><span style="color:#f87171">a</span><span style="color:#22d3ee">l</span><span style="color:#0f172a;font-weight:800;">watch</span>
       </span>
       <span class="brand-tag">Beta</span>
+      <span class="brand-tag" id="proBadge" style="display:none;background:var(--teal-light);color:var(--teal);border-color:var(--teal-mid);">Pro</span>
     </a>
     <div class="nav-center">
       <button class="nav-btn active" id="navSearch" onclick="showPage('search')">Search</button>
@@ -1364,9 +1365,17 @@
     function skipLogin()  { closeModal(false); }
     function openModal()  { document.getElementById("loginModal").classList.add("open"); }
     function closeModal(continueSearch) {
-      document.getElementById("loginModal").classList.remove("open");
-      if (continueSearch) runSearch();
-    }
+  document.getElementById("loginModal").classList.remove("open");
+
+  // If they signed in specifically to pay, open payment modal instead of searching
+  if (_pendingPaymentAfterLogin) {
+    _pendingPaymentAfterLogin = false;
+    showPaymentModal(_paymentModalSource);
+    return;
+  }
+
+  if (continueSearch) runSearch();
+}
 
     // ── LIMIT MESSAGE ─────────────────────────────────────────────────────
     function showLimitMessage(container) {
@@ -2359,18 +2368,27 @@ if (loadingText) {
     // ── PAYMENT MODAL ─────────────────────────────────────────────────────
 
     let _paymentModalSource = "nav"; // Tracks where the modal was opened from
+    let _pendingPaymentAfterLogin = false; // True when login was triggered by the Upgrade button, not search
 
     function showPaymentModal(source) {
-      _paymentModalSource = source || "nav";
-      document.getElementById("paymentModal").classList.add("open");
-      // Render the PayPal button when the modal opens
-      // We do this here rather than on page load so the button is
-      // always fresh and tied to the current session
-      renderPayPalButton();
-      if (typeof umami !== "undefined") {
-        umami.track("payment-modal-open", { from: source });
-      }
-    }
+  // Require Google sign-in before allowing any payment
+  // This is non-negotiable — does not touch the free search limit at all
+  const isAuthed = localStorage.getItem("sw_authed") === "google";
+  if (!isAuthed && !googleIdToken) {
+    // Reuse the existing login modal, but mark that we want to
+    // open payment afterwards instead of running a search
+    document.getElementById("loginModal").classList.add("open");
+    _pendingPaymentAfterLogin = true;
+    return;
+  }
+
+  _paymentModalSource = source || "nav";
+  document.getElementById("paymentModal").classList.add("open");
+  renderPayPalButton();
+  if (typeof umami !== "undefined") {
+    umami.track("payment-modal-open", { from: source });
+  }
+}
 
     function closePaymentModal() {
       document.getElementById("paymentModal").classList.remove("open");
@@ -2579,16 +2597,17 @@ if (loadingText) {
     // ── PRO STATUS ON PAGE LOAD ───────────────────────────────────────────
 
     function checkProStatus() {
-      if (localStorage.getItem("sw_pro") === "true") {
-        // Already Pro — hide upgrade button
-        const btn = document.getElementById("navUpgradeBtn");
-        if (btn) btn.style.display = "none";
-      } else {
-        // Not Pro — show upgrade button in nav
-        const btn = document.getElementById("navUpgradeBtn");
-        if (btn) btn.style.display = "block";
-      }
-    }
+  const proBadge = document.getElementById("proBadge");
+  if (localStorage.getItem("sw_pro") === "true") {
+    const btn = document.getElementById("navUpgradeBtn");
+    if (btn) btn.style.display = "none";
+    if (proBadge) proBadge.style.display = "inline-block";
+  } else {
+    const btn = document.getElementById("navUpgradeBtn");
+    if (btn) btn.style.display = "block";
+    if (proBadge) proBadge.style.display = "none";
+  }
+}
 
     // Run on every page load
     checkProStatus();
