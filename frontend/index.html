@@ -26,7 +26,7 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- PayPal Subscriptions SDK — vault=true enables subscription billing -->
   <!-- intent=subscription tells PayPal this is a recurring payment -->
-  <script src="https://www.paypal.com/sdk/js?client-id=ARnTBEuj63ttKnXhLxjkXqe9_NZZJXv-lRDpAKCvld-NFwocBZ-wt2mXWpW7x13Lcdh0OjllIaPClKLu&vault=true&intent=subscription"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=BAAuMEWToFjAsukQqjdHIB6XrHAydubSXqiuf1UMGJD3AhHJliqQyRqMup6nMokRlbaXWibbLONH8GpuIs&currency=USD"></script>
 
   <!-- Razorpay checkout SDK -->
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -2665,67 +2665,70 @@ if (loadingText) {
     let _paypalRendered = false; // Prevent rendering the button twice
 
     function renderPayPalButton() {
-      // Only render once — PayPal throws an error if you render twice
-      if (_paypalRendered) return;
-      if (!window.paypal) return; // SDK not loaded yet
+  // Only render once — PayPal throws an error if you render twice
+  if (_paypalRendered) return;
+  if (!window.paypal) return; // SDK not loaded yet
 
-      _paypalRendered = true;
+  _paypalRendered = true;
 
-      paypal.Buttons({
-        style: {
-          shape:  "rect",    // Rectangular matches your site's style better than pill
-          color:  "blue",    // Blue PayPal button — internationally recognised
-          layout: "horizontal",
-          label:  "subscribe"
-        },
+  paypal.Buttons({
+    style: {
+      shape:  "rect",
+      color:  "blue",
+      layout: "horizontal",
+      label:  "pay"   // "pay" fits a one-time charge better than "subscribe"
+    },
 
-        // createSubscription is called when user clicks the PayPal button
-        // Returns the subscription ID to PayPal to complete the flow
-        createSubscription: function(data, actions) {
-          return actions.subscription.create({
-            plan_id: "P-9YX43303NP195600ANI6B6QQ"  // Your PayPal plan ID
-          });
-        },
+    // createOrder asks OUR backend to create the order — never the
+    // browser directly. This keeps the price server-controlled.
+    createOrder: async function(data, actions) {
+      const res = await fetch(
+        `${API_BASE}/create-paypal-order?token=${encodeURIComponent(getToken())}`
+      );
+      const order = await res.json();
+      if (order.error) {
+        alert("Could not start checkout: " + order.error);
+        throw new Error(order.error);
+      }
+      return order.order_id;
+    },
 
-        // onApprove is called after the user approves in the PayPal popup
-        // data.subscriptionID is what we send to our backend for verification
-        onApprove: async function(data, actions) {
-          try {
-            // Send subscription ID to our backend for server-side verification
-            // We never grant Pro based on frontend state alone
-            const verify = await fetch(`${API_BASE}/verify-paypal`, {
-              method:  "POST",
-              headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify({
-                subscription_id: data.subscriptionID,
-                token:           getToken()
-              })
-            });
-            const result = await verify.json();
-            if (result.success) {
-              onPaymentSuccess("paypal");
-            } else {
-              alert(
-                "Subscription approved but activation failed. " +
-                "Email support@signalwatch.in with subscription ID: " +
-                data.subscriptionID
-              );
-            }
-          } catch (e) {
-            alert(
-              "Subscription approved but server unreachable. " +
-              "Email support@signalwatch.in with subscription ID: " +
-              data.subscriptionID
-            );
-          }
-        },
-
-        onError: function(err) {
-          console.log("PayPal error:", err);
+    // onApprove fires after the buyer approves in the popup.
+    // We tell our backend to capture the payment — this is the moment
+    // money actually moves. Pro activation happens separately via
+    // webhook, not here — same pattern as Razorpay.
+    onApprove: async function(data, actions) {
+      try {
+        const res = await fetch(`${API_BASE}/capture-paypal-order`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ order_id: data.orderID })
+        });
+        const result = await res.json();
+        if (result.success) {
+          // Webhook will activate Pro within a few seconds.
+          // We show success immediately for a smooth experience.
+          onPaymentSuccess("paypal");
+        } else {
+          alert(
+            "Payment could not be completed. Please try again or email " +
+            "support@signalwatch.in with order ID: " + data.orderID
+          );
         }
+      } catch (e) {
+        alert(
+          "Payment approved but server unreachable. " +
+          "Email support@signalwatch.in with order ID: " + data.orderID
+        );
+      }
+    },
 
-      }).render("#paypal-button-container");
+    onError: function(err) {
+      console.log("PayPal error:", err);
     }
+
+  }).render("#paypal-button-container");
+}
 
 
     // ── PROMO CODE REDEMPTION ─────────────────────────────────────────────

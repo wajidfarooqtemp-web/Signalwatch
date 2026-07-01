@@ -34,7 +34,9 @@ from payments import (
     increment_pro_search_count,
     create_razorpay_order,
     verify_webhook_signature,
-    verify_paypal_subscription,
+    create_paypal_order,
+    capture_paypal_order,
+    verify_paypal_webhook,
     generate_promo_code,
     redeem_promo_code,
     ADMIN_SECRET
@@ -2986,33 +2988,77 @@ async def razorpay_webhook(request: Request):
         return {"status": "error"}
 
 
-@app.post("/verify-paypal")
-async def verify_paypal(request: Request):
+@app.get("/create-paypal-order")
+async def create_paypal_order_route(token: str = ""):
     """
-    PayPal flow — server-side verification.
-    Frontend sends the subscription ID PayPal returns after approval.
-    We call PayPal's API directly to confirm it is real and active.
-    Never trust the frontend alone for payment confirmation.
+    Step one of PayPal checkout. Creates an order server-side so the
+    price cannot be tampered with from the browser. Returns the order_id
+    the frontend needs to open the PayPal popup.
+    """
+    if not token or (not token.startswith("sw_") and not token.startswith("g_")):
+        return {"error": "invalid token"}
+    return create_paypal_order(token)
+
+
+@app.post("/capture-paypal-order")
+async def capture_paypal_order_route(request: Request):
+    """
+    Step two of PayPal checkout. Called after the buyer approves in the
+    popup. This is the moment the actual charge happens. We do NOT grant
+    Pro access here — the webhook below is the real source of truth,
+    same pattern as Razorpay. This endpoint just tells PayPal to take
+    the money; activation happens independently via webhook.
     """
     try:
-        body            = await request.json()
-        subscription_id = body.get("subscription_id", "")
-        token           = body.get("token", "")
+        body     = await request.json()
+        order_id = body.get("order_id", "")
 
-        if not subscription_id or not token:
-            return {"success": False, "error": "missing fields"}
+        if not order_id:
+            return {"success": False, "error": "missing order_id"}
 
-        # verify_paypal_subscription calls PayPal API — server-side only
-        if not verify_paypal_subscription(subscription_id):
-            print(f"PayPal subscription invalid: {subscription_id}")
-            return {"success": False, "error": "subscription could not be verified"}
-
-        activated = mark_token_as_pro(token, payment_ref=subscription_id)
-        return {"success": activated}
+        captured = capture_paypal_order(order_id)
+        return {"success": captured}
 
     except Exception as e:
-        print(f"verify_paypal error: {e}")
+        print(f"capture_paypal_order_route error: {e}")
         return {"success": False, "error": "server error"}
+
+
+@app.post("/paypal-webhook")
+async def paypal_webhook(request: Request):
+    """
+    PayPal calls this automatically once a capture genuinely completes.
+    We verify it's really PayPal (not a fake request), then read the
+    token we stored in custom_id, and grant 30 days of Pro access.
+    """
+    raw_body = await request.body()
+    headers  = dict(request.headers)
+
+    if not verify_paypal_webhook(headers, raw_body):
+        print("PayPal webhook signature invalid — rejecting")
+        return {"status": "invalid signature"}
+
+    try:
+        data       = json.loads(raw_body)
+        event_type = data.get("event_type", "")
+
+        if event_type == "PAYMENT.CAPTURE.COMPLETED":
+            resource = data.get("resource", {})
+            payment_id = resource.get("id", "")
+            token      = resource.get("custom_id", "")
+
+            if token:
+                expires = datetime.now() + timedelta(days=30)
+                mark_token_as_pro(token, payment_ref=payment_id, expires_at=expires)
+                print(f"PayPal webhook: activated 30-day Pro for {token[:12]}... payment {payment_id}")
+            else:
+                print("PayPal webhook: capture completed but no token in custom_id")
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        print(f"PayPal webhook processing error: {e}")
+        return {"status": "error"}
 
 
 @app.post("/redeem-code")

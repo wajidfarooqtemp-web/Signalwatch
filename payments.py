@@ -14,6 +14,7 @@ import string      # Python built-in — gives us character sets for code genera
 import razorpay    # pip install razorpay — add to requirements.txt
 import requests    # Already in your requirements.txt — used for PayPal API calls
 from datetime import datetime, timedelta
+import json
 
 # ── CREDENTIALS ───────────────────────────────────────────────────────────────
 # Set all of these in Render → your service → Environment.
@@ -58,9 +59,6 @@ PAYPAL_BASE           = (
     if PAYPAL_ENV == "sandbox"
     else "https://api-m.paypal.com"
 )
-
-# Your PayPal Plan ID — the one starting with P-
-PAYPAL_PLAN_ID = "P-9YX43303NP195600ANI6B6QQ"
 
 # Secret salt for promo code generation — set this in Render environment.
 # Any random string works. Example: openssl rand -hex 32
@@ -337,51 +335,118 @@ def get_paypal_access_token() -> str:
     res.raise_for_status()
     return res.json()["access_token"]
 
-
-def verify_paypal_subscription(subscription_id: str) -> bool:
+def create_paypal_order(token: str) -> dict:
     """
-    Verifies a PayPal subscription ID server-side.
+    Creates a one-time PayPal order for $19 USD.
+    PayPal calls this "intent: CAPTURE" — meaning we take payment
+    immediately once the buyer approves, not a recurring subscription.
 
-    Why server-side:
-    The frontend receives the subscription ID from PayPal after approval.
-    Anyone could send a fake subscription ID hoping to get Pro for free.
-    We call PayPal's API directly to confirm:
-      - The subscription exists
-      - Its status is ACTIVE
-      - It belongs to our plan ID
-
-    Returns True only if all three checks pass.
+    custom_id stores our token so we know whose account to upgrade
+    when the webhook fires later.
     """
     try:
-        token = get_paypal_access_token()
-        res = requests.get(
-            f"{PAYPAL_BASE}/v1/billing/subscriptions/{subscription_id}",
+        access_token = get_paypal_access_token()
+        res = requests.post(
+            f"{PAYPAL_BASE}/v2/checkout/orders",
             headers={
-                "Authorization": f"Bearer {token}",
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type":  "application/json"
+            },
+            json={
+                "intent": "CAPTURE",
+                "purchase_units": [{
+                    "amount": {
+                        "currency_code": "USD",
+                        "value": "19.00"
+                    },
+                    "custom_id": token,
+                    "description": PLAN_DESCRIPTION
+                }]
+            },
+            timeout=10
+        )
+        if res.status_code not in (200, 201):
+            print(f"PayPal create order failed: {res.status_code} {res.text}")
+            return {"error": "Could not create PayPal order"}
+
+        data = res.json()
+        return {"order_id": data.get("id", "")}
+
+    except Exception as e:
+        print(f"create_paypal_order error: {e}")
+        return {"error": "Could not create PayPal order"}
+
+
+def capture_paypal_order(order_id: str) -> bool:
+    """
+    Step two of PayPal's flow. Creating an order does NOT take the money.
+    After the buyer approves in the popup, we must explicitly "capture"
+    the order — this is the moment the actual charge happens.
+
+    Returns True if capture succeeded.
+    """
+    try:
+        access_token = get_paypal_access_token()
+        res = requests.post(
+            f"{PAYPAL_BASE}/v2/checkout/orders/{order_id}/capture",
+            headers={
+                "Authorization": f"Bearer {access_token}",
                 "Content-Type":  "application/json"
             },
             timeout=10
         )
-        if res.status_code != 200:
-            print(f"PayPal subscription lookup failed: {res.status_code}")
+        if res.status_code not in (200, 201):
+            print(f"PayPal capture failed: {res.status_code} {res.text}")
             return False
-
-        data   = res.json()
-        status  = data.get("status", "")
-        plan_id = data.get("plan_id", "")
-
-        # Both must match — status must be ACTIVE and plan must be ours
-        if status != "ACTIVE":
-            print(f"PayPal subscription not active: {status}")
-            return False
-        if plan_id != PAYPAL_PLAN_ID:
-            print(f"PayPal plan ID mismatch: {plan_id}")
-            return False
-
         return True
 
     except Exception as e:
-        print(f"verify_paypal_subscription error: {e}")
+        print(f"capture_paypal_order error: {e}")
+        return False
+
+
+PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "")
+
+def verify_paypal_webhook(headers: dict, body: bytes) -> bool:
+    """
+    PayPal does NOT use a simple secret + HMAC like Razorpay.
+    Instead, you send PayPal back the exact headers it sent you,
+    plus your Webhook ID, and PayPal's own API tells you whether
+    the webhook was genuinely sent by them.
+
+    This is PayPal's official verification method — no shortcuts.
+    """
+    if not PAYPAL_WEBHOOK_ID:
+        return False
+    try:
+        access_token = get_paypal_access_token()
+        verification_payload = {
+            "transmission_id":   headers.get("paypal-transmission-id", ""),
+            "transmission_time": headers.get("paypal-transmission-time", ""),
+            "cert_url":          headers.get("paypal-cert-url", ""),
+            "auth_algo":         headers.get("paypal-auth-algo", ""),
+            "transmission_sig":  headers.get("paypal-transmission-sig", ""),
+            "webhook_id":        PAYPAL_WEBHOOK_ID,
+            "webhook_event":     json.loads(body)
+        }
+        res = requests.post(
+            f"{PAYPAL_BASE}/v1/notifications/verify-webhook-signature",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type":  "application/json"
+            },
+            json=verification_payload,
+            timeout=10
+        )
+        if res.status_code != 200:
+            print(f"PayPal webhook verify request failed: {res.status_code}")
+            return False
+
+        result = res.json()
+        return result.get("verification_status") == "SUCCESS"
+
+    except Exception as e:
+        print(f"verify_paypal_webhook error: {e}")
         return False
 
 
