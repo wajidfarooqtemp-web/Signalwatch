@@ -567,7 +567,13 @@
         <span style="color:#22d3ee">S</span><span style="color:#a78bfa">i</span><span style="color:#34d399">g</span><span style="color:#f59e0b">n</span><span style="color:#f87171">a</span><span style="color:#22d3ee">l</span><span style="color:#0f172a;font-weight:800;">watch</span>
       </span>
       <span class="brand-tag">Beta</span>
-      <span class="brand-tag" id="proBadge" style="display:none;background:var(--teal-light);color:var(--teal);border-color:var(--teal-mid);">Pro</span>
+      <span
+  id="proBadge"
+  style="
+    display:none;font-family:var(--mono);font-size:9px;font-weight:600;
+    color:var(--text3);letter-spacing:0.8px;text-transform:uppercase;
+    padding:2px 6px;border:1px solid var(--border2);border-radius:3px;
+  ">Pro</span>
     </a>
     <div class="nav-center">
       <button class="nav-btn active" id="navSearch" onclick="showPage('search')">Search</button>
@@ -578,17 +584,19 @@
       <div class="live-badge"><div class="live-dot"></div>Live</div>
       <div class="searches-left" id="searchesLeft"><span id="searchesCount">3</span> left today</div>
       <button
-        id="navUpgradeBtn"
-        onclick="showPaymentModal('nav')"
-        style="
-          font-family:var(--mono);font-size:11px;font-weight:600;
-          color:var(--teal);background:var(--teal-light);
-          border:1px solid var(--teal-mid);border-radius:20px;
-          padding:4px 12px;cursor:pointer;letter-spacing:0.3px;
-          white-space:nowrap;display:none;
-        ">
-        Upgrade ↗
-      </button>
+  id="navUpgradeBtn"
+  onclick="showPaymentModal('nav')"
+  style="
+    font-family:var(--sans);font-size:13px;font-weight:600;
+    color:var(--white);background:var(--ink);
+    border:1px solid var(--ink);border-radius:5px;
+    padding:6px 16px;cursor:pointer;letter-spacing:0.1px;
+    white-space:nowrap;display:none;transition:opacity 0.15s;
+  "
+  onmouseover="this.style.opacity='0.85'"
+  onmouseout="this.style.opacity='1'">
+  Upgrade to Pro
+</button>
     </div>
     <div class="hamburger" id="hamburger" onclick="toggleMenu()">
       <span></span><span></span><span></span>
@@ -1509,13 +1517,12 @@
 
     function skipLogin()  { closeModal(false); }
     function openModal() {
-  // Reset modal text to the search-limit context (not payment context)
   const title = document.getElementById("loginModalTitle");
   const sub   = document.getElementById("loginModalSub");
   const skip  = document.getElementById("loginModalSkip");
   if (title) title.textContent = "One more search needs a sign-in";
   if (sub)   sub.innerHTML = 'Your first search was free. Sign in with Google to continue. <strong>3 searches per day</strong> — resets at midnight.';
-  if (skip)  skip.style.display = "block";
+  if (skip)  { skip.style.display = "block"; skip.textContent = "Skip for now — use my 3 anyway"; }
 
   document.getElementById("loginModal").classList.add("open");
 }
@@ -2535,13 +2542,12 @@ if (loadingText) {
     function showPaymentModal(source) {
   const isAuthed = localStorage.getItem("sw_authed") === "google";
   if (!isAuthed && !googleIdToken) {
-    // Swap the modal text to payment-specific copy before showing it
     const title = document.getElementById("loginModalTitle");
     const sub   = document.getElementById("loginModalSub");
     const skip  = document.getElementById("loginModalSkip");
     if (title) title.textContent = "Sign in to upgrade";
     if (sub)   sub.innerHTML = "Sign in with Google so we know your account when you pay.";
-    if (skip)  skip.style.display = "none"; // Paying requires sign-in, no skip option here
+    if (skip)  { skip.style.display = "block"; skip.textContent = "Maybe later"; }
 
     document.getElementById("loginModal").classList.add("open");
     _pendingPaymentAfterLogin = true;
