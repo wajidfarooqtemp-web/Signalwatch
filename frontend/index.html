@@ -571,8 +571,8 @@
   id="proBadge"
   style="
     display:none;font-family:var(--mono);font-size:9px;font-weight:600;
-    color:var(--text3);letter-spacing:0.8px;text-transform:uppercase;
-    padding:2px 6px;border:1px solid var(--border2);border-radius:3px;
+    color:var(--white);background:var(--teal);letter-spacing:0.8px;
+    text-transform:uppercase;padding:2px 7px;border-radius:3px;
   ">Pro</span>
     </a>
     <div class="nav-center">
@@ -588,13 +588,13 @@
   onclick="showPaymentModal('nav')"
   style="
     font-family:var(--sans);font-size:13px;font-weight:600;
-    color:var(--white);background:var(--ink);
-    border:1px solid var(--ink);border-radius:5px;
-    padding:6px 16px;cursor:pointer;letter-spacing:0.1px;
-    white-space:nowrap;display:none;transition:opacity 0.15s;
+    color:var(--white);background:var(--teal);
+    border:none;border-radius:5px;
+    padding:7px 16px;cursor:pointer;letter-spacing:0.1px;
+    white-space:nowrap;display:none;transition:background 0.15s;
   "
-  onmouseover="this.style.opacity='0.85'"
-  onmouseout="this.style.opacity='1'">
+  onmouseover="this.style.background='#0b6859'"
+  onmouseout="this.style.background='var(--teal)'">
   Upgrade to Pro
 </button>
     </div>
@@ -1490,14 +1490,51 @@
     const SW_TOKEN = getToken();
     // ── GOOGLE SIGN-IN ────────────────────────────────────────────────────
     function signInWithGoogle() {
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback:  handleGoogleCredential,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
-      google.accounts.id.prompt();
+  // Uses the OAuth2 popup flow instead of One Tap / FedCM.
+  // One Tap relies on third-party cookies and FedCM, both blocked
+  // in incognito by design — no fix exists for that within One Tap.
+  // A real popup window works reliably everywhere, including incognito.
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: "openid email profile",
+    callback: (tokenResponse) => {
+      if (tokenResponse.error) {
+        console.error("Google sign-in error:", tokenResponse.error);
+        return;
+      }
+      fetchGoogleProfile(tokenResponse.access_token);
     }
+  });
+  client.requestAccessToken();
+}
+
+// Fetches the user's profile using the access token from the popup flow,
+// then reuses the existing handleGoogleCredential-style UI update.
+async function fetchGoogleProfile(accessToken) {
+  try {
+    const res = await fetch(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const profile = await res.json();
+    googleUserName = profile.given_name || profile.name || "you";
+    // Store the access token directly — backend verification below
+    // uses this instead of an ID token, since the popup flow returns
+    // an access token, not a JWT
+    googleIdToken = accessToken;
+
+    document.getElementById("modalContent").innerHTML = `
+      <div class="modal-signed-in">
+        <div class="modal-avatar">${googleUserName[0].toUpperCase()}</div>
+        <span>Signed in as ${googleUserName} — continuing</span>
+      </div>`;
+    document.querySelector(".modal-skip").style.display = "none";
+    localStorage.setItem("sw_authed", "google");
+    setTimeout(() => closeModal(true), 800);
+  } catch (e) {
+    console.error("Could not fetch Google profile:", e);
+  }
+}
 
     function handleGoogleCredential(response) {
       googleIdToken = response.credential;

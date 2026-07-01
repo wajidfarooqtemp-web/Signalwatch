@@ -87,36 +87,31 @@ DAILY_LIMIT = 3
 # Add your Vercel domain to "Authorised JavaScript origins"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 
-def verify_google_token(id_token_str):
-    # Verifies a Google ID token and returns the stable user ID (sub)
-    # The sub field is a permanent unique string tied to the Google account
-    # It never changes even if the user changes their email or name
-    # We use this as the rate limit key instead of localStorage tokens
-    # which users can delete
-    #
-    # We verify by calling Google's tokeninfo endpoint — no library needed
-    # Google checks the signature and expiry for us
+def verify_google_token(access_token_str):
+    # The frontend switched from One Tap (ID tokens, JWTs) to the OAuth2
+    # popup flow (access tokens) — this fixes incognito mode reliability.
+    # Access tokens cannot be verified via tokeninfo?id_token=; instead we
+    # call Google's userinfo endpoint directly with the access token.
+    # Google validates the token for us when it returns profile data.
     try:
         res = requests.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token_str}",
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token_str}"},
             timeout=8
         )
         if res.status_code != 200:
+            print(f"Google userinfo failed: {res.status_code}")
             return None
         data = res.json()
-        # aud must match our client ID — prevents tokens from other apps being used
-        if GOOGLE_CLIENT_ID and data.get("aud") != GOOGLE_CLIENT_ID:
-            print(f"Token aud mismatch: {data.get('aud')}")
-            return None
+
         sub = data.get("sub")  # permanent unique Google user ID
         if not sub:
             return None
-        # Prefix so we can distinguish Google tokens from legacy sw_ tokens in DB
+
         email = data.get("email", "unknown")
         print(f"Google login: {email} (sub: {sub[:8]}...)")
 
         # Store this login in the database
-        # This lets you query who has used Signalwatch from the Render console
         try:
             conn = get_db()
             if conn:
