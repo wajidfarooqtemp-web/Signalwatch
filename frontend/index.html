@@ -1515,7 +1515,12 @@
       setTimeout(() => closeModal(true), 800);
     }
 
-    function skipLogin()  { closeModal(false); }
+    function skipLogin() {
+  // Clear the pending-payment flag FIRST so closeModal does not
+  // reopen the payment modal after a skip. Skip means "not now" — full stop.
+  _pendingPaymentAfterLogin = false;
+  closeModal(false);
+}
     function openModal() {
   const title = document.getElementById("loginModalTitle");
   const sub   = document.getElementById("loginModalSub");
