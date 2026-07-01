@@ -2942,7 +2942,8 @@ async def create_order(token: str = ""):
     Creates a server-side order so the price cannot be tampered with.
     Returns order details the frontend needs to open the checkout popup.
     """
-    if not token or (not token.startswith("sw_") and not token.startswith("g_")):
+    # Accept any non-empty token — format does not matter, only that it exists
+    if not token:
         return {"error": "invalid token"}
     return create_razorpay_order(token)
 
@@ -2995,7 +2996,8 @@ async def create_paypal_order_route(token: str = ""):
     price cannot be tampered with from the browser. Returns the order_id
     the frontend needs to open the PayPal popup.
     """
-    if not token or (not token.startswith("sw_") and not token.startswith("g_")):
+    # Accept any non-empty token — format does not matter, only that it exists
+    if not token:
         return {"error": "invalid token"}
     return create_paypal_order(token)
 
