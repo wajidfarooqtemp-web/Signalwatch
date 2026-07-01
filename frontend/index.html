@@ -579,6 +579,7 @@
       <button class="nav-btn active" id="navSearch" onclick="showPage('search')">Search</button>
       <button class="nav-btn" id="navAbout" onclick="showPage('about')">About</button>
       <button class="nav-btn" id="navHelp" onclick="showPage('help')">Help</button>
+      <button class="nav-btn" id="navPricing" onclick="showPage('pricing')">Pricing</button>
     </div>
     <div class="nav-right">
       <div class="live-badge"><div class="live-dot"></div>Live</div>
@@ -607,6 +608,7 @@
     <div class="mobile-btn active" id="mNavSearch" onclick="showPage('search');toggleMenu()">Search</div>
     <div class="mobile-btn" id="mNavAbout" onclick="showPage('about');toggleMenu()">About</div>
     <div class="mobile-btn" id="mNavHelp" onclick="showPage('help');toggleMenu()">Help</div>
+    <div class="mobile-btn" id="mNavPricing" onclick="showPage('pricing');toggleMenu()">Pricing</div>
   </div>
 
   <!-- ── PAYMENT MODAL ──────────────────────────────────────────────────────
@@ -1146,6 +1148,152 @@
     </footer>
   </div>
 
+  <!-- PRICING PAGE -->
+  <div class="about-page" id="pricingPage">
+
+    <!-- Header -->
+    <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">Pricing</div>
+        <h2 style="font-family:var(--serif);font-size:36px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:16px;">Simple. One plan. No surprises.</h2>
+        <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;">We built Signalwatch because brand intelligence was either too expensive, too slow, or too complicated. Pro gives you everything, at a price that makes sense.</p>
+      </div>
+    </div>
+
+    <!-- Plans -->
+    <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
+      <div style="max-width:680px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+        <!-- Free -->
+        <div style="border:1px solid var(--border);border-radius:6px;padding:28px 24px;">
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:16px;">Free</div>
+          <div style="font-family:var(--serif);font-size:32px;font-weight:800;color:var(--ink);margin-bottom:4px;">$0</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:24px;">Always</div>
+          <div style="font-size:13px;color:var(--text2);line-height:2;font-weight:300;">
+            3 searches per day<br>
+            Signal briefing<br>
+            Context agent<br>
+            One lead scan
+          </div>
+        </div>
+
+        <!-- Pro -->
+        <div style="border:2px solid var(--teal);border-radius:6px;padding:28px 24px;position:relative;">
+          <div style="position:absolute;top:-12px;left:20px;background:var(--teal);color:white;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;padding:3px 10px;border-radius:20px;">Most popular</div>
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:16px;">Pro</div>
+          <div style="font-family:var(--serif);font-size:32px;font-weight:800;color:var(--ink);margin-bottom:4px;">$19</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:24px;">per month</div>
+          <div style="font-size:13px;color:var(--text2);line-height:2;font-weight:300;">
+            1,000 searches per month<br>
+            All 4 intelligence agents<br>
+            Unlimited lead generation<br>
+            Competitive intelligence<br>
+            Priority support
+          </div>
+          <button
+            onclick="showPaymentModal('pricing')"
+            style="
+              margin-top:24px;width:100%;padding:12px;
+              background:var(--teal);color:white;
+              font-family:var(--sans);font-size:14px;font-weight:600;
+              border:none;border-radius:5px;cursor:pointer;
+            ">
+            Get Pro
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- What Pro actually means in plain English -->
+    <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">What you actually get</div>
+        <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">Most brand teams spend Monday morning going through mentions by hand. They open six tabs, skim through noise, try to figure out what actually matters, and write a summary that takes two hours to produce.</p>
+        <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">Signalwatch Pro does that before they finish their first coffee. Four agents run in parallel. One reads the signal, one builds context, one flags risk, one finds leads. You get a briefing, not a pile of links.</p>
+        <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;">At $19 a month, it costs less than the coffee.</p>
+      </div>
+    </div>
+
+    <!-- Refund policy -->
+    <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Our refund policy</div>
+        <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">If Signalwatch is not right for you, we will refund you. No forms to fill, no questions, no waiting. Even if it has been more than 29 days.</p>
+        <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">We would rather you leave happy and come back later than feel stuck paying for something that is not working for you. Email <a href="mailto:billing@signalwatch.in" style="color:var(--teal);text-decoration:none;">billing@signalwatch.in</a> and we will sort it out the same day.</p>
+        <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;">We are a small team. We read every email ourselves.</p>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div style="padding:48px 40px 72px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Common questions</div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Can I cancel any time?</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Yes. Email <a href="mailto:billing@signalwatch.in" style="color:var(--teal);text-decoration:none;">billing@signalwatch.in</a> and we cancel it immediately. No notice period.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Do you offer team plans?</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Not yet. If you need Signalwatch for a team, email <a href="mailto:partnerships@signalwatch.in" style="color:var(--teal);text-decoration:none;">partnerships@signalwatch.in</a> and we will figure something out.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">What payment methods do you accept?</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">UPI, all major cards, and netbanking via Razorpay for Indian customers. PayPal for international customers. Both on the same payment screen.</div>
+        </div>
+
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">I have a promo code.</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Click "Get Pro" above and look for "Have a promo code?" on the payment screen.</div>
+        </div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+      <span>© 2026 Signalwatch</span>
+      <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
+    </footer>
+    <!-- Bottom of search tab — visible to all users, upgrade nudge for free users only -->
+    <div style="border-top:1px solid var(--border);margin-top:48px;padding:48px 40px;">
+      <div style="max-width:680px;margin:0 auto;">
+
+        <!-- Questions strip -->
+        <div style="margin-bottom:40px;">
+          <div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:4px;">Questions? We have answers.</div>
+          <div style="font-size:13px;color:var(--text2);font-weight:300;margin-bottom:20px;">Quick help for common questions.</div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;">
+            <button onclick="showPage('help')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">How does search work?</button>
+            <button onclick="showPage('pricing')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">What does Pro include?</button>
+            <button onclick="showPage('pricing')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">Cancel or refund?</button>
+            <button onclick="showPaymentModal('bottom')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">Have a promo code?</button>
+          </div>
+        </div>
+
+        <!-- Upgrade nudge — only shown to free users -->
+        <div id="bottomUpgradeNudge" style="background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:6px;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Most brand teams do this by hand on Monday mornings.</div>
+            <div style="font-size:13px;color:var(--text2);font-weight:300;line-height:1.7;">Signalwatch does it before they finish their first coffee. $19 a month.</div>
+          </div>
+          <button
+            onclick="showPaymentModal('bottom')"
+            style="
+              background:var(--teal);color:white;
+              font-family:var(--sans);font-size:13px;font-weight:600;
+              padding:10px 22px;border-radius:4px;border:none;cursor:pointer;
+              white-space:nowrap;
+            ">
+            Upgrade to Pro
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
   <!-- HELP CENTRE PAGE -->
   <div class="about-page" id="helpPage">
     <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
@@ -1158,6 +1306,32 @@
 
     <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
       <div style="max-width:680px;margin:0 auto;">
+        <!-- See examples section — real use cases, no jargon -->
+        <div style="margin-bottom:48px;">
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">See examples</div>
+
+          <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+
+            <div style="padding:20px 24px;border-bottom:1px solid var(--border);">
+              <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px;">A SaaS company tracking competitor complaints</div>
+              <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:10px;">They want to know every time someone complains about a rival's pricing or support, across Reddit, news and review sites. They search:</div>
+              <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">(Salesforce OR HubSpot) AND (pricing OR "too expensive" OR "customer service")</code>
+            </div>
+
+            <div style="padding:20px 24px;border-bottom:1px solid var(--border);">
+              <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px;">A PR team monitoring a brand crisis</div>
+              <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:10px;">Something has gone wrong and they need to track every mention as it happens, without getting buried in unrelated noise. They search:</div>
+              <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">"Brand Name" AND (scandal OR recall OR lawsuit OR apology) NOT careers</code>
+            </div>
+
+            <div style="padding:20px 24px;">
+              <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px;">An agency finding warm leads for a client</div>
+              <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:10px;">They need people actively asking for recommendations in a specific category, not just browsing. They search:</div>
+              <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">("looking for" OR "recommend" OR "alternatives to") AND "project management"</code>
+            </div>
+
+          </div>
+        </div>
         <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Boolean search</div>
 
         <div style="margin-bottom:24px;">
@@ -1646,8 +1820,10 @@ async function fetchGoogleProfile(accessToken) {
       // Contact and Help pages reuse the .about-page styling but are separate sections
       const contactPage = document.getElementById("contactPage");
       const helpPage    = document.getElementById("helpPage");
-      if (contactPage) contactPage.className = page==="contact" ? "about-page active" : "about-page";
-      if (helpPage)    helpPage.className    = page==="help"    ? "about-page active" : "about-page";
+      if (contactPage)  contactPage.className  = page==="contact"  ? "about-page active" : "about-page";
+      if (helpPage)     helpPage.className     = page==="help"     ? "about-page active" : "about-page";
+      const pricingPage = document.getElementById("pricingPage");
+      if (pricingPage)  pricingPage.className  = page==="pricing"  ? "about-page active" : "about-page";
 
       window.scrollTo(0, 0);
     }
@@ -2814,17 +2990,17 @@ if (loadingText) {
     // ── PRO STATUS ON PAGE LOAD ───────────────────────────────────────────
 
     function checkProStatus() {
-  const proBadge = document.getElementById("proBadge");
-  if (localStorage.getItem("sw_pro") === "true") {
-    const btn = document.getElementById("navUpgradeBtn");
-    if (btn) btn.style.display = "none";
-    if (proBadge) proBadge.style.display = "inline-block";
-  } else {
-    const btn = document.getElementById("navUpgradeBtn");
-    if (btn) btn.style.display = "block";
-    if (proBadge) proBadge.style.display = "none";
-  }
-}
+      if (localStorage.getItem("sw_pro") === "true") {
+        const btn = document.getElementById("navUpgradeBtn");
+        if (btn) btn.style.display = "none";
+        // Hide the bottom upgrade nudge for Pro users
+        const nudge = document.getElementById("bottomUpgradeNudge");
+        if (nudge) nudge.style.display = "none";
+      } else {
+        const btn = document.getElementById("navUpgradeBtn");
+        if (btn) btn.style.display = "block";
+      }
+    }
 
     // Run on every page load
     checkProStatus();
