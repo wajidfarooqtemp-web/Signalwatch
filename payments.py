@@ -71,6 +71,7 @@ ADMIN_SECRET          = os.getenv("ADMIN_SECRET", "")
 
 # Pro plan limits
 PRO_MONTHLY_LIMIT     = 1000   # Searches per calendar month
+PRO_MONTHLY_LEAD_LIMIT = 250   # Lead scans per calendar month for Pro users
 PLAN_AMOUNT_PAISE     = 190000  # ₹1,900 — approximately $19
 PLAN_CURRENCY         = "INR"
 PLAN_DESCRIPTION      = "Know what to do next · All 4 specialised agents · Competitor intelligence · Lead intelligence"
@@ -284,6 +285,58 @@ def increment_pro_search_count(token: str) -> int:
     except Exception as e:
         print(f"increment_pro_search_count error: {e}")
         return 1
+    
+
+def get_pro_lead_count(token: str) -> int:
+    """
+    Returns how many lead scans this Pro token has used this calendar month.
+    Reuses the pro_searches table with a different month_key prefix so we
+    don't need a new table.
+    """
+    month_key = "leads-" + datetime.now().strftime("%Y-%m")
+    conn = _get_conn()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT count FROM pro_searches
+            WHERE token = %s AND month_key = %s
+        """, (token, month_key))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row[0] if row else 0
+    except Exception as e:
+        print(f"get_pro_lead_count error: {e}")
+        return 0
+
+
+def increment_pro_lead_count(token: str) -> int:
+    """
+    Adds 1 to this Pro token's monthly lead scan count.
+    """
+    month_key = "leads-" + datetime.now().strftime("%Y-%m")
+    conn = _get_conn()
+    if not conn:
+        return 1
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO pro_searches (token, month_key, count)
+            VALUES (%s, %s, 1)
+            ON CONFLICT (token, month_key)
+            DO UPDATE SET count = pro_searches.count + 1
+            RETURNING count
+        """, (token, month_key))
+        count = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return count
+    except Exception as e:
+        print(f"increment_pro_lead_count error: {e}")
+        return 1    
 
 
 # ── RAZORPAY ──────────────────────────────────────────────────────────────────

@@ -632,7 +632,7 @@
       <div class="modal-icon">◎</div>
       <div class="modal-title">Signalwatch Pro</div>
       <p class="modal-sub">
-        Unlimited searches · All 4 agents · Lead intelligence · No daily cap
+        Know what to do next · 1,000 searches a month · All 4 agents · 250 lead scans a month
         <br><strong>$19 / month</strong>
       </p>
 
@@ -1235,9 +1235,10 @@
           <div style="font-family:var(--serif);font-size:32px;font-weight:800;color:var(--ink);margin-bottom:4px;">$19</div>
           <div style="font-size:13px;color:var(--text3);margin-bottom:24px;">per month</div>
           <div style="font-size:13px;color:var(--text2);line-height:2;font-weight:300;">
+            Know what to do next<br>           
             1,000 searches per month<br>
             All 4 intelligence agents<br>
-            Unlimited lead generation<br>
+            250 lead scans per month<br>
             Competitive intelligence<br>
             Priority support
           </div>
@@ -1349,27 +1350,46 @@
         </div>
         <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Boolean search</div>
 
-        <div style="margin-bottom:24px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AND — combine two terms</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Both words must appear. Use this to narrow a search to a specific overlap.</div>
-          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce AND pricing</code>
+        <div style="display:grid;grid-template-columns:1fr 90px;gap:16px;align-items:center;margin-bottom:24px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AND — both words must appear</div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is only included if it contains every word joined by AND.</div>
+            <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce AND pricing</code>
+          </div>
+          <svg viewBox="0 0 90 60" width="90" height="60">
+            <circle cx="32" cy="30" r="22" fill="none" stroke="var(--teal-mid)" stroke-width="2"/>
+            <circle cx="58" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2" clip-path="inset(0 0 0 30%)"/>
+            <clipPath id="clipAnd"><rect x="0" y="0" width="45" height="60"/></clipPath>
+          </svg>
         </div>
 
-        <div style="margin-bottom:24px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">OR — search for either</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Either word can appear. Use this to track multiple brands or terms at once. Wrap in brackets when combining with AND.</div>
-          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">(Salesforce OR HubSpot) AND pricing</code>
+        <div style="display:grid;grid-template-columns:1fr 90px;gap:16px;align-items:center;margin-bottom:24px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">OR — either word can appear</div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is included if it contains at least one of the words. Use brackets when combining with AND.</div>
+            <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">(Salesforce OR HubSpot) AND pricing</code>
+          </div>
+          <svg viewBox="0 0 90 60" width="90" height="60">
+            <circle cx="32" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2"/>
+            <circle cx="58" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2"/>
+          </svg>
         </div>
 
-        <div style="margin-bottom:24px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">NOT — exclude a word</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Removes results containing that word. Useful for filtering out noise like job postings.</div>
-          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce NOT careers</code>
+        <div style="display:grid;grid-template-columns:1fr 90px;gap:16px;align-items:center;margin-bottom:24px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">NOT — excludes a word</div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Any result containing the word after NOT is removed entirely. Useful for filtering out noise like job postings.</div>
+            <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce NOT careers</code>
+          </div>
+          <svg viewBox="0 0 90 60" width="90" height="60">
+            <circle cx="32" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2"/>
+            <circle cx="58" cy="30" r="22" fill="none" stroke="var(--teal-mid)" stroke-width="2"/>
+          </svg>
         </div>
 
         <div>
           <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">"..." — exact phrase</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Matches the exact phrase only, not the words separately.</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Words inside quotes must appear together in that exact order, not scattered separately in the result.</div>
           <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">"customer service" AND Salesforce</code>
         </div>
       </div>
@@ -1386,7 +1406,7 @@
 
         <div style="margin-bottom:20px;">
           <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">What does Pro include?</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Unlimited searches up to 1,000 per month, all 4 intelligence agents, unlimited lead generation scans, and no daily cap.</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">1,000 searches a month, all 4 intelligence agents, and 250 lead scans a month.</div>
         </div>
 
         <div style="margin-bottom:20px;">
@@ -2064,11 +2084,19 @@ if (loadingText) {
           localStorage.setItem("sw_count", used.toString());
           localStorage.setItem("sw_date", new Date().toDateString());
         }
-        document.getElementById("searchesLeft").style.display = "block";
+        const searchesLeftEl = document.getElementById("searchesLeft");
+        searchesLeftEl.style.display = "block";
         document.getElementById("searchesCount").textContent = data.searches_remaining;
+
+        // Pro users see "this month", free users see "today"
+        // data.is_pro is sent by the backend on every search response
+        const periodLabel = data.is_pro ? " left this month" : " left today";
+        // Replace only the text after the count span, keep the span itself intact
+        searchesLeftEl.childNodes[1].textContent = periodLabel;
+
         if (data.searches_remaining <= 0) {
           document.getElementById("searchBtn").disabled = true;
-          document.getElementById("searchBtn").textContent = "Come back tomorrow";
+          document.getElementById("searchBtn").textContent = data.is_pro ? "Monthly limit reached" : "Come back tomorrow";
         }
       }
 
@@ -2572,6 +2600,19 @@ if (loadingText) {
         );
         const data  = await res.json();
 
+        if (data.error === "lead_limit") {
+          results.innerHTML = `
+            <div style="
+              background:var(--amber-light);border:1px solid var(--amber-mid);
+              border-radius:5px;padding:20px 24px;
+            ">
+              <div style="font-size:14px;color:var(--text);font-weight:500;">
+                ${escapeHtml(data.message || "Monthly lead scan limit reached")}
+              </div>
+            </div>`;
+          return;
+        }
+
         if (data.error === "used") {
           const btnWrap = document.getElementById("leadBtnWrap");
           if (btnWrap) btnWrap.style.display = "none";
@@ -2589,7 +2630,7 @@ if (loadingText) {
               </div>
               <div style="font-size:13px;color:var(--text2);font-weight:300;
                           line-height:1.6;margin-bottom:20px;">
-                Pro gives you unlimited lead scans on every search.
+                Pro gives you 250 lead scans a month.
               </div>
               <button
                 onclick="showPaymentModal('leads')"

@@ -32,6 +32,8 @@ from payments import (
     mark_token_as_pro,
     get_pro_search_count,
     increment_pro_search_count,
+    get_pro_lead_count,
+    increment_pro_lead_count,
     create_razorpay_order,
     verify_webhook_signature,
     create_paypal_order,
@@ -2743,11 +2745,18 @@ async def find_leads(query: str, request: Request, token: str = ""):
     if not resolved_token:
         return {"error": "invalid token", "leads": []}
 
-    # One lead generation per token. Ever. Not per day — ever.
-    # This prevents abuse and creates urgency to pay for more.
-    # We store used tokens in a separate table so it survives server restarts.
-    # Pro users get unlimited lead scans
-    if not is_pro(resolved_token):
+    # Free users get exactly one lead scan, ever.
+    # Pro users get up to 250 lead scans per calendar month — not unlimited.
+    if is_pro(resolved_token):
+        lead_count = get_pro_lead_count(resolved_token)
+        if lead_count >= 250:
+            return {
+                "error": "lead_limit",
+                "leads": [],
+                "message": "You have used your 250 lead scans this month. Resets on the 1st."
+            }
+        increment_pro_lead_count(resolved_token)
+    else:
         if not try_consume_lead_allowance(resolved_token):
             return {"error": "used", "leads": [], "message": "You have used your one free lead scan."}
 
@@ -3283,6 +3292,7 @@ async def search_stream(query: str, request: Request, token: str = ""):
         final = {
             "type":                "complete",
             "pro_warning":         _pro_warning,   # True if Pro user is near monthly limit
+            "is_pro":              _user_is_pro,   # Lets frontend show "this month" vs "today"
             "query":               query,
             "total":               len(ranked),
             "searches_remaining":  remaining,
