@@ -2935,6 +2935,18 @@ async def add_security_headers(request: Request, call_next):
 # @app.get("/") means: when someone visits / run this function
 # ── PAYMENT ROUTES ────────────────────────────────────────────────────────────
 
+@app.get("/pro-status")
+async def pro_status(token: str = ""):
+    """
+    Called on every page load to check if the token has Pro access.
+    Returns is_pro: true or false.
+    Frontend uses this to show or hide the upgrade button and Pro badge.
+    """
+    if not token:
+        return {"is_pro": False}
+    from payments import is_pro
+    return {"is_pro": is_pro(token)}
+
 @app.get("/create-order")
 async def create_order(token: str = ""):
     """

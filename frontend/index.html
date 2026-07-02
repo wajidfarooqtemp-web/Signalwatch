@@ -584,6 +584,14 @@
     <div class="nav-right">
       <div class="live-badge"><div class="live-dot"></div>Live</div>
       <div class="searches-left" id="searchesLeft"><span id="searchesCount">3</span> left today</div>
+      <!-- Pro badge — hidden by default, shown when server confirms Pro status -->
+      <div id="proBadge" style="
+        display:none;
+        font-family:var(--mono);font-size:10px;font-weight:600;
+        color:var(--teal);background:var(--teal-light);
+        border:1px solid var(--teal-mid);border-radius:20px;
+        padding:4px 12px;letter-spacing:0.5px;
+      ">PRO</div>
       <button
   id="navUpgradeBtn"
   onclick="showPaymentModal('nav')"
@@ -2986,20 +2994,36 @@ if (loadingText) {
 
     // ── PRO STATUS ON PAGE LOAD ───────────────────────────────────────────
 
-    function checkProStatus() {
-      if (localStorage.getItem("sw_pro") === "true") {
-        const btn = document.getElementById("navUpgradeBtn");
-        if (btn) btn.style.display = "none";
-        // Hide the bottom upgrade nudge for Pro users
-        const nudge = document.getElementById("bottomUpgradeNudge");
-        if (nudge) nudge.style.display = "none";
-      } else {
-        const btn = document.getElementById("navUpgradeBtn");
-        if (btn) btn.style.display = "block";
+    async function checkProStatus() {
+      // Always verify Pro status from the server on page load
+      // localStorage alone is unreliable — clears on new browser or incognito
+      try {
+        const res  = await fetch(`${API_BASE}/pro-status?token=${encodeURIComponent(getToken())}`);
+        const data = await res.json();
+
+        if (data.is_pro) {
+          localStorage.setItem("sw_pro", "true");
+          const btn = document.getElementById("navUpgradeBtn");
+          if (btn) btn.style.display = "none";
+          const nudge = document.getElementById("bottomUpgradeNudge");
+          if (nudge) nudge.style.display = "none";
+          // Show Pro badge in nav
+          const badge = document.getElementById("proBadge");
+          if (badge) badge.style.display = "inline-block";
+        } else {
+          localStorage.removeItem("sw_pro");
+          const btn = document.getElementById("navUpgradeBtn");
+          if (btn) btn.style.display = "block";
+        }
+      } catch (e) {
+        // If server unreachable fall back to localStorage
+        if (localStorage.getItem("sw_pro") === "true") {
+          const btn = document.getElementById("navUpgradeBtn");
+          if (btn) btn.style.display = "none";
+        }
       }
     }
 
-    // Run on every page load
     checkProStatus();
 
     // ── SHOW LEAD BUTTON AFTER SEARCH COMPLETES ───────────────────────────
