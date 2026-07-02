@@ -808,21 +808,19 @@
         <span class="hint"><code>OR</code> either</span>
         <span class="hint"><code>NOT</code> exclude</span>
         <span class="hint"><code>"..."</code> exact phrase</span>
+        <span class="hint">
+          <button
+            onclick="showPage('help')"
+            style="
+              background:none;border:none;padding:0;
+              font-family:var(--sans);font-size:11px;font-weight:600;
+              color:var(--teal);cursor:pointer;
+              text-decoration:underline;text-underline-offset:3px;
+            ">
+            See examples
+          </button>
+        </span>
       </div>
-      <!-- See examples — opens Help page at the examples section -->
-          <div style="margin-top:8px;">
-            <button
-              onclick="showPage('help')"
-              style="
-                background:none;border:none;padding:0;
-                font-family:var(--mono);font-size:11px;
-                color:var(--text3);cursor:pointer;
-                text-decoration:underline;
-                text-underline-offset:3px;
-              ">
-              See examples
-            </button>
-          </div>
     </div>
 
     <div class="results-wrap">
@@ -976,14 +974,13 @@
 
       </div>
     </div>
-  </div><!-- end search page -->
-    </div>
+  </div><!-- end results-wrap -->
 
     <footer class="site-footer">
       <span>© 2026 Signalwatch</span>
       <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
-  </div>
+  </div><!-- end search-page -->
 
   <!-- ABOUT PAGE -->
   <div class="about-page" id="aboutPage">
@@ -1719,21 +1716,6 @@ async function fetchGoogleProfile(accessToken) {
   }
 }
 
-    function handleGoogleCredential(response) {
-      googleIdToken = response.credential;
-      try {
-        const payload = JSON.parse(atob(googleIdToken.split('.')[1]));
-        googleUserName = payload.given_name || payload.name || "you";
-      } catch(e) { googleUserName = "you"; }
-      document.getElementById("modalContent").innerHTML = `
-        <div class="modal-signed-in">
-          <div class="modal-avatar">${googleUserName[0].toUpperCase()}</div>
-          <span>Signed in as ${googleUserName} — continuing</span>
-        </div>`;
-      document.querySelector(".modal-skip").style.display = "none";
-      localStorage.setItem("sw_authed", "google");
-      setTimeout(() => closeModal(true), 800);
-    }
 
     function skipLogin() {
   // Clear the pending-payment flag FIRST so closeModal does not
