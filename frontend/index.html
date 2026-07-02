@@ -212,13 +212,6 @@
     .empty-title { font-family:var(--serif); font-size:20px; font-weight:700; color:var(--text2); margin-bottom:8px; }
     .empty-sub { font-size:13px; color:var(--text3); }
 
-    .example-chip {
-      font-family:var(--sans); font-size:12px; font-weight:500;
-      color:var(--text2); background:var(--white);
-      border:1px solid var(--border2); border-radius:20px;
-      padding:7px 14px; cursor:pointer; transition:all 0.15s;
-    }
-    .example-chip:hover { border-color:var(--teal); color:var(--teal); }
 
     /* ABOUT */
     .about-page { display:none; }
@@ -955,14 +948,9 @@
       </div>
     </div>
       <div id="resultsContainer">
-        <div class="empty-state" style="padding:64px 0 40px;">
+        <div class="empty-state">
           <div class="empty-title">Enter a query above to begin</div>
-          <div class="empty-sub" style="margin-bottom:28px;">Signal intelligence from the last 90 days · 13 sources</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:640px;margin:0 auto;">
-            <button class="example-chip" onclick="runExampleSearch('(Salesforce OR HubSpot) AND pricing')">Salesforce OR HubSpot pricing</button>
-            <button class="example-chip" onclick="runExampleSearch('&quot;customer service&quot; AND complaints')">Customer service complaints</button>
-            <button class="example-chip" onclick="runExampleSearch('(looking for OR recommend) AND CRM')">Who's asking for a CRM</button>
-          </div>
+          <div class="empty-sub">Signal intelligence from the last 90 days · 13 sources</div>
         </div>
       </div>
       <!-- Questions and upgrade nudge — bottom of search tab -->
@@ -1853,10 +1841,6 @@ async function fetchGoogleProfile(accessToken) {
     // appear to hang. fetch() with streaming reads chunks as they arrive
     // and gives us control over when to parse each line.
     // This is more reliable on Railway than native EventSource.
-    function runExampleSearch(query) {
-  document.getElementById("queryInput").value = query;
-  runSearch();
-}
 
     async function runSearch() {
       const query = document.getElementById("queryInput").value.trim();
