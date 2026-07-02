@@ -571,7 +571,7 @@
   id="proBadge"
   style="
     display:none;font-family:var(--mono);font-size:9px;font-weight:600;
-    color:var(--white);background:var(--teal);letter-spacing:0.8px;
+    color:var(--white);background:var(--amber);letter-spacing:0.8px;
     text-transform:uppercase;padding:2px 7px;border-radius:3px;
   ">Pro</span>
     </a>
@@ -2953,9 +2953,12 @@ if (loadingText) {
         umami.track("upgrade-success", { method });
       }
 
-      // Hide upgrade button in nav
+      // Hide upgrade button and show Pro badge immediately —
+      // do not wait for the page reload to reflect the new status
       const navBtn = document.getElementById("navUpgradeBtn");
       if (navBtn) navBtn.style.display = "none";
+      const proBadge = document.getElementById("proBadge");
+      if (proBadge) proBadge.style.display = "inline-block";
 
       closePaymentModal();
 
