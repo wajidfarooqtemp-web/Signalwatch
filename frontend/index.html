@@ -809,6 +809,20 @@
         <span class="hint"><code>NOT</code> exclude</span>
         <span class="hint"><code>"..."</code> exact phrase</span>
       </div>
+      <!-- See examples — opens Help page at the examples section -->
+          <div style="margin-top:8px;">
+            <button
+              onclick="showPage('help')"
+              style="
+                background:none;border:none;padding:0;
+                font-family:var(--mono);font-size:11px;
+                color:var(--text3);cursor:pointer;
+                text-decoration:underline;
+                text-underline-offset:3px;
+              ">
+              See examples
+            </button>
+          </div>
     </div>
 
     <div class="results-wrap">
@@ -932,6 +946,37 @@
           <div class="empty-sub">Signal intelligence from the last 90 days · 13 sources</div>
         </div>
       </div>
+      <!-- Questions and upgrade nudge — bottom of search tab -->
+    <div style="border-top:1px solid var(--border);margin-top:48px;padding:48px 40px 64px;">
+      <div style="max-width:720px;margin:0 auto;">
+
+        <div style="margin-bottom:36px;">
+          <div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:4px;">Questions? We have answers.</div>
+          <div style="font-size:13px;color:var(--text2);font-weight:300;margin-bottom:20px;">Quick help for common questions.</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            <button onclick="showPage('help')"    style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">How does search work?</button>
+            <button onclick="showPage('pricing')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">What does Pro include?</button>
+            <button onclick="showPage('pricing')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">Cancel or refund?</button>
+            <button onclick="showPaymentModal('bottom')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">Have a promo code?</button>
+          </div>
+        </div>
+
+        <!-- Hidden for Pro users by checkProStatus() -->
+        <div id="bottomUpgradeNudge" style="background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:6px;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Most brand teams do this by hand on Monday mornings.</div>
+            <div style="font-size:13px;color:var(--text2);font-weight:300;line-height:1.7;">Signalwatch does it before they finish their first coffee. $19 a month.</div>
+          </div>
+          <button
+            onclick="showPaymentModal('bottom')"
+            style="background:var(--teal);color:white;font-family:var(--sans);font-size:13px;font-weight:600;padding:10px 22px;border-radius:4px;border:none;cursor:pointer;white-space:nowrap;">
+            Upgrade to Pro
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- end search page -->
     </div>
 
     <footer class="site-footer">
@@ -1208,7 +1253,7 @@
     <!-- What Pro actually means in plain English -->
     <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
       <div style="max-width:680px;margin:0 auto;">
-        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">What you actually get</div>
+        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:20px;">What you actually get</div>
         <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">Most brand teams spend Monday morning going through mentions by hand. They open six tabs, skim through noise, try to figure out what actually matters, and write a summary that takes two hours to produce.</p>
         <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">Signalwatch Pro does that before they finish their first coffee. Four agents run in parallel. One reads the signal, one builds context, one flags risk, one finds leads. You get a briefing, not a pile of links.</p>
         <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;">At $19 a month, it costs less than the coffee.</p>
@@ -1218,7 +1263,7 @@
     <!-- Refund policy -->
     <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
       <div style="max-width:680px;margin:0 auto;">
-        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Our refund policy</div>
+        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:20px;">Our refund policy</div>
         <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">If Signalwatch is not right for you, we will refund you. No forms to fill, no questions, no waiting. Even if it has been more than 29 days.</p>
         <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:20px;">We would rather you leave happy and come back later than feel stuck paying for something that is not working for you. Email <a href="mailto:billing@signalwatch.in" style="color:var(--teal);text-decoration:none;">billing@signalwatch.in</a> and we will sort it out the same day.</p>
         <p style="font-size:15px;color:var(--text2);line-height:1.9;font-weight:300;">We are a small team. We read every email ourselves.</p>
@@ -1228,7 +1273,7 @@
     <!-- FAQ -->
     <div style="padding:48px 40px 72px;">
       <div style="max-width:680px;margin:0 auto;">
-        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Common questions</div>
+        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:20px;">Common questions</div>
 
         <div style="margin-bottom:20px;">
           <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Can I cancel any time?</div>
@@ -1257,42 +1302,6 @@
       <span>© 2026 Signalwatch</span>
       <span>13 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
-    <!-- Bottom of search tab — visible to all users, upgrade nudge for free users only -->
-    <div style="border-top:1px solid var(--border);margin-top:48px;padding:48px 40px;">
-      <div style="max-width:680px;margin:0 auto;">
-
-        <!-- Questions strip -->
-        <div style="margin-bottom:40px;">
-          <div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:4px;">Questions? We have answers.</div>
-          <div style="font-size:13px;color:var(--text2);font-weight:300;margin-bottom:20px;">Quick help for common questions.</div>
-          <div style="display:flex;flex-wrap:wrap;gap:12px;">
-            <button onclick="showPage('help')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">How does search work?</button>
-            <button onclick="showPage('pricing')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">What does Pro include?</button>
-            <button onclick="showPage('pricing')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">Cancel or refund?</button>
-            <button onclick="showPaymentModal('bottom')" style="font-family:var(--sans);font-size:13px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 14px;cursor:pointer;">Have a promo code?</button>
-          </div>
-        </div>
-
-        <!-- Upgrade nudge — only shown to free users -->
-        <div id="bottomUpgradeNudge" style="background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:6px;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Most brand teams do this by hand on Monday mornings.</div>
-            <div style="font-size:13px;color:var(--text2);font-weight:300;line-height:1.7;">Signalwatch does it before they finish their first coffee. $19 a month.</div>
-          </div>
-          <button
-            onclick="showPaymentModal('bottom')"
-            style="
-              background:var(--teal);color:white;
-              font-family:var(--sans);font-size:13px;font-weight:600;
-              padding:10px 22px;border-radius:4px;border:none;cursor:pointer;
-              white-space:nowrap;
-            ">
-            Upgrade to Pro
-          </button>
-        </div>
-
-      </div>
-    </div>
   </div>
   <!-- HELP CENTRE PAGE -->
   <div class="about-page" id="helpPage">
@@ -1810,20 +1819,23 @@ async function fetchGoogleProfile(accessToken) {
     }
 
     function showPage(page) {
-      document.getElementById("searchPage").className  = page==="search" ? "search-page" : "search-page hidden";
-      document.getElementById("aboutPage").className   = page==="about"  ? "about-page active" : "about-page";
-      document.getElementById("navSearch").className   = "nav-btn" + (page==="search" ? " active" : "");
-      document.getElementById("navAbout").className    = "nav-btn" + (page==="about"  ? " active" : "");
-      document.getElementById("mNavSearch").className  = "mobile-btn" + (page==="search" ? " active" : "");
-      document.getElementById("mNavAbout").className   = "mobile-btn" + (page==="about"  ? " active" : "");
+      // Show and hide pages
+      document.getElementById("searchPage").className = page==="search" ? "search-page" : "search-page hidden";
 
-      // Contact and Help pages reuse the .about-page styling but are separate sections
-      const contactPage = document.getElementById("contactPage");
-      const helpPage    = document.getElementById("helpPage");
-      if (contactPage)  contactPage.className  = page==="contact"  ? "about-page active" : "about-page";
-      if (helpPage)     helpPage.className     = page==="help"     ? "about-page active" : "about-page";
-      const pricingPage = document.getElementById("pricingPage");
-      if (pricingPage)  pricingPage.className  = page==="pricing"  ? "about-page active" : "about-page";
+      const pages = ["about","contact","help","pricing"];
+      pages.forEach(p => {
+        const el = document.getElementById(p + "Page");
+        if (el) el.className = page===p ? "about-page active" : "about-page";
+      });
+
+      // Highlight the correct nav button — all four
+      ["Search","About","Help","Pricing"].forEach(name => {
+        const btn  = document.getElementById("nav"  + name);
+        const mBtn = document.getElementById("mNav" + name);
+        const isActive = page === name.toLowerCase();
+        if (btn)  btn.className  = "nav-btn"    + (isActive ? " active" : "");
+        if (mBtn) mBtn.className = "mobile-btn" + (isActive ? " active" : "");
+      });
 
       window.scrollTo(0, 0);
     }
