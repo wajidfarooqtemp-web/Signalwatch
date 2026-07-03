@@ -709,6 +709,70 @@ def fetch_mastodon(query):
         print("Mastodon error:", e)
         return []
 
+def fetch_bluesky(query):
+    # Searches Bluesky (the AT Protocol network) for recent posts matching the query
+    # Bluesky's public search API needs no login and no API key — it's free
+    # Same pattern as fetch_mastodon: public social search, no auth required
+    results = []
+    try:
+        url = (
+            f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
+            f"?q={requests.utils.quote(query)}&limit=100"
+        )
+        res = requests.get(url, timeout=10, headers={"User-Agent": "signalwatch/1.0"})
+
+        if res.status_code != 200:
+            print(f"Bluesky: status {res.status_code}")
+            return []
+
+        data = res.json()
+        cutoff = datetime.now() - timedelta(days=90)
+
+        for post in data.get("posts", []):
+            record = post.get("record", {})
+            text = record.get("text", "")
+
+            if not text or len(text) < 10:
+                continue
+
+            # Build the public web link from the author's handle and post ID
+            # A Bluesky post URI looks like: at://did:plc:xxxx/app.bsky.feed.post/xxxxxx
+            # The last part after the final "/" is the post ID we need
+            author  = post.get("author", {})
+            handle  = author.get("handle", "")
+            uri     = post.get("uri", "")
+            post_id = uri.split("/")[-1] if uri else ""
+            post_url = (
+                f"https://bsky.app/profile/{handle}/post/{post_id}"
+                if handle and post_id else ""
+            )
+
+            created_at = record.get("createdAt", "")
+            ts = 0
+            if created_at:
+                try:
+                    # Bluesky timestamps look like 2024-01-15T12:00:00.000Z
+                    # First 19 characters strip milliseconds and timezone
+                    dt = datetime.strptime(created_at[:19], "%Y-%m-%dT%H:%M:%S")
+                    if dt < cutoff:
+                        continue
+                    ts = int(dt.timestamp())
+                except Exception:
+                    pass  # Keep the post even if the date fails to parse
+
+            results.append({
+                "title":   text[:200],  # Same 200 character cap as Mastodon
+                "source":  "bluesky",
+                "url":     post_url,
+                "created": ts
+            })
+
+        print(f"Bluesky: {len(results)} posts")
+        return results
+
+    except Exception as e:
+        print(f"Bluesky error: {e}")
+        return []
 
 def fetch_trustpilot(query):
     # Fetches customer reviews from Trustpilot
@@ -3307,6 +3371,10 @@ async def search_stream(query: str, request: Request, token: str = ""):
         all_posts += mastodon; sources_counts["mastodon"] = len(mastodon)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'mastodon', 'count': len(mastodon), 'label': 'Mastodon'})}\n\n"
 
+        bluesky = await asyncio.to_thread(fetch_bluesky, query)
+        all_posts += bluesky; sources_counts["bluesky"] = len(bluesky)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'bluesky', 'count': len(bluesky), 'label': 'Bluesky'})}\n\n"
+
         wikipedia = await asyncio.to_thread(fetch_wikipedia, query)
         all_posts += wikipedia; sources_counts["wikipedia"] = len(wikipedia)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'wikipedia', 'count': len(wikipedia), 'label': 'Wikipedia'})}\n\n"
@@ -3410,6 +3478,7 @@ def search(query: str, request: Request, token: str = ""):
     rss        = fetch_rss(query)
     youtube    = fetch_youtube(query)
     mastodon   = fetch_mastodon(query)
+    bluesky    = fetch_bluesky(query)
     wikipedia  = fetch_wikipedia(query)
     trustpilot = fetch_trustpilot(query)
     appstore   = fetch_appstore(query)
@@ -3421,13 +3490,13 @@ def search(query: str, request: Request, token: str = ""):
     # The + operator joins lists together
     all_posts = (reddit + hn + newsapi + newsdata + rss +
                  youtube + mastodon + wikipedia + trustpilot +
-                 appstore + playstore + googlenews)
+                 appstore + playstore + googlenews + bingnews + bluesky)
 
     print(f"Total: {len(all_posts)} — Reddit:{len(reddit)} HN:{len(hn)} "
       f"News:{len(newsapi)} NewsData:{len(newsdata)} RSS:{len(rss)} "
       f"YT:{len(youtube)} Mastodon:{len(mastodon)} Wiki:{len(wikipedia)} "
       f"Trustpilot:{len(trustpilot)} AppStore:{len(appstore)} "
-      f"PlayStore:{len(playstore)} GNews:{len(googlenews)}")
+      f"PlayStore:{len(playstore)} GNews:{len(googlenews)} BNews:{len(bingnews)} Bluesky:{len(bluesky)}")
 
     ranked  = filter_and_rank(all_posts, query)
     insight = generate_insight(ranked, query)
@@ -3450,7 +3519,8 @@ def search(query: str, request: Request, token: str = ""):
             "appstore":   len(appstore),
             "playstore":  len(playstore),
             "googlenews": len(googlenews),
-            "bingnews":   len(bingnews)
+            "bingnews":   len(bingnews),
+            "bluesky":    len(bluesky)
         },
         # insight is a dict — we extract briefing and questions separately
         "insight":           insight.get("briefing", "") if isinstance(insight, dict) else insight,
