@@ -1350,40 +1350,52 @@
         </div>
         <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Boolean search</div>
 
-        <div style="display:grid;grid-template-columns:1fr 90px;gap:16px;align-items:center;margin-bottom:24px;">
+        <div style="display:grid;grid-template-columns:1fr 140px;gap:16px;align-items:center;margin-bottom:24px;">
           <div>
             <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AND — both words must appear</div>
             <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is only included if it contains every word joined by AND.</div>
             <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce AND pricing</code>
           </div>
-          <svg viewBox="0 0 90 60" width="90" height="60">
-            <circle cx="32" cy="30" r="22" fill="none" stroke="var(--teal-mid)" stroke-width="2"/>
-            <circle cx="58" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2" clip-path="inset(0 0 0 30%)"/>
-            <clipPath id="clipAnd"><rect x="0" y="0" width="45" height="60"/></clipPath>
+          <svg viewBox="0 0 140 90" width="140" height="90">
+            <defs>
+              <clipPath id="clipRightA"><circle cx="80" cy="40" r="30"/></clipPath>
+            </defs>
+            <circle cx="60" cy="40" r="30" fill="none" stroke="#333" stroke-width="1.5"/>
+            <circle cx="80" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5" clip-path="inset(0 0 0 20)"/>
+            <circle cx="60" cy="40" r="30" fill="none" stroke="#333" stroke-width="1.5"/>
+            <text x="45" y="44" font-size="11" fill="#333" text-anchor="middle">A</text>
+            <text x="95" y="44" font-size="11" fill="#333" text-anchor="middle">B</text>
+            <text x="70" y="82" font-size="11" fill="#333" text-anchor="middle" font-weight="600">AND</text>
           </svg>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 90px;gap:16px;align-items:center;margin-bottom:24px;">
+        <div style="display:grid;grid-template-columns:1fr 140px;gap:16px;align-items:center;margin-bottom:24px;">
           <div>
             <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">OR — either word can appear</div>
             <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is included if it contains at least one of the words. Use brackets when combining with AND.</div>
             <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">(Salesforce OR HubSpot) AND pricing</code>
           </div>
-          <svg viewBox="0 0 90 60" width="90" height="60">
-            <circle cx="32" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2"/>
-            <circle cx="58" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2"/>
+          <svg viewBox="0 0 140 90" width="140" height="90">
+            <circle cx="60" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5"/>
+            <circle cx="80" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5" fill-opacity="0.85"/>
+            <text x="45" y="44" font-size="11" fill="#fff" text-anchor="middle">A</text>
+            <text x="95" y="44" font-size="11" fill="#fff" text-anchor="middle">B</text>
+            <text x="70" y="82" font-size="11" fill="#333" text-anchor="middle" font-weight="600">OR</text>
           </svg>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 90px;gap:16px;align-items:center;margin-bottom:24px;">
+        <div style="display:grid;grid-template-columns:1fr 140px;gap:16px;align-items:center;margin-bottom:24px;">
           <div>
             <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">NOT — excludes a word</div>
             <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Any result containing the word after NOT is removed entirely. Useful for filtering out noise like job postings.</div>
             <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce NOT careers</code>
           </div>
-          <svg viewBox="0 0 90 60" width="90" height="60">
-            <circle cx="32" cy="30" r="22" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="2"/>
-            <circle cx="58" cy="30" r="22" fill="none" stroke="var(--teal-mid)" stroke-width="2"/>
+          <svg viewBox="0 0 140 90" width="140" height="90">
+            <circle cx="60" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5"/>
+            <circle cx="80" cy="40" r="30" fill="none" stroke="#333" stroke-width="1.5"/>
+            <text x="45" y="44" font-size="11" fill="#fff" text-anchor="middle">A</text>
+            <text x="95" y="44" font-size="11" fill="#333" text-anchor="middle">B</text>
+            <text x="70" y="82" font-size="11" fill="#333" text-anchor="middle" font-weight="600">NOT</text>
           </svg>
         </div>
 
@@ -1739,6 +1751,9 @@ async function fetchGoogleProfile(accessToken) {
       </div>`;
     document.querySelector(".modal-skip").style.display = "none";
     localStorage.setItem("sw_authed", "google");
+    // Re-check Pro status under the new Google identity — the old
+    // check ran against the anonymous sw_ token before sign-in
+    checkProStatus();
     setTimeout(() => closeModal(true), 800);
   } catch (e) {
     console.error("Could not fetch Google profile:", e);
@@ -1862,9 +1877,19 @@ async function fetchGoogleProfile(accessToken) {
     // and gives us control over when to parse each line.
     // This is more reliable on Railway than native EventSource.
 
+    let currentSearchController = null; // Tracks the in-flight search so we can cancel it
+
     async function runSearch() {
       const query = document.getElementById("queryInput").value.trim();
       if (!query) return;
+
+      // Cancel any previous search still streaming — this stops the old
+      // agents from continuing to run and overwrite the UI with stale data
+      if (currentSearchController) {
+        currentSearchController.abort();
+      }
+      currentSearchController = new AbortController();
+      const thisController = currentSearchController;
 
       // After first search, unauthenticated users see the Google login modal
       const searchCount = parseInt(localStorage.getItem("sw_count") || "0");
@@ -1905,7 +1930,8 @@ async function fetchGoogleProfile(accessToken) {
             // Tell the server we want a stream, not a buffered response
             "Accept": "text/event-stream",
             "Cache-Control": "no-cache"
-          }
+          },
+          signal: thisController.signal
         });
 
         if (!response.ok) {
@@ -1921,6 +1947,9 @@ async function fetchGoogleProfile(accessToken) {
           // done = true means the stream has ended
           // value = the raw bytes of this chunk
           const { done, value } = await reader.read();
+
+          // If a newer search has started, stop processing this old stream
+          if (thisController.signal.aborted) return;
 
           if (done) break;
 
@@ -2056,6 +2085,10 @@ if (loadingText) {
         }
 
       } catch(err) {
+        if (err.name === "AbortError") {
+          // Expected — a newer search cancelled this one. Say nothing.
+          return;
+        }
         console.error("Stream error:", err);
         loading.style.display = "none";
         btn.disabled = false;
@@ -2888,7 +2921,11 @@ if (loadingText) {
     function renderPayPalButton() {
   // Only render once — PayPal throws an error if you render twice
   if (_paypalRendered) return;
-  if (!window.paypal) return; // SDK not loaded yet
+  if (!window.paypal) {
+    // SDK not ready yet — try again shortly instead of giving up silently
+    setTimeout(renderPayPalButton, 300);
+    return;
+  }
 
   _paypalRendered = true;
 
@@ -3063,6 +3100,10 @@ if (loadingText) {
         if (localStorage.getItem("sw_pro") === "true") {
           const btn = document.getElementById("navUpgradeBtn");
           if (btn) btn.style.display = "none";
+          const nudge = document.getElementById("bottomUpgradeNudge");
+          if (nudge) nudge.style.display = "none";
+          const badge = document.getElementById("proBadge");
+          if (badge) badge.style.display = "inline-block";
         }
       }
     }

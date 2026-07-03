@@ -1572,6 +1572,39 @@ def extract_briefing_and_questions(raw_text):
 
     return briefing, action, questions
 
+def sanitise_briefing_output(text: str) -> str:
+    """
+    Final safety net against leaked AI reasoning text.
+
+    Some models "think out loud" before producing JSON — phrases like
+    "The user wants a JSON with..." or "Let's parse the signals..."
+    sometimes survive extraction if the model's reasoning itself looks
+    similar enough to valid prose. This catches and strips that pattern
+    so it can never reach the user, regardless of which code path
+    produced the briefing.
+    """
+    if not text:
+        return text
+
+    # Reasoning almost always starts with these — first-person or
+    # meta-commentary about the task itself, never a real briefing
+    leak_starts = [
+        r'^the user wants',
+        r'^first,?\s*let\'?s',
+        r'^i need to',
+        r'^i\'?ll\s',
+        r'^let me\s',
+        r'^okay,?\s',
+        r'^so,?\s+let\'?s',
+        r'^looking at (the|this)',
+        r'^to (answer|analyse|analyze)',
+    ]
+    for pattern in leak_starts:
+        if re.match(pattern, text.strip(), re.IGNORECASE):
+            return ""  # Discard entirely — caller must fall back
+
+    return text
+
 # ─── PATTERN LIBRARY ─────────────────────────────────────────────────────────
 # 15 documented patterns from real brand intelligence cases.
 # Each pattern uses THEME-BASED detection — looking for groups of related
@@ -1844,6 +1877,7 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
 
     if ai_result:
         briefing, action, questions = extract_briefing_and_questions(ai_result)
+        briefing = sanitise_briefing_output(briefing)
 
     # If the first AI call returned no action or no briefing,
     # retry once with a much simpler prompt.
@@ -1871,6 +1905,7 @@ Raw JSON only. No markdown. No backticks. Example:
 
         if retry_result:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
+            retry_briefing = sanitise_briefing_output(retry_briefing)
             # Only use retry values if the original was missing
             if not briefing and retry_briefing:
                 briefing = retry_briefing
