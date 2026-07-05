@@ -75,7 +75,9 @@ PRO_MONTHLY_LEAD_LIMIT = 250   # Lead scans per calendar month for Pro users
 PLAN_AMOUNT_PAISE     = 190000  # ₹1,900 — approximately $19
 PLAN_CURRENCY         = "INR"
 PLAN_DESCRIPTION      = "Know what to do next · All 4 specialised agents · Competitor intelligence · Lead intelligence"
-
+# Minimum support amount in paise (Razorpay's smallest unit, 100 paise = ₹1)
+# ₹40 is roughly $0.50 and keeps us above Razorpay's own minimum charge
+MIN_SUPPORT_PAISE = 4000
 
 # ── DATABASE HELPER ───────────────────────────────────────────────────────────
 # Reuses your existing DATABASE_URL — no new connection setup needed.
@@ -159,6 +161,22 @@ def setup_payment_tables():
                 note         TEXT
             )
         """)
+
+        # Stores every one-off support/tip payment, separate from Pro subscriptions.
+        # These never grant Pro access — pure donations, tracked so you can
+        # see who supported you. Query anytime with:
+        # SELECT * FROM support_payments ORDER BY created_at DESC;
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS support_payments (
+                id           SERIAL PRIMARY KEY,
+                payment_ref  TEXT,
+                amount_paise INTEGER,
+                name         TEXT,
+                message      TEXT,
+                created_at   TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        
 
         conn.commit()
         cur.close()
@@ -617,3 +635,58 @@ def redeem_promo_code(code: str, token: str) -> dict:
     except Exception as e:
         print(f"redeem_promo_code error: {e}")
         return {"success": False, "error": "Service error — please try again"}
+    
+def create_razorpay_support_order(amount_paise: int, name: str = "", message: str = "") -> dict:
+    """
+    Creates a one-time Razorpay order for a support payment of any amount.
+    Unlike create_razorpay_order, the amount is chosen by the supporter,
+    not fixed. notes contains type="support" so the webhook can tell this
+    apart from a Pro subscription payment and never grant Pro access for it.
+    """
+    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+        return {"error": "Razorpay not configured"}
+    if amount_paise < MIN_SUPPORT_PAISE:
+        return {"error": f"Minimum support amount is ₹{MIN_SUPPORT_PAISE // 100}"}
+    try:
+        client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        order = client.order.create({
+            "amount":   amount_paise,
+            "currency": "INR",
+            "receipt":  f"support_{secrets.token_hex(6)}",
+            "notes":    {
+                "type":    "support",
+                "name":    name[:100],
+                "message": message[:300]
+            }
+        })
+        return {
+            "order_id": order["id"],
+            "amount":   amount_paise,
+            "currency": "INR",
+            "key_id":   RAZORPAY_KEY_ID
+        }
+    except Exception as e:
+        print(f"create_razorpay_support_order error: {e}")
+        return {"error": "Could not create order"}
+
+
+def record_support_payment(payment_ref: str, amount_paise: int, name: str = "", message: str = ""):
+    """
+    Writes a completed support payment into the database.
+    Called only from the webhook, once Razorpay confirms it actually captured.
+    """
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO support_payments (payment_ref, amount_paise, name, message)
+            VALUES (%s, %s, %s, %s)
+        """, (payment_ref, amount_paise, name, message))
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"Support payment recorded: ₹{amount_paise/100} ref={payment_ref}")
+    except Exception as e:
+        print(f"record_support_payment error: {e}")    

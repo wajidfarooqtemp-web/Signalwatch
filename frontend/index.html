@@ -353,6 +353,16 @@
     .modal-skip { display:block; margin-top:16px; font-size:12px; color:var(--text3); cursor:pointer; font-family:var(--mono); text-decoration:underline; }
     .modal-skip:hover { color:var(--text2); }
     .modal-signed-in { display:flex; align-items:center; gap:10px; background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:5px; padding:10px 16px; font-size:13px; color:var(--teal); font-weight:500; }
+    .support-amount-btn {
+      flex:1; padding:10px 0;
+      font-family:var(--sans); font-size:14px; font-weight:600;
+      color:var(--text2); background:var(--white);
+      border:1.5px solid var(--border2); border-radius:5px;
+      cursor:pointer; transition:all 0.15s;
+    }
+    .support-amount-btn.selected {
+      background:var(--amber-light); border-color:var(--amber); color:var(--amber);
+    }
     .modal-avatar { width:28px; height:28px; border-radius:50%; background:var(--teal-mid); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-size:12px; font-weight:700; color:var(--teal); flex-shrink:0; }
 
     /* FOOTER */
@@ -582,9 +592,20 @@
       <button class="nav-btn" id="navAbout" onclick="showPage('about')">About</button>
       <button class="nav-btn" id="navHelp" onclick="showPage('help')">Help</button>
       <button class="nav-btn" id="navPricing" onclick="showPage('pricing')">Pricing</button>
+      <button class="nav-btn" id="navServices" onclick="showPage('services')">Services</button>
     </div>
     <div class="nav-right">
       <div class="live-badge"><div class="live-dot"></div>Live</div>
+      <button
+        onclick="showSupportModal()"
+        style="
+          font-family:var(--sans);font-size:12px;font-weight:500;
+          color:var(--text2);background:none;
+          border:1px solid var(--border2);border-radius:5px;
+          padding:6px 12px;cursor:pointer;white-space:nowrap;
+        ">
+        ♥ Support
+      </button>
       <div class="searches-left" id="searchesLeft"><span id="searchesCount">3</span> left today</div>
       <!-- Pro badge — hidden by default, shown when server confirms Pro status -->
       <div id="proBadge" style="
@@ -619,6 +640,7 @@
     <div class="mobile-btn" id="mNavAbout" onclick="showPage('about');toggleMenu()">About</div>
     <div class="mobile-btn" id="mNavHelp" onclick="showPage('help');toggleMenu()">Help</div>
     <div class="mobile-btn" id="mNavPricing" onclick="showPage('pricing');toggleMenu()">Pricing</div>
+    <div class="mobile-btn" id="mNavServices" onclick="showPage('services');toggleMenu()">Services</div>
   </div>
 
   <!-- ── PAYMENT MODAL ──────────────────────────────────────────────────────
@@ -737,6 +759,56 @@
       </button>
     </div>
     <span class="modal-skip" id="loginModalSkip" onclick="skipLogin()">Skip for now — use my 3 anyway</span>
+  </div>
+</div>
+
+<!-- SUPPORT US MODAL -->
+<div class="modal-overlay" id="supportModal">
+  <div class="modal-box" style="max-width:480px;text-align:left;">
+    <div class="modal-icon" style="text-align:center;">♥</div>
+    <div class="modal-title" style="text-align:center;">Support the builder</div>
+    <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;margin-bottom:20px;">
+      I built Signalwatch on my own, coming from a support role, not a software background. Every part of this, the search, the agents, the payments, I learned by building it. If Signalwatch has been useful to you, a small tip helps me keep building and keep learning. Any amount is genuinely appreciated.
+    </p>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button onclick="setSupportAmount(1)"  class="support-amount-btn" id="sup1">$1</button>
+      <button onclick="setSupportAmount(2)"  class="support-amount-btn" id="sup2">$2</button>
+      <button onclick="setSupportAmount(5)"  class="support-amount-btn" id="sup5">$5</button>
+      <button onclick="setSupportAmount(10)" class="support-amount-btn" id="sup10">$10</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input
+        id="supportAmountInput"
+        type="number"
+        min="1"
+        placeholder="Or enter any amount (USD)"
+        style="
+          flex:1;padding:11px 14px;
+          border:1.5px solid var(--border2);border-radius:5px;
+          font-family:var(--sans);font-size:14px;
+          background:var(--white);color:var(--text);outline:none;
+        "
+      />
+      <button
+        onclick="submitSupportPayment()"
+        style="
+          padding:11px 22px;background:var(--amber);color:white;
+          font-family:var(--sans);font-size:14px;font-weight:600;
+          border:none;border-radius:5px;cursor:pointer;white-space:nowrap;
+        ">
+        Send support
+      </button>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:16px;">
+      Charged in INR at an approximate exchange rate via Razorpay
+    </div>
+    <div id="supportMessage" style="font-family:var(--mono);font-size:11px;min-height:16px;"></div>
+
+    <span class="modal-skip" onclick="closeSupportModal()" style="margin-top:16px;display:block;">
+      Maybe another time
+    </span>
   </div>
 </div>
 
@@ -1311,6 +1383,92 @@
       <span>14 sources · Signal intelligence · Last 90 days · More sources coming</span>
     </footer>
   </div>
+<!-- SERVICES PAGE -->
+  <div class="about-page" id="servicesPage">
+
+    <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">Services</div>
+        <h2 style="font-family:var(--serif);font-size:36px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:16px;">I can automate this for your business too.</h2>
+        <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;">Signalwatch is proof of what I can build, not just a product. Everything below is something I have actually done, live, in production, not a promise.</p>
+      </div>
+    </div>
+
+    <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:24px;">What I can build for you right now</div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Brand and mention monitoring</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Pull mentions of your business from news, forums, reviews and social platforms into one place, instead of checking each one by hand.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AI written summaries and reports</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Turn raw data into a short, plain English summary and a clear next action, the same way Signalwatch turns 200 mentions into two sentences.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Payment and subscription setup</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Razorpay and PayPal checkout, webhooks, promo codes, and usage limits, done server side and properly verified, not just a payment button that trusts the browser.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Lead scoring from your existing traffic</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Score inbound comments, reviews or forum posts by how ready to buy the person actually sounds, and generate a ready to send message for each one.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Live, real time website features</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Results that stream in as they are found instead of a plain loading spinner, useful for anything that takes more than a few seconds to process.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Google sign in for websites and apps</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Secure login without customers needing to remember another password.</div>
+        </div>
+
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Basic website security hardening</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Rate limiting, security headers, and protection against common attacks, the kind of thing most small business sites are missing entirely.</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="padding:48px 40px 72px;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:24px;">What I am learning next, so I can offer it soon</div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">No code automation tools</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Connecting the tools a small business already uses, like their inbox, spreadsheets and forms, without needing custom code for every single workflow.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">CRM and email marketing integration</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Getting leads and customer data flowing automatically into the tools a sales team already lives in.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Turning a website into an installable app</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">So a business's existing website can sit on a customer's home screen like a real app, without building a separate mobile app from scratch.</div>
+        </div>
+
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Scaling past free tier hosting</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Moving a project from something like Render's free tier to proper infrastructure once real traffic and paying customers show up.</div>
+        </div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+      <span>© 2026 Signalwatch</span>
+      <span>14 sources · Signal intelligence · Last 90 days · More sources coming</span>
+    </footer>
+  </div>
+
   <!-- HELP CENTRE PAGE -->
   <div class="about-page" id="helpPage">
     <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
@@ -1446,6 +1604,82 @@
     </footer>
   </div>
 
+  <!-- ADMIN ANALYTICS PAGE -->
+  <!-- Not linked from any nav button on purpose. Only reachable by loading
+       the site with #admin in the URL, and even then nothing loads until
+       the correct admin secret is entered. Every actual data request is
+       still checked against ADMIN_SECRET on the server, the hidden URL is
+       just to keep it out of casual sight, not the real security boundary. -->
+  <div class="about-page" id="adminPage">
+    <div style="background:var(--white);border-bottom:1px solid var(--border);padding:48px 40px;">
+      <div style="max-width:900px;margin:0 auto;">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:16px;">Admin</div>
+        <h2 style="font-family:var(--serif);font-size:28px;font-weight:800;color:var(--ink);margin-bottom:20px;">Analytics dashboard</h2>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <input id="adminSecretInput" type="password" placeholder="Admin secret"
+            style="flex:1;min-width:200px;padding:10px 14px;border:1.5px solid var(--border2);border-radius:5px;font-family:var(--mono);font-size:13px;">
+          <select id="adminDaysFilter" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:5px;font-family:var(--sans);font-size:13px;">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <select id="adminTypeFilter" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:5px;font-family:var(--sans);font-size:13px;">
+            <option value="">All event types</option>
+            <option value="search">Search</option>
+            <option value="page_view">Page view</option>
+            <option value="payment_modal_open">Payment modal open</option>
+            <option value="conversion">Conversion</option>
+          </select>
+          <input id="adminTokenFilter" type="text" placeholder="Filter by token, optional"
+            style="min-width:200px;padding:10px 14px;border:1.5px solid var(--border2);border-radius:5px;font-family:var(--mono);font-size:12px;">
+          <button onclick="loadAdminAnalytics()" style="padding:10px 22px;background:var(--teal);color:white;border:none;border-radius:5px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">Load</button>
+        </div>
+        <div id="adminMessage" style="font-family:var(--mono);font-size:11px;color:var(--text3);"></div>
+      </div>
+    </div>
+
+    <div id="adminSummaryWrap" style="padding:32px 40px;border-bottom:1px solid var(--border);display:none;">
+      <div style="max-width:900px;margin:0 auto;">
+        <div id="adminSummaryCards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Top searches</div>
+            <div id="adminTopSearches"></div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Top pages</div>
+            <div id="adminTopPages"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:24px;">
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Browser</div>
+            <div id="adminByBrowser"></div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">OS</div>
+            <div id="adminByOs"></div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Device</div>
+            <div id="adminByDevice"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:32px 40px 72px;">
+      <div style="max-width:900px;margin:0 auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);">Individual events</div>
+          <button onclick="deleteAllAnalyticsPrompt()" style="padding:8px 16px;background:var(--red);color:white;border:none;border-radius:4px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;">Delete all analytics</button>
+        </div>
+        <div id="adminEventsTable" style="border:1px solid var(--border);border-radius:6px;overflow:hidden;"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ── CONFIGURATION ──────────────────────────────────────────────────────
     const API_BASE = "https://signalwatch-r6s8.onrender.com";
@@ -1454,7 +1688,7 @@
       reddit:"Reddit", hackernews:"Tech Forums", newsapi:"News",
       newsdata:"Global News", youtube:"YouTube", rss:"RSS",
       wikipedia:"Wikipedia", mastodon:"Mastodon", trustpilot:"Trustpilot",
-      appstore:"App Store", playstore:"Play Store", googlenews:"Google News", bingnews:"News", bluesky:"Bluesky"
+      appstore:"App Store", playstore:"Play Store", googlenews:"Google News", bingnews:"Bing News", bluesky:"Bluesky"
     };
 
     let signalChart = null;
@@ -1849,10 +2083,19 @@ async function fetchGoogleProfile(accessToken) {
       // Show and hide pages
       document.getElementById("searchPage").className = page==="search" ? "search-page" : "search-page hidden";
 
-      const pages = ["about","contact","help","pricing"];
+      const pages = ["about","contact","help","pricing","services"];
       pages.forEach(p => {
         const el = document.getElementById(p + "Page");
         if (el) el.className = page===p ? "about-page active" : "about-page";
+      });
+
+      // Highlight the correct nav button — all four
+      ["Search","About","Help","Pricing","Services"].forEach(name => {
+        const btn  = document.getElementById("nav"  + name);
+        const mBtn = document.getElementById("mNav" + name);
+        const isActive = page === name.toLowerCase();
+        if (btn)  btn.className  = "nav-btn"    + (isActive ? " active" : "");
+        if (mBtn) mBtn.className = "mobile-btn" + (isActive ? " active" : "");
       });
 
       // Highlight the correct nav button — all four
@@ -1863,6 +2106,8 @@ async function fetchGoogleProfile(accessToken) {
         if (btn)  btn.className  = "nav-btn"    + (isActive ? " active" : "");
         if (mBtn) mBtn.className = "mobile-btn" + (isActive ? " active" : "");
       });
+
+      trackEvent("page_view", { page: page });
 
       window.scrollTo(0, 0);
     }
@@ -2830,6 +3075,182 @@ if (loadingText) {
         btn.textContent = "Select and copy manually";
       });
     }
+// ── ANALYTICS TRACKING ─────────────────────────────────────────────────
+function trackEvent(eventType, eventData) {
+  // Fires a lightweight analytics event to the backend. Uses sendBeacon
+  // when available, since it does not block navigation or add any lag,
+  // and falls back to fetch for older browsers.
+  const payload = JSON.stringify({
+    token: getToken(),
+    event_type: eventType,
+    event_data: eventData || {}
+  });
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: "application/json" });
+      navigator.sendBeacon(`${API_BASE}/track`, blob);
+    } else {
+      fetch(`${API_BASE}/track`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true
+      });
+    }
+  } catch (e) {
+    // Analytics failing should never break an actual feature for the user
+  }
+}  
+
+// ── ADMIN ANALYTICS ────────────────────────────────────────────────────
+// This section only does anything once the correct admin secret is typed
+// in. Every request also carries that secret to the backend, which checks
+// it independently, so a wrong or missing secret simply gets a 404 back,
+// the same pattern already used for your promo code admin route.
+
+if (window.location.hash === "#admin") {
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("searchPage").className = "search-page hidden";
+    document.getElementById("adminPage").className = "about-page active";
+  });
+}
+
+async function loadAdminAnalytics() {
+  const secret = document.getElementById("adminSecretInput").value.trim();
+  const days   = document.getElementById("adminDaysFilter").value;
+  const type   = document.getElementById("adminTypeFilter").value;
+  const token  = document.getElementById("adminTokenFilter").value.trim();
+  const msg    = document.getElementById("adminMessage");
+
+  if (!secret) {
+    msg.textContent = "Enter the admin secret first";
+    return;
+  }
+  msg.textContent = "Loading...";
+
+  try {
+    const [summaryRes, eventsRes] = await Promise.all([
+      fetch(`${API_BASE}/admin/analytics/summary?secret=${encodeURIComponent(secret)}&days=${days}`),
+      fetch(`${API_BASE}/admin/analytics?secret=${encodeURIComponent(secret)}&days=${days}&event_type=${encodeURIComponent(type)}&token=${encodeURIComponent(token)}`)
+    ]);
+
+    if (summaryRes.status === 404 || eventsRes.status === 404) {
+      msg.textContent = "Incorrect secret";
+      return;
+    }
+
+    const summary = await summaryRes.json();
+    const events  = await eventsRes.json();
+
+    renderAdminSummary(summary);
+    renderAdminEvents(events.events || []);
+    msg.textContent = `Loaded ${events.count || 0} events`;
+
+  } catch (e) {
+    msg.textContent = "Could not reach the server";
+  }
+}
+
+function renderAdminSummary(s) {
+  const wrap = document.getElementById("adminSummaryWrap");
+  wrap.style.display = "block";
+
+  const cards = document.getElementById("adminSummaryCards");
+  const byType = s.by_type || {};
+  cards.innerHTML =
+    adminCard("Unique users", s.unique_users || 0) +
+    adminCard("Total events", s.total_events || 0) +
+    adminCard("Searches", byType.search || 0) +
+    adminCard("Conversions", byType.conversion || 0);
+
+  document.getElementById("adminTopSearches").innerHTML = adminBarList(
+    (s.top_searches || []).map(x => ({ label: x.query, count: x.count }))
+  );
+  document.getElementById("adminTopPages").innerHTML = adminBarList(
+    (s.top_pages || []).map(x => ({ label: x.page, count: x.count }))
+  );
+  document.getElementById("adminByBrowser").innerHTML = adminBarList(
+    Object.entries(s.by_browser || {}).map(([k,v]) => ({ label: k, count: v }))
+  );
+  document.getElementById("adminByOs").innerHTML = adminBarList(
+    Object.entries(s.by_os || {}).map(([k,v]) => ({ label: k, count: v }))
+  );
+  document.getElementById("adminByDevice").innerHTML = adminBarList(
+    Object.entries(s.by_device || {}).map(([k,v]) => ({ label: k, count: v }))
+  );
+}
+
+function adminCard(label, value) {
+  return `
+    <div style="border:1px solid var(--border);border-radius:6px;padding:16px;">
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:6px;">${label}</div>
+      <div style="font-family:var(--serif);font-size:24px;font-weight:700;color:var(--ink);">${value}</div>
+    </div>`;
+}
+
+function adminBarList(items) {
+  if (!items.length) return `<div style="font-size:12px;color:var(--text3);">No data yet</div>`;
+  const max = Math.max(...items.map(i => i.count), 1);
+  return items.map(i => `
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:3px;">
+        <span>${escapeHtml(String(i.label || "unknown"))}</span><span>${i.count}</span>
+      </div>
+      <div style="background:var(--bg2);border-radius:3px;height:5px;">
+        <div style="background:var(--teal);height:5px;border-radius:3px;width:${(i.count/max*100).toFixed(0)}%;"></div>
+      </div>
+    </div>`).join("");
+}
+
+function renderAdminEvents(events) {
+  const container = document.getElementById("adminEventsTable");
+  if (!events.length) {
+    container.innerHTML = `<div style="padding:20px;font-size:13px;color:var(--text3);">No events match these filters</div>`;
+    return;
+  }
+
+  let html = "";
+  events.forEach(e => {
+    const who = e.email || e.token;
+    const details = JSON.stringify(e.event_data || {});
+    html += `
+      <div style="display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;">
+        <div style="width:130px;flex-shrink:0;color:var(--text3);font-family:var(--mono);font-size:10px;">${new Date(e.created_at).toLocaleString()}</div>
+        <div style="width:180px;flex-shrink:0;color:var(--text2);word-break:break-all;">${escapeHtml(who)}</div>
+        <div style="width:110px;flex-shrink:0;color:var(--teal);font-weight:600;">${e.event_type}</div>
+        <div style="flex:1;color:var(--text2);word-break:break-word;">${escapeHtml(details)}</div>
+        <div style="width:130px;flex-shrink:0;color:var(--text3);font-size:10px;">${e.browser} · ${e.os} · ${e.device}</div>
+        <button onclick="deleteUserAnalyticsPrompt('${e.token}')" style="flex-shrink:0;padding:4px 10px;background:none;border:1px solid var(--red);color:var(--red);border-radius:3px;font-size:10px;cursor:pointer;">Delete user</button>
+      </div>`;
+  });
+  container.innerHTML = html;
+}
+
+async function deleteUserAnalyticsPrompt(token) {
+  // Always confirm before an irreversible delete
+  const ok = confirm(`Permanently delete all analytics for this user?\n\nToken: ${token}\n\nThis cannot be undone.`);
+  if (!ok) return;
+
+  const secret = document.getElementById("adminSecretInput").value.trim();
+  const res = await fetch(`${API_BASE}/admin/analytics/user?secret=${encodeURIComponent(secret)}&token=${encodeURIComponent(token)}`, { method: "DELETE" });
+  const data = await res.json();
+  alert(`Deleted ${data.deleted || 0} events for this user`);
+  loadAdminAnalytics();
+}
+
+async function deleteAllAnalyticsPrompt() {
+  // Double confirmation for the most destructive action on this page,
+  // typing the exact word prevents an accidental misclick from wiping
+  // everything
+  const typed = prompt("This permanently deletes ALL analytics for ALL users. Type DELETE to confirm.");
+  if (typed !== "DELETE") return;
+
+  const secret = document.getElementById("adminSecretInput").value.trim();
+  const res = await fetch(`${API_BASE}/admin/analytics/all?secret=${encodeURIComponent(secret)}`, { method: "DELETE" });
+  const data = await res.json();
+  alert(`Deleted ${data.deleted || 0} events total`);
+  loadAdminAnalytics();
+}
 
     // ── PAYMENT MODAL ─────────────────────────────────────────────────────
 
@@ -2857,7 +3278,9 @@ if (loadingText) {
   if (typeof umami !== "undefined") {
     umami.track("payment-modal-open", { from: source });
   }
+  trackEvent("payment_modal_open", { source: source });
 }
+
 
     function closePaymentModal() {
       document.getElementById("paymentModal").classList.remove("open");
@@ -3130,6 +3553,78 @@ if (loadingText) {
     // 7. Backend verifies and marks the token as Pro
     // 8. We update the UI and remove limits
     // you have to ignore the comments in the code above... yay
+
+// ── SUPPORT US ────────────────────────────────────────────────────────
+let supportSelectedAmount = 0;
+
+function showSupportModal() {
+  document.getElementById("supportModal").classList.add("open");
+}
+function closeSupportModal() {
+  document.getElementById("supportModal").classList.remove("open");
+}
+function setSupportAmount(amount) {
+  supportSelectedAmount = amount;
+  document.getElementById("supportAmountInput").value = "";
+  [1,2,5,10].forEach(a => {
+    const btn = document.getElementById("sup" + a);
+    if (btn) btn.className = "support-amount-btn" + (a === amount ? " selected" : "");
+  });
+}
+
+async function submitSupportPayment() {
+  const customInput = document.getElementById("supportAmountInput");
+  const msg = document.getElementById("supportMessage");
+  const customVal = parseFloat(customInput.value);
+
+  // A typed custom amount always wins over a preset button
+  const amountUsd = customVal > 0 ? customVal : supportSelectedAmount;
+
+  if (!amountUsd || amountUsd <= 0) {
+    msg.style.color = "var(--red)";
+    msg.textContent = "Please choose or enter an amount";
+    return;
+  }
+
+  // Razorpay charges in INR, so we convert the USD amount using a fixed
+  // rough rate. Good enough for a tip, no need for a live currency API.
+  const amountInr = Math.max(40, Math.round(amountUsd * 83));
+
+  msg.style.color = "var(--text3)";
+  msg.textContent = "Opening checkout...";
+
+  try {
+    const res = await fetch(`${API_BASE}/create-support-order?amount=${amountInr}`);
+    const order = await res.json();
+
+    if (order.error) {
+      msg.style.color = "var(--red)";
+      msg.textContent = order.error;
+      return;
+    }
+
+    const options = {
+      key:         order.key_id,
+      amount:      order.amount,
+      currency:    order.currency,
+      name:        "Support Signalwatch",
+      description: "Thank you for supporting an independent builder",
+      order_id:    order.order_id,
+      theme:       { color: "#c4720a" },
+      handler: function(response) {
+        msg.style.color = "var(--teal)";
+        msg.textContent = "Thank you so much for the support!";
+        setTimeout(closeSupportModal, 2000);
+      }
+    };
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+
+  } catch (e) {
+    msg.style.color = "var(--red)";
+    msg.textContent = "Could not reach the server. Please try again.";
+  }
+}
 
   </script>
 </body>

@@ -41,7 +41,19 @@ from payments import (
     verify_paypal_webhook,
     generate_promo_code,
     redeem_promo_code,
+    create_razorpay_support_order,
+    record_support_payment,
     ADMIN_SECRET
+)
+
+from analytics import (
+    setup_analytics_table,
+    cleanup_old_events,
+    log_event,
+    get_events,
+    get_summary,
+    delete_user_analytics,
+    delete_all_analytics
 )
 
 # Create the FastAPI application object
@@ -66,7 +78,7 @@ app.add_middleware(
         "http://127.0.0.1:5500",            # Same, different notation
     ],
 
-    allow_methods=["GET", "POST", "OPTIONS"],  # Only the methods your app actually uses
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],  # DELETE added for the admin analytics erasure endpoints
     allow_headers=["*"],                        # Headers are fine to leave open
     allow_credentials=False,
     expose_headers=["*"],
@@ -255,6 +267,11 @@ setup_db()
 
 # Creates pro_users, pro_searches, and promo_codes tables if they do not exist
 setup_payment_tables()
+
+# Creates the analytics_events table, and clears out anything already
+# past the 90 day retention window in case the server was down for a while
+setup_analytics_table()
+cleanup_old_events()
 
 def try_consume_lead_allowance(token: str) -> bool:
     """
@@ -719,7 +736,22 @@ def fetch_bluesky(query):
             f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
             f"?q={requests.utils.quote(query)}&limit=100"
         )
-        res = requests.get(url, timeout=10, headers={"User-Agent": "signalwatch/1.0"})
+        res = requests.get(
+            url,
+            timeout=10,
+            headers={
+                # Bluesky's public API is fronted by Cloudflare, which blocks
+                # generic bot User-Agents. A full browser-style User-Agent
+                # gets treated as a normal visitor instead. Same fix already
+                # used for Trustpilot in fetch_trustpilot above.
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json"
+            }
+        )
+
+        if res.status_code == 403:
+            print("Bluesky: blocked (403) even with browser headers, skipping")
+            return []
 
         if res.status_code != 200:
             print(f"Bluesky: status {res.status_code}")
@@ -2952,7 +2984,7 @@ async def add_security_headers(request: Request, call_next):
         allowed = incoming_origin if incoming_origin in ALLOWED_ORIGINS else "https://signalwatch.vercel.app"
         response = await call_next(request)
         response.headers["Access-Control-Allow-Origin"] = allowed
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
         return response
 
@@ -3055,6 +3087,94 @@ async def pro_status(token: str = ""):
     from payments import is_pro
     return {"is_pro": is_pro(token)}
 
+@app.post("/track")
+async def track_event(request: Request):
+    """
+    Generic analytics tracking endpoint, called by the frontend for page
+    views and payment modal opens. Searches and conversions are logged
+    directly from their own backend routes instead, since those already
+    know the full confirmed story server side.
+
+    Body: {"token": "...", "event_type": "page_view", "event_data": {"page": "pricing"}}
+    We read the User Agent header ourselves rather than trusting one sent
+    by the client, so the browser and OS category cannot be spoofed.
+    """
+    try:
+        body = await request.json()
+        token = body.get("token", "")
+        event_type = body.get("event_type", "")
+        event_data = body.get("event_data", {})
+
+        # Only allow the event types the frontend actually needs to send.
+        # This stops the endpoint being used to write arbitrary rows.
+        allowed_types = ["page_view", "payment_modal_open"]
+        if event_type not in allowed_types or not token:
+            return {"status": "ignored"}
+
+        user_agent = request.headers.get("user-agent", "")
+        await asyncio.to_thread(log_event, token, event_type, event_data, user_agent)
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"track_event error: {e}")
+        return {"status": "error"}
+
+
+@app.get("/admin/analytics")
+async def admin_analytics(secret: str = "", event_type: str = "", token: str = "", days: int = 30):
+    """
+    Returns filtered analytics events for the admin dashboard.
+    Protected by the same ADMIN_SECRET used for promo code generation.
+    """
+    if not secret or secret != ADMIN_SECRET:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
+
+    events = await asyncio.to_thread(get_events, event_type, token, days, 500)
+    return {"events": events, "count": len(events)}
+
+
+@app.get("/admin/analytics/summary")
+async def admin_analytics_summary(secret: str = "", days: int = 30):
+    """
+    Returns the aggregate analytics numbers for the admin dashboard.
+    """
+    if not secret or secret != ADMIN_SECRET:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
+
+    summary = await asyncio.to_thread(get_summary, days)
+    return summary
+
+
+@app.delete("/admin/analytics/user")
+async def admin_delete_user_analytics(secret: str = "", token: str = ""):
+    """
+    Permanently deletes all analytics events for one user token.
+    This is the right to erasure action for a single person.
+    """
+    if not secret or secret != ADMIN_SECRET:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
+    if not token:
+        return {"error": "token required"}
+
+    deleted = await asyncio.to_thread(delete_user_analytics, token)
+    return {"deleted": deleted}
+
+
+@app.delete("/admin/analytics/all")
+async def admin_delete_all_analytics(secret: str = ""):
+    """
+    Permanently deletes every analytics event for every user.
+    Irreversible, protected the same way as everything else.
+    """
+    if not secret or secret != ADMIN_SECRET:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
+
+    deleted = await asyncio.to_thread(delete_all_analytics)
+    return {"deleted": deleted}
+
 @app.get("/create-order")
 async def create_order(token: str = ""):
     """
@@ -3066,6 +3186,19 @@ async def create_order(token: str = ""):
     if not token:
         return {"error": "invalid token"}
     return create_razorpay_order(token)
+
+@app.get("/create-support-order")
+async def create_support_order(amount: int = 0, name: str = "", message: str = ""):
+    """
+    Creates a Razorpay order for a one-off support payment.
+    amount comes from the frontend already converted to rupees, so we
+    multiply by 100 to get paise, which is what Razorpay expects.
+    No token is required — anyone can support anonymously.
+    """
+    if amount <= 0:
+        return {"error": "Please enter an amount"}
+    amount_paise = int(amount) * 100
+    return create_razorpay_support_order(amount_paise, name=name, message=message)
 
 
 @app.post("/razorpay-webhook")
@@ -3093,12 +3226,32 @@ async def razorpay_webhook(request: Request):
             payment_entity = data.get("payload", {}).get("payment", {}).get("entity", {})
             payment_id = payment_entity.get("id", "")
             notes      = payment_entity.get("notes", {})
-            token      = notes.get("token", "")
+
+            # Support payments are tagged type="support" when the order is created.
+            # These are tips, not subscriptions. We record them and stop here,
+            # we never grant Pro access for a support payment.
+            if notes.get("type") == "support":
+                amount_paise = payment_entity.get("amount", 0)
+                record_support_payment(
+                    payment_ref=payment_id,
+                    amount_paise=amount_paise,
+                    name=notes.get("name", ""),
+                    message=notes.get("message", "")
+                )
+                print(f"Webhook: support payment recorded, {payment_id}")
+                return {"status": "ok"}
+
+            token = notes.get("token", "")
 
             if token:
                 expires = datetime.now() + timedelta(days=30)
                 mark_token_as_pro(token, payment_ref=payment_id, expires_at=expires)
                 print(f"Webhook: activated 30-day Pro for {token[:12]}... payment {payment_id}")
+                # Log this as a conversion. Webhook calls come from Razorpay's
+                # own servers, not the customer's browser, so there is no real
+                # browser to record here, it will show as Unknown, which is
+                # accurate rather than guessed.
+                await asyncio.to_thread(log_event, token, "conversion", {"method": "razorpay"}, "")
             else:
                 print("Webhook: payment captured but no token found in notes")
 
@@ -3173,6 +3326,7 @@ async def paypal_webhook(request: Request):
                 expires = datetime.now() + timedelta(days=30)
                 mark_token_as_pro(token, payment_ref=payment_id, expires_at=expires)
                 print(f"PayPal webhook: activated 30-day Pro for {token[:12]}... payment {payment_id}")
+                await asyncio.to_thread(log_event, token, "conversion", {"method": "paypal"}, "")
             else:
                 print("PayPal webhook: capture completed but no token in custom_id")
 
@@ -3198,7 +3352,13 @@ async def redeem_code_route(request: Request):
         if not code or not token:
             return {"success": False, "error": "missing fields"}
 
-        return redeem_promo_code(code, token)
+        result = redeem_promo_code(code, token)
+
+        # Only counts as a conversion if the code actually worked
+        if result.get("success"):
+            await asyncio.to_thread(log_event, token, "conversion", {"method": "promo"}, request.headers.get("user-agent", ""))
+
+        return result
 
     except Exception as e:
         print(f"redeem_code error: {e}")
@@ -3329,6 +3489,10 @@ async def search_stream(query: str, request: Request, token: str = ""):
         sources_counts = {}
 
         yield f"data: {json.dumps({'type': 'start', 'query': query})}\n\n"
+
+        # Log this search for analytics. Runs in a background thread so the
+        # database write never delays the actual search results.
+        await asyncio.to_thread(log_event, token, "search", {"query": query}, request.headers.get("user-agent", ""))
 
         # Each line: run the fetch in a thread, yield the progress immediately
         reddit = await asyncio.to_thread(fetch_reddit, query)
@@ -3468,6 +3632,9 @@ def search(query: str, request: Request, token: str = ""):
     new_count = increment_count(token)
     remaining = max(0, DAILY_LIMIT - new_count)
     print(f"Token search {new_count}/{DAILY_LIMIT}")
+
+    # Log this search for analytics
+    log_event(token, "search", {"query": query}, request.headers.get("user-agent", ""))
 
     # Fetch from all sources simultaneously (Python runs them in sequence
     # but each has a timeout so slow sources do not block fast ones)
