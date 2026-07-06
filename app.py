@@ -1228,13 +1228,31 @@ def fetch_wikipedia(query):
     keywords = [w for w in clean.split() if w not in stop]
     search_term = " ".join(keywords[:3])  # Use first 3 keywords
 
+    # If every word in the query was a stop word like "the" or "not",
+    # search_term ends up empty. Sending an empty search to Wikipedia is
+    # what sometimes causes the broken response, so we skip it entirely
+    if not search_term.strip():
+        return results
+
     url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={requests.utils.quote(search_term)}&limit=3&format=json"
     try:
-        res = requests.get(url, timeout=8)
-        # Wikipedia sometimes returns 200 with empty body — guard before parsing
+        res = requests.get(
+            url,
+            timeout=8,
+            # Wikipedia's API asks every caller to identify itself with a
+            # User-Agent. Without one, they occasionally send back an
+            # empty or non-JSON response, which is exactly what caused
+            # the "Expecting value" error in your logs
+            headers={"User-Agent": "signalwatch/1.0 (contact wajidfarooqtemp@gmail.com)"}
+        )
         if not res.content or not res.content.strip():
             return results
-        data = res.json()
+        try:
+            data = res.json()
+        except ValueError:
+            # Response wasn't valid JSON, fail quietly like any other
+            # source having a bad day, instead of throwing an error
+            return results
         # Wikipedia returns: [query, [titles], [descriptions], [urls]]
         for title, desc in zip(data[1], data[2]):
             if desc:
@@ -1278,6 +1296,19 @@ def get_free_models():
 
         # Shuffle so we spread load across models rather than hammering the same ones
         random.shuffle(free_models)
+
+        # A handful of free models are noticeably more reliable at
+        # producing clean JSON than the rest. We still want variety, so
+        # we don't remove any models, we just move these known steadier
+        # ones to the front of the line when they're available, so we
+        # reach for them before the less predictable ones
+        preferred = [
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "google/gemma-2-9b-it:free",
+            "qwen/qwen-2.5-7b-instruct:free",
+        ]
+        free_models.sort(key=lambda m: 0 if m in preferred else 1)
+
         print(f"Found {len(free_models)} free models")
         return free_models[:8]  # Try up to 8
 
@@ -1347,9 +1378,17 @@ def strip_agent_language(text: str) -> str:
     return text.strip()
 
 
-def ai_call(prompt):
+def ai_call(prompt, max_tokens=600):
     # Sends a prompt to the AI and returns the response text
     # Tries multiple free models in order — if one fails, tries the next
+    #
+    # max_tokens controls how much the AI is allowed to write back.
+    # This used to always be fixed at 600, which was too little for the
+    # main briefing prompt, since that prompt asks for a briefing, an
+    # action, AND three questions all in one response. Running out of
+    # room mid-way through writing broke the JSON, which triggered a
+    # fallback to a much shorter, blander response. Callers that need
+    # more space now pass a bigger number in.
     models = get_free_models()
     print(f"Trying {len(models)} models")
 
@@ -1367,7 +1406,7 @@ def ai_call(prompt):
                 json={
                     "model":    model,
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 600
+                    "max_tokens": max_tokens
                 },
                 timeout=40
             )
@@ -1964,7 +2003,12 @@ Return a JSON object with exactly THREE keys: "briefing", "action", and "questio
 
 Return only raw JSON. No markdown. No backticks. No code fences."""
 
-    ai_result = ai_call(prompt)
+    # This is the single most important AI call in the whole app, it's
+    # the one that writes the actual briefing. It now gets a bigger
+    # writing budget than the default, so it has enough room to finish
+    # the briefing, the action, and all three questions without getting
+    # cut off part way through
+    ai_result = ai_call(prompt, max_tokens=1000)
 
     # Parse AI response
     briefing   = ""
@@ -1975,13 +2019,14 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
         briefing, action, questions = extract_briefing_and_questions(ai_result)
         briefing = sanitise_briefing_output(briefing)
 
-    # If the first AI call returned no action or no briefing,
-    # retry once with a much simpler prompt.
-    # A simpler prompt is less likely to produce malformed JSON.
-    # We do not retry infinitely — once is enough.
-    # If the retry also fails, we accept empty and move on.
+    # We now also check questions here, not just action and briefing.
+    # Before this change, a response missing its questions was silently
+    # accepted as good enough, which is exactly why the "questions your
+    # team should be asking" section sometimes never showed up.
+    # We do not retry infinitely, once is enough.
+    # If the retry also comes up short, we accept what we have and move on.
     # Empty is honest. A fake action destroys trust.
-    if not action or not briefing:
+    if not action or not briefing or len(questions) < 3:
         print("generate_insight: retrying with simpler prompt")
 
         # Build a minimal context — just the top 5 titles
@@ -1990,14 +2035,17 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
         simple_prompt = f"""Analyse these mentions about "{query}":
 {top_titles}
 
-Return JSON with two keys only:
+Return JSON with exactly three keys:
 "briefing": one sentence stating the most important thing happening right now.
 "action": one sentence starting with a verb — the single most important thing to do in 48 hours.
+"questions": an array of exactly 3 objects, each with a "question" key and a "reason" key. Base each question on something in the mentions above. Strategic language only, no technical terms.
 
 Raw JSON only. No markdown. No backticks. Example:
-{{"briefing": "Complaints about delivery speed are rising.", "action": "Publish a delivery update on your main channels within 24 hours."}}"""
+{{"briefing": "Complaints about delivery speed are rising.", "action": "Publish a delivery update on your main channels within 24 hours.", "questions": [{{"question": "Why are delivery times slipping this month?", "reason": "Repeated delays are the fastest way to lose repeat customers."}}]}}"""
 
-        retry_result = ai_call(simple_prompt)
+        # This backup call also gets a bigger writing budget, since it
+        # now has to produce three sections too, same reasoning as above
+        retry_result = ai_call(simple_prompt, max_tokens=700)
 
         if retry_result:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
@@ -2007,8 +2055,12 @@ Raw JSON only. No markdown. No backticks. Example:
                 briefing = retry_briefing
             if not action and retry_action:
                 action = retry_action
-            # Do not overwrite questions if we already have them
-            if not questions and retry_questions:
+            # Only replace questions if we don't already have a full set
+            # of 3. Before, this only checked "if there are zero
+            # questions", so a partial set of 1 or 2 was never topped
+            # up, which is why the questions section sometimes appeared
+            # incomplete
+            if len(questions) < 3 and retry_questions:
                 questions = retry_questions
 
     # Final fallback for briefing only — never force a fake action
@@ -3580,7 +3632,15 @@ async def search_stream(query: str, request: Request, token: str = ""):
         # The connection stays open as long as the user is on the page.
         # When they leave, the browser closes the connection and this stops.
         # max_loops=3 means up to 3 investigation cycles (~3 minutes total)
-        async for agent_event in chief_of_staff(query, ranked, max_loops=3):
+        # Reduced from 3 rounds to 2. Each round takes 45 to 90 seconds,
+        # and Agent 4 runs afterwards taking another 60 to 90 seconds on
+        # top of that. At 3 rounds, the whole thing could run past 4 or
+        # 5 minutes total, which is more time for the connection to the
+        # browser to drop partway through, which is what "agents
+        # disappearing" looks like from the user's side. 2 rounds
+        # finishes faster and holds together more reliably, at the cost
+        # of one fewer investigation angle per search
+        async for agent_event in chief_of_staff(query, ranked, max_loops=2):
             yield agent_event
 
     return StreamingResponse(
