@@ -220,6 +220,7 @@
     .src-googlenews { background:#fff8f0; color:#ea4335; border:1px solid #fca5a5; }
     .src-mastodon   { background:#f3f0ff; color:#563acc; border:1px solid #d4bbff; }
     .src-bluesky    { background:#eff8ff; color:#0085ff; border:1px solid #b0dcff; }
+    .src-bingnews   { background:#f0fdfa; color:#0d9488; border:1px solid #99f6e4; }
 
     /* RESULTS LIST */
     .results-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; padding-top:4px; }
@@ -611,7 +612,6 @@
       </span>
       <span class="brand-tag">Beta</span>
       <span
-  id="proBadge"
   style="
     display:none;font-family:var(--mono);font-size:9px;font-weight:600;
     color:var(--white);background:var(--amber);letter-spacing:0.8px;
@@ -2706,7 +2706,8 @@ if (loadingText) {
         reddit:"#c2410c", hackernews:"#92400e", newsapi:"#0d7a6b",
         newsdata:"#0369a1", youtube:"#be123c", rss:"#15803d",
         wikipedia:"#6d28d9", mastodon:"#563acc", trustpilot:"#007b5e",
-        appstore:"#0066cc", playstore:"#1a7340", googlenews:"#ea4335"
+        appstore:"#0066cc", playstore:"#1a7340", googlenews:"#ea4335",
+        bluesky:"#0085ff", bingnews:"#0d9488"
       };
 
       const timed = results.filter(r => r.created && r.created > 0);
@@ -3489,6 +3490,9 @@ async function deleteAllAnalyticsPrompt() {
   const rzp = new window.Razorpay(options);
   rzp.on("payment.failed", function(r) {
     console.log("Razorpay payment failed:", r.error.description);
+    // Tell the customer directly instead of leaving them staring at a
+    // closed popup with no idea what happened
+    alert("Payment could not be completed: " + r.error.description + "\n\nPlease try again, or use PayPal instead.");
   });
   closePaymentModal();
   rzp.open();
@@ -3564,6 +3568,9 @@ async function deleteAllAnalyticsPrompt() {
 
     onError: function(err) {
       console.log("PayPal error:", err);
+      // Same reasoning as the Razorpay failure message above — silence
+      // here just makes the customer think the site is broken
+      alert("Something went wrong with the PayPal payment. Please try again, or use the Razorpay option instead.");
     }
 
   }).render("#paypal-button-container");

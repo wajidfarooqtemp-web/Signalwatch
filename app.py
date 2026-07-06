@@ -560,7 +560,7 @@ def fetch_rss(query):
 
         # ── International news ────────────────────────────────────────────────
         "https://www.aljazeera.com/xml/rss/all.xml",
-        "https://feeds.reuters.com/reuters/businessNews".replace("feeds.reuters.com", "news.google.com/rss/search?q=reuters+business"),
+        "https://news.google.com/rss/search?q=site:reuters.com+business",
 
         # ── Tech and industry ─────────────────────────────────────────────────
         # TechCrunch covers startup and tech brand news extensively
@@ -3051,7 +3051,16 @@ async def add_security_headers(request: Request, call_next):
 
     # Skip rate limiting for OPTIONS requests — these are CORS preflight checks
     # Blocking them breaks all cross-origin requests from the browser
-    if request.url.path != "/" and request.method != "OPTIONS":
+    # Also skip rate limiting for the two payment webhook URLs. These are
+    # called by Razorpay's and PayPal's own servers, not by a customer's
+    # browser, and those servers may share an outgoing IP address across
+    # many different businesses. If that shared IP ever crossed 60 calls
+    # in an hour, this limiter would start rejecting real payment
+    # confirmations, meaning a customer pays but never actually gets
+    # marked as Pro. The webhooks already check a cryptographic signature
+    # above, so rate limiting them adds no real protection, only risk.
+    is_webhook_path = request.url.path in ("/razorpay-webhook", "/paypal-webhook")
+    if request.url.path != "/" and request.method != "OPTIONS" and not is_webhook_path:
         now = datetime.now()
         cutoff = now - timedelta(hours=1)
         _ip_log[client_ip] = [t for t in _ip_log[client_ip] if t > cutoff]
