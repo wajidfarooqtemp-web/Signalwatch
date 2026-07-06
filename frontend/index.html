@@ -130,6 +130,37 @@
     .search-btn:hover { background:#0b6859; }
     .search-btn:disabled { background:var(--bg3); color:var(--text3); cursor:not-allowed; }
     .search-hints { display:flex; gap:20px; margin-top:10px; flex-wrap:wrap; }
+    /* Example query chip row, sits below the search hints */
+    .example-chips-label {
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:0.5px;
+      color:var(--text3);
+      margin-top:18px;
+      margin-bottom:8px;
+    }
+    .example-chips-wrap {
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .example-chip {
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--text2);
+      background:var(--bg2);
+      border:1.5px solid var(--border);
+      border-radius:20px;
+      padding:7px 14px;
+      cursor:pointer;
+      transition:border-color 0.15s, background 0.15s, color 0.15s;
+      white-space:nowrap;
+    }
+    .example-chip:hover {
+      border-color:var(--teal);
+      background:var(--teal-light);
+      color:var(--teal);
+    }
     .hint { font-size:11px; color:var(--text3); display:flex; align-items:center; gap:4px; }
     .hint code { font-family:var(--mono); font-size:10px; background:var(--bg2); border:1px solid var(--border); border-radius:3px; padding:1px 6px; color:var(--text2); }
 
@@ -903,7 +934,20 @@
           </button>
         </span>
       </div>
+
+      <!-- EXAMPLE QUERY CHIPS -->
+      <!-- Clicking one only fills the search box, it does not run the
+           search on its own, the person still clicks Analyse themselves -->
+      <div class="example-chips-label">Not sure where to start? Try one of these</div>
+      <div class="example-chips-wrap">
+        <button class="example-chip" onclick="fillQuery('(Nike OR Adidas) AND pricing')">(Nike OR Adidas) AND pricing</button>
+        <button class="example-chip" onclick="fillQuery('(Zendesk OR Intercom) AND &quot;customer support&quot;')">(Zendesk OR Intercom) AND "customer support"</button>
+        <button class="example-chip" onclick="fillQuery('(Notion OR Coda) AND &quot;switching from&quot;')">(Notion OR Coda) AND "switching from"</button>
+        <button class="example-chip" onclick="fillQuery('(CeraVe OR Cetaphil) AND &quot;no options&quot;')">(CeraVe OR Cetaphil) AND "no options"</button>
+        <button class="example-chip" onclick="fillQuery('NATO AND &quot;rare earth&quot; AND sanctions')">NATO AND "rare earth" AND sanctions</button>
+      </div>
     </div>
+    
 
     <div class="results-wrap">
 
@@ -1389,75 +1433,53 @@
     <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
       <div style="max-width:680px;margin:0 auto;">
         <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">Services</div>
-        <h2 style="font-family:var(--serif);font-size:36px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:16px;">I can automate this for your business too.</h2>
-        <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;">Signalwatch is proof of what I can build, not just a product. Everything below is something I have actually done, live, in production, not a promise.</p>
-      </div>
-    </div>
-
-    <div style="padding:48px 40px;border-bottom:1px solid var(--border);">
-      <div style="max-width:680px;margin:0 auto;">
-        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:24px;">What I can build for you right now</div>
-
-        <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Brand and mention monitoring</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Pull mentions of your business from news, forums, reviews and social platforms into one place, instead of checking each one by hand.</div>
-        </div>
-
-        <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AI written summaries and reports</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Turn raw data into a short, plain English summary and a clear next action, the same way Signalwatch turns 200 mentions into two sentences.</div>
-        </div>
-
-        <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Payment and subscription setup</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Razorpay and PayPal checkout, webhooks, promo codes, and usage limits, done server side and properly verified, not just a payment button that trusts the browser.</div>
-        </div>
-
-        <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Lead scoring from your existing traffic</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Score inbound comments, reviews or forum posts by how ready to buy the person actually sounds, and generate a ready to send message for each one.</div>
-        </div>
-
-        <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Live, real time website features</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Results that stream in as they are found instead of a plain loading spinner, useful for anything that takes more than a few seconds to process.</div>
-        </div>
-
-        <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Google sign in for websites and apps</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Secure login without customers needing to remember another password.</div>
-        </div>
-
-        <div>
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Basic website security hardening</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Rate limiting, security headers, and protection against common attacks, the kind of thing most small business sites are missing entirely.</div>
-        </div>
-
+        <h2 style="font-family:var(--serif);font-size:36px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:16px;">I can build this for your business too.</h2>
+        <p style="font-size:15px;color:var(--text2);line-height:1.8;font-weight:300;">Signalwatch is not a portfolio piece. It is a live product with real, paying customers, running right now. Everything below is something I have already built and shipped, not something I am promising to figure out.</p>
       </div>
     </div>
 
     <div style="padding:48px 40px 72px;">
       <div style="max-width:680px;margin:0 auto;">
-        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:24px;">What I am learning next, so I can offer it soon</div>
+        <div style="font-family:var(--serif);font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:24px;">What I can build for you right now</div>
 
         <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">No code automation tools</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Connecting the tools a small business already uses, like their inbox, spreadsheets and forms, without needing custom code for every single workflow.</div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Full stack product builds</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">I build both the backend and the frontend of a working product, the same way I built Signalwatch from its database up to its live search page.</div>
         </div>
 
         <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">CRM and email marketing integration</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Getting leads and customer data flowing automatically into the tools a sales team already lives in.</div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AI agents that take action, not just chat</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Signalwatch runs four AI agents right now that read data and make decisions on their own. One finds leads, one reads sentiment, one tracks competitors, and one spots problems customers have not said out loud yet.</div>
         </div>
 
         <div style="margin-bottom:20px;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Turning a website into an installable app</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">So a business's existing website can sit on a customer's home screen like a real app, without building a separate mobile app from scratch.</div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AI added into the tools you already use</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">I can connect AI directly into the systems your business already runs on, instead of asking you to switch to something new.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Connecting your business to outside data</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Signalwatch pulls live data from Reddit, YouTube, Bluesky, and NewsAPI, among others, and I can build the same kind of connection for your business.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Security hardening</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Signalwatch runs with rate limiting, security headers, and protection against common attacks. I can set up the same protection for your site.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Payment gateway setup</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Signalwatch charges real customers today through Razorpay and PayPal, both verified properly on the server. I can set up the same for you.</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Lead scoring and qualification</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Signalwatch already scores real mentions by how ready to buy someone sounds, and writes a message ready to send. I can build that same system around your customers.</div>
         </div>
 
         <div>
-          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Scaling past free tier hosting</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Moving a project from something like Render's free tier to proper infrastructure once real traffic and paying customers show up.</div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">Live, streaming website features</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;">Signalwatch shows results streaming in as they are found, instead of a plain loading spinner. I can build that same live feel into your site.</div>
         </div>
 
       </div>
@@ -1509,53 +1531,180 @@
         </div>
         <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;">Boolean search</div>
 
-        <div style="display:grid;grid-template-columns:1fr 140px;gap:16px;align-items:center;margin-bottom:24px;">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AND — both words must appear</div>
-            <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is only included if it contains every word joined by AND.</div>
-            <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce AND pricing</code>
-          </div>
-          <svg viewBox="0 0 140 90" width="140" height="90">
-            <defs>
-              <clipPath id="clipRightA"><circle cx="80" cy="40" r="30"/></clipPath>
-            </defs>
-            <circle cx="60" cy="40" r="30" fill="none" stroke="#333" stroke-width="1.5"/>
-            <circle cx="80" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5" clip-path="inset(0 0 0 20)"/>
-            <circle cx="60" cy="40" r="30" fill="none" stroke="#333" stroke-width="1.5"/>
-            <text x="45" y="44" font-size="11" fill="#333" text-anchor="middle">A</text>
-            <text x="95" y="44" font-size="11" fill="#333" text-anchor="middle">B</text>
-            <text x="70" y="82" font-size="11" fill="#333" text-anchor="middle" font-weight="600">AND</text>
-          </svg>
+        <div class="bool-logic-diagram">
+
+  <!-- Shared, invisible SVG definitions, reused by all three diagrams below -->
+  <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden;">
+    <defs>
+      <!-- Clips a shape down to only the area also inside the right circle -->
+      <clipPath id="blogic-rightClip">
+        <circle cx="125" cy="70" r="50"></circle>
+      </clipPath>
+      <!-- Hides gold fill wherever the right circle sits, used for NOT -->
+      <mask id="blogic-notMask">
+        <rect x="0" y="0" width="200" height="150" fill="#ffffff"></rect>
+        <circle cx="125" cy="70" r="50" fill="#000000"></circle>
+      </mask>
+      <!-- One curly brace shape, stretched to fit each diagram's width -->
+      <symbol id="blogic-brace" viewBox="0 0 100 20">
+        <path d="M0,0 C0,14 14,6 25,12 C36,18 40,20 50,20 C60,20 64,18 75,12 C86,6 100,14 100,0"
+          fill="none" stroke="#222222" stroke-width="2" stroke-linecap="round"></path>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="bl-grid">
+
+    <!-- AND -->
+    <div class="bl-cell">
+      <h3 class="bl-label">AND</h3>
+      <svg class="bl-venn" viewBox="0 0 200 150" role="img" aria-label="AND, only the overlap of puppy and kitten is highlighted">
+        <circle class="bl-circle" cx="75" cy="70" r="50"></circle>
+        <circle class="bl-circle" cx="125" cy="70" r="50"></circle>
+        <circle class="bl-fill" cx="75" cy="70" r="50" clip-path="url(#blogic-rightClip)"></circle>
+        <circle class="bl-outline" cx="75" cy="70" r="50"></circle>
+        <circle class="bl-outline" cx="125" cy="70" r="50"></circle>
+        <text class="bl-text" x="62" y="75">puppy</text>
+        <text class="bl-text" x="138" y="75">kitten</text>
+      </svg>
+      <svg class="bl-brace" viewBox="0 0 100 20" preserveAspectRatio="none">
+        <use href="#blogic-brace"></use>
+      </svg>
+      <p class="bl-caption">Both terms</p>
+    </div>
+
+    <!-- OR -->
+    <div class="bl-cell">
+      <h3 class="bl-label">OR</h3>
+      <svg class="bl-venn" viewBox="0 0 200 150" role="img" aria-label="OR, both puppy and kitten circles are fully highlighted">
+        <circle class="bl-circle" cx="75" cy="70" r="50"></circle>
+        <circle class="bl-circle" cx="125" cy="70" r="50"></circle>
+        <circle class="bl-fill" cx="75" cy="70" r="50"></circle>
+        <circle class="bl-fill" cx="125" cy="70" r="50"></circle>
+        <circle class="bl-outline" cx="75" cy="70" r="50"></circle>
+        <circle class="bl-outline" cx="125" cy="70" r="50"></circle>
+        <text class="bl-text" x="62" y="75">puppy</text>
+        <text class="bl-text" x="138" y="75">kitten</text>
+      </svg>
+      <svg class="bl-brace" viewBox="0 0 100 20" preserveAspectRatio="none">
+        <use href="#blogic-brace"></use>
+      </svg>
+      <p class="bl-caption">Either term</p>
+    </div>
+
+    <!-- NOT -->
+    <div class="bl-cell">
+      <h3 class="bl-label">NOT</h3>
+      <svg class="bl-venn" viewBox="0 0 200 150" role="img" aria-label="NOT, only puppy excluding the overlap is highlighted">
+        <circle class="bl-circle" cx="75" cy="70" r="50"></circle>
+        <circle class="bl-circle" cx="125" cy="70" r="50"></circle>
+        <circle class="bl-fill" cx="75" cy="70" r="50" mask="url(#blogic-notMask)"></circle>
+        <circle class="bl-outline" cx="75" cy="70" r="50"></circle>
+        <circle class="bl-outline" cx="125" cy="70" r="50"></circle>
+        <text class="bl-text" x="62" y="75">puppy</text>
+        <text class="bl-text" x="138" y="75">kitten</text>
+      </svg>
+      <svg class="bl-brace" viewBox="0 0 100 20" preserveAspectRatio="none">
+        <use href="#blogic-brace"></use>
+      </svg>
+      <p class="bl-caption">Just one term</p>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  .bool-logic-diagram {
+    --bl-yellow: #F4B400;
+    --bl-border: #2b2b2b;
+    background: #eeeeee;
+    border: 1.5px solid var(--bl-border);
+    border-radius: 10px;
+    padding: 24px 20px 18px;
+    max-width: 760px;
+    margin: 0 auto;
+    font-family: Arial, Helvetica, sans-serif;
+    box-sizing: border-box;
+  }
+  .bl-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .bl-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .bl-label {
+    margin: 0 0 8px;
+    font-size: clamp(0.95rem, 2.2vw, 1.3rem);
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #111111;
+    text-transform: uppercase;
+  }
+  .bl-venn {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .bl-circle {
+    fill: #ffffff;
+    stroke: #000000;
+    stroke-width: 3;
+  }
+  .bl-fill {
+    fill: var(--bl-yellow);
+    stroke: none;
+  }
+  .bl-outline {
+    fill: none;
+    stroke: #000000;
+    stroke-width: 3;
+  }
+  .bl-text {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    fill: #111111;
+    text-anchor: middle;
+  }
+  .bl-brace {
+    width: 65%;
+    height: 16px;
+    margin-top: 2px;
+    display: block;
+  }
+  .bl-caption {
+    margin: 4px 0 0;
+    font-size: 0.8rem;
+    color: #222222;
+  }
+
+  @media (max-width: 480px) {
+    .bl-grid { gap: 10px; }
+    .bl-label { font-size: 0.85rem; }
+    .bl-caption { font-size: 0.7rem; }
+  }
+</style>
+
+        <div style="margin-bottom:24px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">AND — both words must appear</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is only included if it contains every word joined by AND.</div>
+          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce AND pricing</code>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 140px;gap:16px;align-items:center;margin-bottom:24px;">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">OR — either word can appear</div>
-            <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is included if it contains at least one of the words. Use brackets when combining with AND.</div>
-            <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">(Salesforce OR HubSpot) AND pricing</code>
-          </div>
-          <svg viewBox="0 0 140 90" width="140" height="90">
-            <circle cx="60" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5"/>
-            <circle cx="80" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5" fill-opacity="0.85"/>
-            <text x="45" y="44" font-size="11" fill="#fff" text-anchor="middle">A</text>
-            <text x="95" y="44" font-size="11" fill="#fff" text-anchor="middle">B</text>
-            <text x="70" y="82" font-size="11" fill="#333" text-anchor="middle" font-weight="600">OR</text>
-          </svg>
+        <div style="margin-bottom:24px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">OR — either word can appear</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">A result is included if it contains at least one of the words. Use brackets when combining with AND.</div>
+          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">(Salesforce OR HubSpot) AND pricing</code>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 140px;gap:16px;align-items:center;margin-bottom:24px;">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">NOT — excludes a word</div>
-            <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Any result containing the word after NOT is removed entirely. Useful for filtering out noise like job postings.</div>
-            <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce NOT careers</code>
-          </div>
-          <svg viewBox="0 0 140 90" width="140" height="90">
-            <circle cx="60" cy="40" r="30" fill="#5b9bd5" stroke="#333" stroke-width="1.5"/>
-            <circle cx="80" cy="40" r="30" fill="none" stroke="#333" stroke-width="1.5"/>
-            <text x="45" y="44" font-size="11" fill="#fff" text-anchor="middle">A</text>
-            <text x="95" y="44" font-size="11" fill="#333" text-anchor="middle">B</text>
-            <text x="70" y="82" font-size="11" fill="#333" text-anchor="middle" font-weight="600">NOT</text>
-          </svg>
+        <div style="margin-bottom:24px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">NOT — excludes a word</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.7;font-weight:300;margin-bottom:8px;">Any result containing the word after NOT is removed entirely. Useful for filtering out noise like job postings.</div>
+          <code style="font-family:var(--mono);font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:4px 10px;display:inline-block;">Salesforce NOT careers</code>
         </div>
 
         <div>
@@ -2124,6 +2273,14 @@ async function fetchGoogleProfile(accessToken) {
     // This is more reliable on Railway than native EventSource.
 
     let currentSearchController = null; // Tracks the in-flight search so we can cancel it
+
+    // Fills the search box with an example query when a chip is clicked.
+    // Deliberately does not call runSearch() here, the person still needs
+    // to click Analyse themselves, this only saves them typing
+    function fillQuery(text) {
+      document.getElementById("queryInput").value = text;
+      document.getElementById("queryInput").focus();
+    }
 
     async function runSearch() {
       const query = document.getElementById("queryInput").value.trim();
@@ -3077,26 +3234,26 @@ if (loadingText) {
     }
 // ── ANALYTICS TRACKING ─────────────────────────────────────────────────
 function trackEvent(eventType, eventData) {
-  // Fires a lightweight analytics event to the backend. Uses sendBeacon
-  // when available, since it does not block navigation or add any lag,
-  // and falls back to fetch for older browsers.
+  // Fires a lightweight analytics event to the backend.
+  // We use plain fetch instead of navigator.sendBeacon here. sendBeacon
+  // automatically tries to send cookies with the request, which the
+  // browser blocks since our server does not allow credentialed
+  // cross-origin requests, that mismatch is exactly what caused the
+  // CORS error in the console. Plain fetch does not attach cookies by
+  // default, so it passes through cleanly. keepalive:true still lets
+  // the request finish even if the user clicks away right after.
   const payload = JSON.stringify({
     token: getToken(),
     event_type: eventType,
     event_data: eventData || {}
   });
   try {
-    if (navigator.sendBeacon) {
-      const blob = new Blob([payload], { type: "application/json" });
-      navigator.sendBeacon(`${API_BASE}/track`, blob);
-    } else {
-      fetch(`${API_BASE}/track`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-        keepalive: true
-      });
-    }
+    fetch(`${API_BASE}/track`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true
+    });
   } catch (e) {
     // Analytics failing should never break an actual feature for the user
   }

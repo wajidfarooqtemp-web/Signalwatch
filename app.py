@@ -21,6 +21,7 @@ import asyncio  # NEW — needed for async SSE generator
 from fastapi.middleware.cors import CORSMiddleware  # CORS allows browser to talk to server
 from datetime import date, datetime, timedelta  # Tools for working with dates and times
 import requests   # Tool for making HTTP requests to other websites
+from curl_cffi import requests as curl_requests  # Same job as requests, but copies a real Chrome browser's connection behaviour, needed only for Bluesky since Cloudflare blocks Python's normal requests library specifically
 import re         # Tool for finding patterns in text (regex)
 import xml.etree.ElementTree as ET  # Tool for reading XML files (used for RSS feeds)
 import os         # Tool for reading environment variables (our API keys)
@@ -736,21 +737,22 @@ def fetch_bluesky(query):
             f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
             f"?q={requests.utils.quote(query)}&limit=100"
         )
-        res = requests.get(
+        # curl_requests.get works almost identically to normal requests.get,
+        # the one extra piece is impersonate="chrome120", which makes the
+        # actual network handshake look like a real Chrome 120 browser,
+        # not just the headers. This is what gets past Cloudflare's check.
+        res = curl_requests.get(
             url,
             timeout=10,
+            impersonate="chrome120",
             headers={
-                # Bluesky's public API is fronted by Cloudflare, which blocks
-                # generic bot User-Agents. A full browser-style User-Agent
-                # gets treated as a normal visitor instead. Same fix already
-                # used for Trustpilot in fetch_trustpilot above.
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "application/json"
             }
         )
 
         if res.status_code == 403:
-            print("Bluesky: blocked (403) even with browser headers, skipping")
+            print("Bluesky: still blocked (403) even with browser TLS fingerprint, skipping")
             return []
 
         if res.status_code != 200:
@@ -3632,15 +3634,10 @@ async def search_stream(query: str, request: Request, token: str = ""):
         # The connection stays open as long as the user is on the page.
         # When they leave, the browser closes the connection and this stops.
         # max_loops=3 means up to 3 investigation cycles (~3 minutes total)
-        # Reduced from 3 rounds to 2. Each round takes 45 to 90 seconds,
-        # and Agent 4 runs afterwards taking another 60 to 90 seconds on
-        # top of that. At 3 rounds, the whole thing could run past 4 or
-        # 5 minutes total, which is more time for the connection to the
-        # browser to drop partway through, which is what "agents
-        # disappearing" looks like from the user's side. 2 rounds
-        # finishes faster and holds together more reliably, at the cost
-        # of one fewer investigation angle per search
-        async for agent_event in chief_of_staff(query, ranked, max_loops=2):
+        # Back to 3 rounds. All 3 agents matter for the product, and
+        # missing one looks broken to the person using it, worse than
+        # the search simply taking a bit longer to fully finish
+        async for agent_event in chief_of_staff(query, ranked, max_loops=3):
             yield agent_event
 
     return StreamingResponse(
