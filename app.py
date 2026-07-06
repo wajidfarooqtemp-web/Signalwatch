@@ -1294,25 +1294,37 @@ def get_free_models():
                 skip = ["owl-alpha", "laguna", "nemotron"]
                 if any(s in model_id for s in skip):
                     continue
+                # Skip models that aren't actually text chat models.
+                # Your logs showed "google/lyria-3-pro-preview" and
+                # "google/lyria-3-clip-preview" in the free list, both
+                # returning 402 Payment Required every time. Lyria is a
+                # music generation model, it was never able to answer a
+                # text prompt, it just happened to get tagged as $0 cost.
+                # Trying it wastes one of our limited retry attempts on
+                # something guaranteed to fail
+                non_chat = ["lyria", "whisper", "tts", "embed", "dall-e", "stable-diffusion", "clip"]
+                if any(s in model_id for s in non_chat):
+                    continue
                 free_models.append(model_id)
 
-        # Shuffle so we spread load across models rather than hammering the same ones
+        # Shuffle so we spread load across models rather than hammering
+        # the same ones. We tried keeping a "preferred" list of known
+        # reliable model names here, but OpenRouter's free catalog
+        # renames and rotates its models within weeks, your own logs
+        # showed a completely different set of models between two
+        # searches seconds apart, so a hardcoded list goes stale almost
+        # immediately and stops helping
         random.shuffle(free_models)
 
-        # A handful of free models are noticeably more reliable at
-        # producing clean JSON than the rest. We still want variety, so
-        # we don't remove any models, we just move these known steadier
-        # ones to the front of the line when they're available, so we
-        # reach for them before the less predictable ones
-        preferred = [
-            "meta-llama/llama-3.1-8b-instruct:free",
-            "google/gemma-2-9b-it:free",
-            "qwen/qwen-2.5-7b-instruct:free",
-        ]
-        free_models.sort(key=lambda m: 0 if m in preferred else 1)
-
         print(f"Found {len(free_models)} free models")
-        return free_models[:8]  # Try up to 8
+        # Increased from 8 to 14. Your logs show it's completely normal
+        # for several free models in a row to be rate limited at once,
+        # since they're shared across everyone using OpenRouter's free
+        # tier, not something specific to Signalwatch. A 429 response
+        # comes back almost instantly, it does not wait for the full
+        # timeout, so trying more models costs very little extra time,
+        # and gives a much better chance that at least one succeeds
+        return free_models[:14]
 
     except Exception as e:
         print("Could not fetch model list:", e)
@@ -2006,11 +2018,14 @@ Return a JSON object with exactly THREE keys: "briefing", "action", and "questio
 Return only raw JSON. No markdown. No backticks. No code fences."""
 
     # This is the single most important AI call in the whole app, it's
-    # the one that writes the actual briefing. It now gets a bigger
-    # writing budget than the default, so it has enough room to finish
-    # the briefing, the action, and all three questions without getting
-    # cut off part way through
-    ai_result = ai_call(prompt, max_tokens=1000)
+    # the one that writes the actual briefing. This was raised to 1000
+    # in an earlier fix so it wouldn't cut off mid-sentence, but asking
+    # for more output per call adds pressure on OpenRouter's shared free
+    # quota, and every search already makes several AI calls in total,
+    # this one, the agents, sometimes lead scoring, all pulling from the
+    # same allowance. 800 is a middle ground, still more breathing room
+    # than the original 600, but less pressure than 1000
+    ai_result = ai_call(prompt, max_tokens=800)
 
     # Parse AI response
     briefing   = ""
@@ -2045,9 +2060,10 @@ Return JSON with exactly three keys:
 Raw JSON only. No markdown. No backticks. Example:
 {{"briefing": "Complaints about delivery speed are rising.", "action": "Publish a delivery update on your main channels within 24 hours.", "questions": [{{"question": "Why are delivery times slipping this month?", "reason": "Repeated delays are the fastest way to lose repeat customers."}}]}}"""
 
-        # This backup call also gets a bigger writing budget, since it
-        # now has to produce three sections too, same reasoning as above
-        retry_result = ai_call(simple_prompt, max_tokens=700)
+        # Brought back down closer to the original 600, same reasoning
+        # as the main call above. This is also a shorter, simpler prompt
+        # than the main one, so it needs less room to begin with
+        retry_result = ai_call(simple_prompt, max_tokens=600)
 
         if retry_result:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
