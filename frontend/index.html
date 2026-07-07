@@ -68,6 +68,26 @@
     .mobile-btn.active { background:var(--teal-light); color:var(--teal); }
     /*key frame dot pluse animation for loading state*/
     @keyframes dotPulse { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+
+    /* Stage words for the loading line. Each word starts dim, turns
+       teal once its stage begins, and the current stage pulses gently.
+       Earlier stages stay lit (not pulsing) to show progress made. */
+    .sw-stage-word {
+      color: var(--text3);
+      opacity: 0.5;
+      transition: color 0.4s ease, opacity 0.4s ease;
+    }
+    .sw-stage-word.lit {
+      color: var(--teal);
+      opacity: 1;
+    }
+    .sw-stage-word.active {
+      animation: swWordPulse 1.1s ease-in-out infinite;
+    }
+    @keyframes swWordPulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.45; }
+    }
     /* HERO */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
     .hero { max-width:1100px; margin:0 auto; padding:64px 40px 52px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
@@ -981,12 +1001,18 @@
   <div id="swStatusLine" style="
     font-family:var(--mono);
     font-size:10px;
-    letter-spacing:2.5px;
+    letter-spacing:2px;
     text-transform:uppercase;
-    color:var(--text3);
+    display:flex;
+    justify-content:center;
+    gap:14px;
     min-height:16px;
-    transition:opacity 0.4s ease;
-  "><span id="swStatusWord">Findings</span><span id="swStatusDots" style="display:inline-block;width:18px;text-align:left;overflow:hidden;"></span></div>
+  ">
+    <span class="sw-stage-word" id="swWordQuerying">Querying</span>
+    <span class="sw-stage-word" id="swWordAnalysing">Analysing</span>
+    <span class="sw-stage-word" id="swWordSynthesizing">Synthesizing</span>
+    <span class="sw-stage-word" id="swWordFindings">Findings</span>
+  </div>
 
   <div id="swCountLine" style="display:none;"></div>
   <div id="liveProgress" style="display:none;"></div>
@@ -1940,10 +1966,6 @@
           line.setAttribute("stroke-dasharray", "3 4");
         }
       });
-      const wordEl = document.getElementById("swStatusWord");
-      const dotsEl = document.getElementById("swStatusDots");
-      if (wordEl) wordEl.textContent = "";
-      if (dotsEl) dotsEl.textContent = "";
     }
 
     // Build the hub immediately when the page loads
@@ -2045,40 +2067,55 @@
     // Status changes are driven by SSE events, not a timer.
     // Ellipsis animates only while active (querying/analyzing/synthesizing).
 
-    let swDotTimer  = null;
-    let swDotCount  = 0;
-    let swBaseWord  = "FINDINGS";
+    // ── STAGE WORDS — lit left to right as the search progresses ────────────
+    // Replaces the old single-word + animated dots status. All four
+    // stage words sit in a row; each lights up in order as its stage
+    // is reached, and the current stage pulses gently, similar to
+    // Claude's own step-by-step thinking indicator.
+    const SW_STAGES = [
+      { key: "QUERYING",     id: "swWordQuerying"     },
+      { key: "ANALYSING",    id: "swWordAnalysing"    },
+      { key: "SYNTHESIZING", id: "swWordSynthesizing" },
+      { key: "FINDINGS",     id: "swWordFindings"     }
+    ];
 
     function swSetStatus(word, animated) {
-      swBaseWord = word;
-      if (swDotTimer) { clearInterval(swDotTimer); swDotTimer = null; }
+      // "animated" is still accepted so every existing call to
+      // swSetStatus keeps working without needing to be changed —
+      // it just no longer controls dots, since there are none now
+      const stageIndex = SW_STAGES.findIndex(s => s.key === word.toUpperCase());
+      if (stageIndex === -1) return;
 
-      const wordEl = document.getElementById("swStatusWord");
-      const dotsEl = document.getElementById("swStatusDots");
-      const lineEl = document.getElementById("swStatusLine");
-      if (!wordEl || !dotsEl) return;
-
-      if (lineEl) lineEl.style.opacity = "0";
-      setTimeout(() => {
-        wordEl.textContent = word;
-        dotsEl.textContent = "";
-        if (lineEl) lineEl.style.opacity = "1";
-
-        if (animated) {
-          swDotCount = 0;
-          dotsEl.textContent = ".";
-          swDotTimer = setInterval(() => {
-            swDotCount = (swDotCount + 1) % 3;
-            // Only the dots span changes — word span never moves
-            dotsEl.textContent = ".".repeat(swDotCount + 1);
-          }, 300);
+      SW_STAGES.forEach((stage, i) => {
+        const el = document.getElementById(stage.id);
+        if (!el) return;
+        el.classList.remove("lit", "active");
+        if (i < stageIndex) {
+          // Stages already passed stay lit, but stop pulsing
+          el.classList.add("lit");
+        } else if (i === stageIndex) {
+          // The current stage is lit and gently pulses
+          el.classList.add("lit", "active");
         }
-      }, 200);
+        // Stages further along the row stay dim until their turn
+      });
     }
 
     function swStopStatus() {
-      if (swDotTimer) { clearInterval(swDotTimer); swDotTimer = null; }
-      swSetStatus("FINDINGS", false);
+      // Search finished — light every word, nothing pulses anymore
+      SW_STAGES.forEach(stage => {
+        const el = document.getElementById(stage.id);
+        if (el) { el.classList.add("lit"); el.classList.remove("active"); }
+      });
+    }
+
+    function swResetStatus() {
+      // Called at the start of a brand new search — dims every word
+      // back down so the sequence can play again from the beginning
+      SW_STAGES.forEach(stage => {
+        const el = document.getElementById(stage.id);
+        if (el) el.classList.remove("lit", "active");
+      });
     }
 
     // ── LEGACY COMPAT — swStartWords / swStopWords map to new system ─────────
@@ -2798,10 +2835,7 @@ if (loadingText) {
       swElapsedSecs  = 0;
       swStopWords();
       swResetHub();
-      const wordEl2 = document.getElementById("swStatusWord");
-      const dotsEl2 = document.getElementById("swStatusDots");
-      if (wordEl2) wordEl2.textContent = "";
-      if (dotsEl2) dotsEl2.textContent = "";
+      swResetStatus();
       if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
 
       // Hide and clear lead section on new search
