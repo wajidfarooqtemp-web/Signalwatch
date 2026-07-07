@@ -94,6 +94,11 @@ NEWS_API_KEY       = os.getenv("NEWS_API_KEY", "")
 NEWSDATA_API_KEY   = os.getenv("NEWSDATA_API_KEY", "")
 YOUTUBE_API_KEY    = os.getenv("YOUTUBE_API_KEY", "")
 DATABASE_URL       = os.getenv("DATABASE_URL", "")
+# Backup AI provider, only used when every OpenRouter free model has
+# failed. Get a free key from https://aistudio.google.com/apikey and
+# add it to Render as GEMINI_API_KEY. This runs on Google's own quota,
+# so a busy day on OpenRouter has zero effect on it.
+GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")
 
 # How many searches each person gets per day
 DAILY_LIMIT = 3
@@ -1392,6 +1397,40 @@ def strip_agent_language(text: str) -> str:
     return text.strip()
 
 
+def ai_call_gemini(prompt, max_tokens=600):
+    """
+    Backup AI provider — only used when every single OpenRouter free
+    model has already failed for this request.
+
+    Why this exists:
+    OpenRouter's free models are shared by every developer using
+    OpenRouter for free, all at once. When traffic across the whole
+    platform spikes, every free model can return 429 at the same
+    moment, even though nothing in Signalwatch changed. Google's
+    Gemini API runs on a separate quota that belongs only to our own
+    GEMINI_API_KEY, so a busy day on OpenRouter cannot affect it.
+    """
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        response = model.generate_content(
+            prompt,
+            generation_config={"max_output_tokens": max_tokens}
+        )
+        text = (response.text or "").strip()
+        text = strip_markdown(text)
+        if len(text) > 50:
+            print("Got response from Gemini fallback")
+            return text
+        return None
+    except Exception as e:
+        print(f"Gemini fallback error: {e}")
+        return None
+
+
 def ai_call(prompt, max_tokens=600):
     # Sends a prompt to the AI and returns the response text
     # Tries multiple free models in order — if one fails, tries the next
@@ -1469,7 +1508,15 @@ def ai_call(prompt, max_tokens=600):
             print(f"Error with {model}: {e}")
             continue
 
-    print("All models failed")
+    print("All models failed — trying Gemini fallback")
+    # Every OpenRouter free model failed. Before giving up completely,
+    # try Google's Gemini API directly — separate quota, unaffected by
+    # whatever is happening on OpenRouter right now
+    gemini_result = ai_call_gemini(prompt, max_tokens)
+    if gemini_result:
+        return gemini_result
+
+    print("Gemini fallback also unavailable or failed")
     return None
 
 
@@ -1747,10 +1794,24 @@ def sanitise_briefing_output(text: str) -> str:
         r'^so,?\s+let\'?s',
         r'^looking at (the|this)',
         r'^to (answer|analyse|analyze)',
+        # Added after a real leak slipped through — the model started
+        # its reasoning with a phrase none of the patterns above caught
+        r'^we need to',
+        r'^we must',
+        r'^we have to',
+        r'^let\'?s (craft|write|draft|produce)',
     ]
     for pattern in leak_starts:
         if re.match(pattern, text.strip(), re.IGNORECASE):
             return ""  # Discard entirely — caller must fall back
+
+    # Extra safety net: a real briefing, action, or 2-sentence summary is
+    # always short. If a model's reasoning leaks through, it tends to be a
+    # long paragraph working through the problem out loud, even if it
+    # doesn't happen to start with one of the phrases above. Anything
+    # this long is almost certainly leaked thinking, not a real answer
+    if len(text) > 500:
+        return ""
 
     return text
 
@@ -2035,6 +2096,10 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     if ai_result:
         briefing, action, questions = extract_briefing_and_questions(ai_result)
         briefing = sanitise_briefing_output(briefing)
+        # Run the same leak check on the action — nothing was catching
+        # a leak here before, so a stray "I need to..." could have shown
+        # up as the actual "Do this" instruction shown to the customer
+        action = sanitise_briefing_output(action)
 
     # We now also check questions here, not just action and briefing.
     # Before this change, a response missing its questions was silently
@@ -2068,6 +2133,7 @@ Raw JSON only. No markdown. No backticks. Example:
         if retry_result:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
             retry_briefing = sanitise_briefing_output(retry_briefing)
+            retry_action   = sanitise_briefing_output(retry_action)
             # Only use retry values if the original was missing
             if not briefing and retry_briefing:
                 briefing = retry_briefing
@@ -2544,6 +2610,8 @@ Be specific. Name the competitor. State what they did.
 No hedging. No dashes. Plain English."""
 
             synthesis = await asyncio.to_thread(ai_call, synthesise_prompt)
+            # Same leak check as everywhere else the AI's words reach the user
+            synthesis = sanitise_briefing_output(synthesis) if synthesis else synthesis
         else:
             synthesis = None
 
@@ -2745,6 +2813,10 @@ Sentence 2: What it means commercially for the brand or their competitors.
 Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
 
         synthesis = await asyncio.to_thread(ai_call, synthesise_prompt)
+
+        # Catch leaked reasoning before it ever reaches the screen — this
+        # was the one spot where your Groupon leak actually came from
+        synthesis = sanitise_briefing_output(synthesis) if synthesis else synthesis
 
         if not synthesis:
             synthesis = f"Agents found {len(loop_findings)} signals on {angle}."

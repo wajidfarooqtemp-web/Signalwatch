@@ -939,13 +939,15 @@
       <!-- EXAMPLE QUERY CHIPS -->
       <!-- Clicking one only fills the search box, it does not run the
            search on its own, the person still clicks Analyse themselves -->
-      <div class="example-chips-label">Not sure where to start? Try one of these</div>
-      <div class="example-chips-wrap">
-        <button class="example-chip" onclick="fillQuery('(Nike OR Adidas) AND pricing')">(Nike OR Adidas) AND pricing</button>
-        <button class="example-chip" onclick="fillQuery('(Zendesk OR Intercom) AND &quot;customer support&quot;')">(Zendesk OR Intercom) AND "customer support"</button>
-        <button class="example-chip" onclick="fillQuery('(Notion OR Coda) AND &quot;switching from&quot;')">(Notion OR Coda) AND "switching from"</button>
-        <button class="example-chip" onclick="fillQuery('(CeraVe OR Cetaphil) AND &quot;no options&quot;')">(CeraVe OR Cetaphil) AND "no options"</button>
-        <button class="example-chip" onclick="fillQuery('NATO AND &quot;rare earth&quot; AND sanctions')">NATO AND "rare earth" AND sanctions</button>
+      <div id="exampleChipsSection">
+        <div class="example-chips-label">Not sure where to start? Try one of these</div>
+        <div class="example-chips-wrap">
+          <button class="example-chip" onclick="fillQuery('(Nike OR Adidas) AND pricing')">(Nike OR Adidas) AND pricing</button>
+          <button class="example-chip" onclick="fillQuery('(Zendesk OR Intercom) AND &quot;customer support&quot;')">(Zendesk OR Intercom) AND "customer support"</button>
+          <button class="example-chip" onclick="fillQuery('(Notion OR Coda) AND &quot;switching from&quot;')">(Notion OR Coda) AND "switching from"</button>
+          <button class="example-chip" onclick="fillQuery('(CeraVe OR Cetaphil) AND &quot;no options&quot;')">(CeraVe OR Cetaphil) AND "no options"</button>
+          <button class="example-chip" onclick="fillQuery('NATO AND &quot;rare earth&quot; AND sanctions')">NATO AND "rare earth" AND sanctions</button>
+        </div>
       </div>
     </div>
     
@@ -2312,6 +2314,12 @@ async function fetchGoogleProfile(accessToken) {
       btn.textContent = "Analysing...";
       loading.style.display = "block";
       container.innerHTML = "";
+
+      // Hide the example chips once a real search starts — they've done
+      // their job of suggesting a query, and shouldn't linger once
+      // results are showing
+      const chipsSection = document.getElementById("exampleChipsSection");
+      if (chipsSection) chipsSection.style.display = "none";
       progress.innerHTML = "";
       if (signalChart) { signalChart.destroy(); signalChart = null; }
       resetAgentPanel(); // clear previous search — must come BEFORE swStartWords
