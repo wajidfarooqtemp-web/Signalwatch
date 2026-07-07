@@ -1397,6 +1397,12 @@ def strip_agent_language(text: str) -> str:
     return text.strip()
 
 
+# Tracks the last time Gemini told us its quota was exhausted. Once
+# that happens, there is no point asking again for a little while,
+# the quota resets on Google's own per-minute clock, not ours. This
+# avoids wasted time and repeated identical error logs.
+_gemini_blocked_until = 0
+
 def ai_call_gemini(prompt, max_tokens=600):
     """
     Backup AI provider — only used when every single OpenRouter free
@@ -1412,6 +1418,14 @@ def ai_call_gemini(prompt, max_tokens=600):
     """
     if not GEMINI_API_KEY:
         return None
+
+    import time
+    global _gemini_blocked_until
+    if time.time() < _gemini_blocked_until:
+        # Still in cooldown from a recent quota error — skip the call
+        # entirely rather than making a request we already expect to fail
+        return None
+
     try:
         import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
@@ -1428,10 +1442,23 @@ def ai_call_gemini(prompt, max_tokens=600):
         return None
     except Exception as e:
         print(f"Gemini fallback error: {e}")
+        # If this looks like a quota / rate limit error, pause trying
+        # Gemini again for 60 seconds so we're not repeatedly hitting
+        # a wall we already know is there
+        if "429" in str(e) or "quota" in str(e).lower():
+            _gemini_blocked_until = time.time() + 60
+            print("Gemini fallback: pausing for 60 seconds after quota error")
         return None
 
 
-def ai_call(prompt, max_tokens=600):
+def ai_call(prompt, max_tokens=600, allow_gemini_fallback=False):
+    # allow_gemini_fallback defaults to False on purpose. Gemini's free
+    # tier only allows a handful of requests per minute. If every one of
+    # the many ai_call() invocations in a single search (Chief of Staff,
+    # competitor lookup, lead scoring) all tried Gemini at once, they'd
+    # exhaust that tiny allowance in seconds. Only the main customer
+    # facing briefing passes allow_gemini_fallback=True, since that's
+    # the one thing every paying customer actually sees.
     # Sends a prompt to the AI and returns the response text
     # Tries multiple free models in order — if one fails, tries the next
     #
@@ -1508,10 +1535,15 @@ def ai_call(prompt, max_tokens=600):
             print(f"Error with {model}: {e}")
             continue
 
-    print("All models failed — trying Gemini fallback")
-    # Every OpenRouter free model failed. Before giving up completely,
-    # try Google's Gemini API directly — separate quota, unaffected by
-    # whatever is happening on OpenRouter right now
+    print("All models failed")
+
+    if not allow_gemini_fallback:
+        # Background agents (Chief of Staff, competitor lookup, lead
+        # scoring) land here — they simply return nothing this round
+        # rather than competing for Gemini's very limited free quota
+        return None
+
+    print("Trying Gemini fallback")
     gemini_result = ai_call_gemini(prompt, max_tokens)
     if gemini_result:
         return gemini_result
@@ -2086,7 +2118,7 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     # this one, the agents, sometimes lead scoring, all pulling from the
     # same allowance. 800 is a middle ground, still more breathing room
     # than the original 600, but less pressure than 1000
-    ai_result = ai_call(prompt, max_tokens=800)
+    ai_result = ai_call(prompt, max_tokens=800, allow_gemini_fallback=True)
 
     # Parse AI response
     briefing   = ""
@@ -2128,7 +2160,7 @@ Raw JSON only. No markdown. No backticks. Example:
         # Brought back down closer to the original 600, same reasoning
         # as the main call above. This is also a shorter, simpler prompt
         # than the main one, so it needs less room to begin with
-        retry_result = ai_call(simple_prompt, max_tokens=600)
+        retry_result = ai_call(simple_prompt, max_tokens=600, allow_gemini_fallback=True)
 
         if retry_result:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
