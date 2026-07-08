@@ -2891,28 +2891,23 @@ if (loadingText) {
       }
 
       else if (phase === "waiting") {
-        // Show a live countdown so the user knows exactly when the next agent starts
-        // msg.wait_seconds comes from the backend — currently 45
+        // Currently unreachable with only one round running — kept
+        // here with corrected wording in case more rounds are ever
+        // added back in future
         const waitSecs = msg.wait_seconds || 45;
-        const nextAgent = (msg.loop || 0) + 1;
         let remaining = waitSecs;
 
-        // Clear any previous countdown interval so they don't stack up
-        // window.agentCountdown stores the interval ID so we can cancel it
         if (window.agentCountdown) clearInterval(window.agentCountdown);
 
-        // Update the status text immediately before the interval fires
-        status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete — Agent ${nextAgent} starts in <strong>${remaining}s</strong>`;
+        status.innerHTML = `<span class="agent-dot"></span>Signal Agent round complete — next round starts in <strong>${remaining}s</strong>`;
 
-        // setInterval fires every 1000ms (1 second) and counts down
-        // When it reaches 0 it clears itself
         window.agentCountdown = setInterval(() => {
           remaining -= 1;
           if (remaining <= 0) {
             clearInterval(window.agentCountdown);
-            status.innerHTML = `<span class="agent-dot"></span>Agent ${nextAgent} starting...`;
+            status.innerHTML = `<span class="agent-dot"></span>Next round starting...`;
           } else {
-            status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete — Agent ${nextAgent} starts in <strong>${remaining}s</strong>`;
+            status.innerHTML = `<span class="agent-dot"></span>Signal Agent round complete — next round starts in <strong>${remaining}s</strong>`;
           }
         }, 1000);
       }
@@ -2931,7 +2926,7 @@ if (loadingText) {
         let html = `<div class="agent-finding">
           ${escapeHtml(msg.message || "")}
           <div class="agent-finding-meta">
-            Agent ${msg.loop || "?"} 
+            Signal Agent
             · ${msg.total_found || 0} signals 
             · ${escapeHtml(msg.angle || "signal analysis")}
           </div>
@@ -2968,18 +2963,16 @@ if (loadingText) {
         // Prepend — newest finding appears at the top
         findings.insertBefore(card, findings.firstChild);
 
-        // Update status to show this agent completed
-        const next = (msg.loop || 0) + 1;
-        if (next <= 3) {
-          status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete — Agent ${next} starting...`;
-        } else {
-          status.innerHTML = `<span class="agent-dot"></span>Agent ${msg.loop} complete`;
-        }
+        // Only one round runs now, so there is no "next agent" to
+        // announce — the old text was actually misleading here, since
+        // it claimed a second agent was starting when nothing further
+        // would actually run
+        status.innerHTML = `<span class="agent-dot"></span>Signal Agent complete`;
       }
 
       else if (phase === "finished") {
-        // All agents done — remove the pulsing dot, show completion
-        status.innerHTML  = `✓ ${escapeHtml(msg.message || "All agents complete")}`;
+        // Signal Agent round done — remove the pulsing dot, show completion
+        status.innerHTML  = `✓ ${escapeHtml(msg.message || "Signal Agent complete")}`;
         status.style.color = "var(--teal)";
       }
     }

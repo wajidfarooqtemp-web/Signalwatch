@@ -2792,7 +2792,12 @@ No markdown. No backticks. Raw JSON only."""
         # strip_agent_language removes any technical words the AI snuck in
         clean_angle = strip_agent_language(angle)
         clean_why   = strip_agent_language(why)
-        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Agent {loop_count} — {clean_angle}', 'why': clean_why, 'loop': loop_count})}\n\n"
+        # No longer labelled "Agent N". With only one round running now,
+        # a number here is confusing rather than informative. "Signal
+        # Agent" matches the naming style already used for Competitor
+        # Intelligence, without implying there are agents 1 and 2 that
+        # ran before it.
+        yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Signal Agent — {clean_angle}', 'why': clean_why, 'loop': loop_count})}\n\n"
 
         # ── Step 2: Run all three specialists simultaneously ──────────────────
         # asyncio.gather runs all three at the same time
@@ -2882,7 +2887,7 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
             # Send the exact wait seconds so the frontend can show a live countdown
             # Send a ping every 10 seconds during the 30 second wait (I have changed the timings)
             # This keeps the SSE connection alive on Render's free tier
-            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Agent {loop_count} complete. Agent {next_num} starting shortly...', 'loop': loop_count, 'wait_seconds': 30})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'waiting', 'message': f'Signal Agent round {loop_count} complete. Next round starting shortly...', 'loop': loop_count, 'wait_seconds': 30})}\n\n"
             for _ in range(3):
                 await asyncio.sleep(10)
                 yield f"data: {json.dumps({'type': 'ping'})}\n\n"
@@ -2896,7 +2901,7 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
     # 3. It has the full existing_results context from all three loops
     # 4. Its own SSE type "agent_4" means the frontend handles it separately
 
-    yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'investigating', 'message': 'Agent 4 — tracking what competitors are doing right now'})}\n\n"
+    yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'investigating', 'message': 'Competitor Intelligence — tracking what competitors are doing right now'})}\n\n"
 
     try:
         # Run Agent 4 and a keepalive ping loop simultaneously
@@ -2952,7 +2957,7 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
         yield f"data: {json.dumps({'type': 'agent_4', 'phase': 'none', 'message': 'Competitor scan unavailable.'})}\n\n"
 
     # Now send the finished event
-    yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'finished', 'message': f'All agents complete. {len(all_agent_findings)} additional signals found.', 'total_findings': len(all_agent_findings)})}\n\n"
+    yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'finished', 'message': f'Signal Agent complete. {len(all_agent_findings)} additional signals found.', 'total_findings': len(all_agent_findings)})}\n\n"
 
 # ─── LEAD GENERATION AGENT ───────────────────────────────────────────────────
 # Triggered when user clicks "Find Leads" button on the frontend.
