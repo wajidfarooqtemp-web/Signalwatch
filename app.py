@@ -833,19 +833,18 @@ def fetch_firecrawl(query):
     """
     Searches the live web via Firecrawl for editorial-quality mentions,
     proper news coverage from outlets like BBC, Reuters, or trade press,
-    rather than just forums and social posts. This is the "quality
-    mentions" source, deliberately kept separate from your main 13
-    RSS/API sources.
+    rather than just forums and social posts.
 
-    COST NOTE — read this before raising the limit below:
-    Free tier is 1,000 credits/month, resetting monthly, no card
-    needed. Search costs roughly 2 credits per 10 results, so limit=5
-    below costs about 1 credit per call. This function is only called
-    from signal_agent, which runs once per search, specifically to
-    keep monthly usage predictable. Check real usage anytime at
-    https://firecrawl.dev/app before turning this up.
+    COST NOTE — this now runs on every main search, not just inside
+    Signal Agent, since editorial-quality mentions are one of
+    Signalwatch's selling points. Free tier is 1,000 credits/month,
+    resetting monthly, no card needed. A 5-result search costs roughly
+    1 credit, so at limit=5 below, 1,000 searches uses the full monthly
+    allowance. Check real usage anytime at https://firecrawl.dev/app —
+    if you're getting close to the cap, lower "limit" below.
     """
     if not FIRECRAWL_API_KEY:
+        print("Firecrawl: skipped, no FIRECRAWL_API_KEY set")
         return []
 
     results = []
@@ -1475,26 +1474,23 @@ def strip_agent_language(text: str) -> str:
 # repeated identical error logs.
 _groq_blocked_until = 0
 
-def ai_call_groq(prompt, max_tokens=600):
+def ai_call_groq(prompt, max_tokens=600, label="ai_call"):
     """
     Backup AI provider — only used when every single OpenRouter free
     model has already failed for this request.
 
-    Why Groq instead of Gemini:
-    Groq's free tier allows thousands of requests per day per model,
-    with no credit card required. It also uses a plain, standard chat
-    API (the same shape as OpenAI's), so no extra Python library is
-    needed, just the requests library Signalwatch already uses
-    everywhere else.
+    label is purely for the Render logs, so you can tell which part of
+    Signalwatch (the briefing, Signal Agent, Competitor Intelligence)
+    is the one actually reaching Groq on any given search.
     """
     if not GROQ_API_KEY:
+        print(f"[{label}] Groq skipped — no GROQ_API_KEY set")
         return None
 
     import time
     global _groq_blocked_until
     if time.time() < _groq_blocked_until:
-        # Still in cooldown from a recent quota error — skip the call
-        # entirely rather than making a request we already expect to fail
+        print(f"[{label}] Groq skipped — still in cooldown from a recent rate limit")
         return None
 
     try:
@@ -1513,14 +1509,12 @@ def ai_call_groq(prompt, max_tokens=600):
         )
 
         if res.status_code == 429:
-            # Pause future attempts for 60 seconds rather than hitting
-            # the same wall again on the very next call
             _groq_blocked_until = time.time() + 60
-            print("Groq fallback: rate limited, pausing for 60 seconds")
+            print(f"[{label}] Groq rate limited, pausing Groq for 60 seconds")
             return None
 
         if res.status_code != 200:
-            print(f"Groq fallback: status {res.status_code}")
+            print(f"[{label}] Groq returned status {res.status_code}")
             return None
 
         data = res.json()
@@ -1528,12 +1522,12 @@ def ai_call_groq(prompt, max_tokens=600):
         text = strip_markdown(text.strip())
 
         if len(text) > 50:
-            print("Got response from Groq fallback")
+            print(f"[{label}] Got a response from Groq")
             return text
         return None
 
     except Exception as e:
-        print(f"Groq fallback error: {e}")
+        print(f"[{label}] Groq error: {e}")
         return None
 
 
@@ -1541,21 +1535,21 @@ def ai_call_groq(prompt, max_tokens=600):
 # limited, don't hammer it again immediately, wait for its own clock
 _cerebras_blocked_until = 0
 
-def ai_call_cerebras(prompt, max_tokens=600):
+def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
     """
     Third AI provider — only reached if OpenRouter's free models AND
-    Groq have both already failed for this request. Cerebras's free
-    tier is 1 million tokens a day, resets daily, no card needed, and
-    uses the same OpenAI-style API shape as Groq, so this function is
-    almost identical to ai_call_groq on purpose, easier to maintain
-    when both look the same.
+    Groq have both already failed for this request. Same OpenAI-style
+    API shape as Groq, so this function stays deliberately similar to
+    ai_call_groq. label works the same way, purely for Render logs.
     """
     if not CEREBRAS_API_KEY:
+        print(f"[{label}] Cerebras skipped — no CEREBRAS_API_KEY set")
         return None
 
     import time
     global _cerebras_blocked_until
     if time.time() < _cerebras_blocked_until:
+        print(f"[{label}] Cerebras skipped — still in cooldown from a recent rate limit")
         return None
 
     try:
@@ -1575,11 +1569,11 @@ def ai_call_cerebras(prompt, max_tokens=600):
 
         if res.status_code == 429:
             _cerebras_blocked_until = time.time() + 60
-            print("Cerebras fallback: rate limited, pausing for 60 seconds")
+            print(f"[{label}] Cerebras rate limited, pausing Cerebras for 60 seconds")
             return None
 
         if res.status_code != 200:
-            print(f"Cerebras fallback: status {res.status_code}")
+            print(f"[{label}] Cerebras returned status {res.status_code}")
             return None
 
         data = res.json()
@@ -1587,38 +1581,27 @@ def ai_call_cerebras(prompt, max_tokens=600):
         text = strip_markdown(text.strip())
 
         if len(text) > 50:
-            print("Got response from Cerebras fallback")
+            print(f"[{label}] Got a response from Cerebras")
             return text
         return None
 
     except Exception as e:
-        print(f"Cerebras fallback error: {e}")
+        print(f"[{label}] Cerebras error: {e}")
         return None
 
 
-def ai_call(prompt, max_tokens=600, allow_backup_fallback=False):
-    # allow_backup_fallback defaults to False on purpose. Even Groq's
-    # generous free tier has a per-minute limit. If every ai_call() in
-    # a single search (Chief of Staff, competitor lookup, lead scoring)
-    # all tried the backup at once, they could still exhaust it. Only
-    # the main customer facing briefing passes allow_backup_fallback=True,
-    # since that's the one thing every paying customer actually sees.
-    # Sends a prompt to the AI and returns the response text
-    # Tries multiple free models in order — if one fails, tries the next
-    #
-    # max_tokens controls how much the AI is allowed to write back.
-    # This used to always be fixed at 600, which was too little for the
-    # main briefing prompt, since that prompt asks for a briefing, an
-    # action, AND three questions all in one response. Running out of
-    # room mid-way through writing broke the JSON, which triggered a
-    # fallback to a much shorter, blander response. Callers that need
-    # more space now pass a bigger number in.
+def ai_call(prompt, max_tokens=600, allow_backup_fallback=False, label="ai_call"):
+    # label is purely for the Render logs. Every AI call in Signalwatch
+    # used to print identical, unlabelled lines, which made it
+    # impossible to tell whether a "429" you were looking at came from
+    # the briefing, Signal Agent, or Competitor Intelligence. Now every
+    # line is tagged, e.g. "[signal_agent_angle] Trying 8 models".
     models = get_free_models()
-    print(f"Trying {len(models)} models")
+    print(f"[{label}] Trying {len(models)} OpenRouter models")
 
     for model in models:
         try:
-            print(f"Trying: {model}")
+            print(f"[{label}] Trying: {model}")
             res = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -1635,25 +1618,21 @@ def ai_call(prompt, max_tokens=600, allow_backup_fallback=False):
                 timeout=40
             )
 
-            print(f"Status {res.status_code} from {model}")
+            print(f"[{label}] Status {res.status_code} from {model}")
 
-            # 429 = rate limited — wait briefly then try next model
             if res.status_code == 429:
                 import time
                 time.sleep(1)
                 continue
 
-            # 502/503 = server error — try next model immediately
             if res.status_code in [502, 503]:
                 continue
 
-            # 400 = bad request for this model — skip it
             if res.status_code == 400:
                 continue
 
-            # 401 = bad API key — no point trying other models
             if res.status_code == 401:
-                print("Bad API key — stopping")
+                print(f"[{label}] Bad OpenRouter API key — stopping")
                 return None
 
             data = res.json()
@@ -1661,7 +1640,6 @@ def ai_call(prompt, max_tokens=600, allow_backup_fallback=False):
             if "choices" not in data:
                 continue
 
-            # content can be a string or a list of objects depending on the model
             content = data["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
@@ -1670,34 +1648,31 @@ def ai_call(prompt, max_tokens=600, allow_backup_fallback=False):
 
             text = strip_markdown(text.strip())
 
-            # Only accept responses longer than 50 characters
             if len(text) > 50:
-                print(f"Got response from {model}")
+                print(f"[{label}] Got response from {model}")
                 return text
 
         except Exception as e:
-            print(f"Error with {model}: {e}")
+            print(f"[{label}] Error with {model}: {e}")
             continue
 
-    print("All models failed")
+    print(f"[{label}] All OpenRouter models failed")
 
     if not allow_backup_fallback:
-        # Background agents (Chief of Staff, competitor lookup, lead
-        # scoring) land here — they simply return nothing this round
-        # rather than competing for the backup provider's quota
+        print(f"[{label}] No backup fallback enabled for this call — returning empty")
         return None
 
-    print("Trying Groq fallback")
-    groq_result = ai_call_groq(prompt, max_tokens)
+    print(f"[{label}] Trying Groq fallback")
+    groq_result = ai_call_groq(prompt, max_tokens, label=label)
     if groq_result:
         return groq_result
 
-    print("Groq unavailable, trying Cerebras fallback")
-    cerebras_result = ai_call_cerebras(prompt, max_tokens)
+    print(f"[{label}] Groq unavailable, trying Cerebras fallback")
+    cerebras_result = ai_call_cerebras(prompt, max_tokens, label=label)
     if cerebras_result:
         return cerebras_result
 
-    print("All AI providers exhausted for this call")
+    print(f"[{label}] All AI providers exhausted for this call")
     return None
 
 
@@ -2267,7 +2242,7 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     # this one, the agents, sometimes lead scoring, all pulling from the
     # same allowance. 800 is a middle ground, still more breathing room
     # than the original 600, but less pressure than 1000
-    ai_result = ai_call(prompt, max_tokens=800, allow_backup_fallback=True)
+    ai_result = ai_call(prompt, max_tokens=800, allow_backup_fallback=True, label="briefing")
 
     # Parse AI response
     briefing   = ""
@@ -2309,7 +2284,7 @@ Raw JSON only. No markdown. No backticks. Example:
         # Brought back down closer to the original 600, same reasoning
         # as the main call above. This is also a shorter, simpler prompt
         # than the main one, so it needs less room to begin with
-        retry_result = ai_call(simple_prompt, max_tokens=600, allow_backup_fallback=True)
+        retry_result = ai_call(simple_prompt, max_tokens=600, allow_backup_fallback=True, label="briefing_retry")
 
         if retry_result:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
@@ -2724,7 +2699,11 @@ Name exactly 2 competitors. Return JSON only:
 
 No markdown. No explanation. Raw JSON only."""
 
-        competitor_result = await asyncio.to_thread(ai_call, competitor_prompt)
+        # Without a backup here, when OpenRouter is saturated this call
+        # returns nothing, no competitors get identified, and the panel
+        # shows "no significant competitor activity found" even though
+        # nothing was actually searched for
+        competitor_result = await asyncio.to_thread(ai_call, competitor_prompt, allow_backup_fallback=True, label="competitor_identify")
 
         competitors = []
         if competitor_result:
@@ -2796,7 +2775,7 @@ that the brand being researched needs to know about.
 Be specific. Name the competitor. State what they did.
 No hedging. No dashes. Plain English."""
 
-            synthesis = await asyncio.to_thread(ai_call, synthesise_prompt)
+            synthesis = await asyncio.to_thread(ai_call, synthesise_prompt, allow_backup_fallback=True, label="competitor_synthesis")
             # Same leak check as everywhere else the AI's words reach the user
             synthesis = sanitise_briefing_output(synthesis) if synthesis else synthesis
         else:
@@ -2886,7 +2865,12 @@ Return JSON only:
 
 No markdown. No backticks. Raw JSON only."""
 
-        think_result = await asyncio.to_thread(ai_call, think_prompt)
+        # This step decides what Signal Agent should investigate. Without
+        # a backup, when OpenRouter is fully saturated (as your logs
+        # show, every model returning 429), this call returns nothing,
+        # and Signal Agent silently skips its entire round, which is
+        # exactly why it was showing "0 additional signals found"
+        think_result = await asyncio.to_thread(ai_call, think_prompt, allow_backup_fallback=True, label="signal_agent_angle")
 
         if not think_result:
             # AI failed — skip this loop
@@ -3004,7 +2988,7 @@ Sentence 2: What it means commercially for the brand or their competitors.
 
 Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
 
-        synthesis = await asyncio.to_thread(ai_call, synthesise_prompt)
+        synthesis = await asyncio.to_thread(ai_call, synthesise_prompt, allow_backup_fallback=True, label="signal_agent_synthesis")
 
         # Catch leaked reasoning before it ever reaches the screen — this
         # was the one spot where your Groupon leak actually came from
@@ -3115,7 +3099,7 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
 # Cost: one AI call per result scored. We limit to top 8 results maximum.
 # Free models handle this fine.
 
-async def score_lead(mention_title: str, mention_source: str, query: str) -> dict:
+async def score_lead(mention_title: str, mention_source: str, mention_url: str, query: str) -> dict:
     """
     Scores one mention for buying intent using your lead generation prompt.
     Returns a dict with intent_score, pain, pitch, and the original mention.
@@ -3149,7 +3133,14 @@ Return JSON only:
 
 No markdown. No backticks. Raw JSON only."""
 
-    result = await asyncio.to_thread(ai_call, prompt)
+    # Lead scoring can fire up to 8 of these at once when someone clicks
+    # Find Leads. Without a backup fallback, an OpenRouter outage meant
+    # every single one silently returned nothing, which is exactly what
+    # your logs showed: "1 mentions scored, 0 leads found". Since a
+    # working Find Leads button is core to what Pro customers are
+    # paying for, this now gets the same Groq/Cerebras safety net as
+    # everything else.
+    result = await asyncio.to_thread(ai_call, prompt, allow_backup_fallback=True, label="lead_scoring")
     if not result:
         return None
 
@@ -3171,6 +3162,7 @@ No markdown. No backticks. Raw JSON only."""
             "pitch":        parsed.get("pitch", ""),
             "mention":      mention_title,
             "source":       mention_source,
+            "url":          mention_url,
             "score_label":  ["", "", "", "Considering", "Ready to buy", "Actively seeking"][min(score, 5)]
         }
 
@@ -3250,7 +3242,7 @@ async def find_leads(query: str, request: Request, token: str = ""):
         # asyncio.gather runs all scoring calls at the same time
         # Total time = slowest single AI call, not sum of all calls
         score_tasks = [
-            score_lead(r["title"], r["source"], query)
+            score_lead(r["title"], r["source"], r.get("url", ""), query)
             for r in ranked
         ]
         scored = await asyncio.gather(*score_tasks, return_exceptions=True)
@@ -3893,6 +3885,14 @@ async def search_stream(query: str, request: Request, token: str = ""):
         bingnews = await asyncio.to_thread(fetch_bing_news, query)
         all_posts += bingnews; sources_counts["bingnews"] = len(bingnews)
         yield f"data: {json.dumps({'type': 'progress', 'source': 'bingnews', 'count': len(bingnews), 'label': 'Bing News'})}\n\n"
+
+        # Firecrawl now runs on every main search, not just inside Signal
+        # Agent, since editorial-quality mentions are one of Signalwatch's
+        # selling points. Uses part of the 1,000 free credits/month —
+        # check usage at https://firecrawl.dev/app if search volume grows
+        firecrawl = await asyncio.to_thread(fetch_firecrawl, query)
+        all_posts += firecrawl; sources_counts["firecrawl"] = len(firecrawl)
+        yield f"data: {json.dumps({'type': 'progress', 'source': 'firecrawl', 'count': len(firecrawl), 'label': 'Editorial Coverage'})}\n\n"
 
         yield f"data: {json.dumps({'type': 'analysing', 'message': 'Generating intelligence briefing'})}\n\n"
 
