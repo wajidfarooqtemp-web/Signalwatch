@@ -101,6 +101,20 @@ DATABASE_URL       = os.getenv("DATABASE_URL", "")
 # https://console.groq.com (no credit card needed) and add it to
 # Render as GROQ_API_KEY.
 GROQ_API_KEY       = os.getenv("GROQ_API_KEY", "")
+# Firecrawl — used only inside signal_agent for editorial-quality
+# mentions (proper news outlets, not just forums). Free tier is 1,000
+# credits a month, resetting monthly, no card needed. A 5-result search
+# costs about 1 credit, so this is genuinely usable at Signalwatch's
+# current volume, but it is not unlimited. Deliberately NOT wired into
+# the main 14-source pipeline, only into the background agent, which
+# runs once per search now, to keep monthly usage well under the cap.
+FIRECRAWL_API_KEY  = os.getenv("FIRECRAWL_API_KEY", "")
+
+# Cerebras — second AI fallback, behind Groq. Free tier is 1 million
+# tokens a day, resets daily, no card needed, OpenAI-compatible API.
+# If OpenRouter's free models AND Groq both fail in the same request,
+# this is the last line of defence before the briefing goes empty.
+CEREBRAS_API_KEY   = os.getenv("CEREBRAS_API_KEY", "")
 
 # How many searches each person gets per day
 DAILY_LIMIT = 3
@@ -815,6 +829,64 @@ def fetch_bluesky(query):
         print(f"Bluesky error: {e}")
         return []
 
+def fetch_firecrawl(query):
+    """
+    Searches the live web via Firecrawl for editorial-quality mentions,
+    proper news coverage from outlets like BBC, Reuters, or trade press,
+    rather than just forums and social posts. This is the "quality
+    mentions" source, deliberately kept separate from your main 13
+    RSS/API sources.
+
+    COST NOTE — read this before raising the limit below:
+    Free tier is 1,000 credits/month, resetting monthly, no card
+    needed. Search costs roughly 2 credits per 10 results, so limit=5
+    below costs about 1 credit per call. This function is only called
+    from signal_agent, which runs once per search, specifically to
+    keep monthly usage predictable. Check real usage anytime at
+    https://firecrawl.dev/app before turning this up.
+    """
+    if not FIRECRAWL_API_KEY:
+        return []
+
+    results = []
+    try:
+        res = requests.post(
+            "https://api.firecrawl.dev/v1/search",
+            headers={
+                "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
+                "Content-Type":  "application/json"
+            },
+            json={
+                "query": query,
+                "limit": 5  # Kept small on purpose — every result costs credits
+            },
+            timeout=20
+        )
+
+        if res.status_code != 200:
+            print(f"Firecrawl: status {res.status_code}")
+            return []
+
+        data = res.json()
+        for item in data.get("data", [])[:5]:
+            title = item.get("title", "")
+            url   = item.get("url", "")
+            if not title:
+                continue
+            results.append({
+                "title":   title,
+                "source":  "firecrawl",
+                "url":     url,
+                "created": 0  # Firecrawl search results don't reliably include a date
+            })
+
+        print(f"Firecrawl: {len(results)} results")
+        return results
+
+    except Exception as e:
+        print(f"Firecrawl error: {e}")
+        return []
+
 def fetch_trustpilot(query):
     # Fetches customer reviews from Trustpilot
     # Trustpilot is a major review platform — reviews are high-quality signal
@@ -1465,6 +1537,65 @@ def ai_call_groq(prompt, max_tokens=600):
         return None
 
 
+# Same cooldown pattern as Groq — if Cerebras tells us it's rate
+# limited, don't hammer it again immediately, wait for its own clock
+_cerebras_blocked_until = 0
+
+def ai_call_cerebras(prompt, max_tokens=600):
+    """
+    Third AI provider — only reached if OpenRouter's free models AND
+    Groq have both already failed for this request. Cerebras's free
+    tier is 1 million tokens a day, resets daily, no card needed, and
+    uses the same OpenAI-style API shape as Groq, so this function is
+    almost identical to ai_call_groq on purpose, easier to maintain
+    when both look the same.
+    """
+    if not CEREBRAS_API_KEY:
+        return None
+
+    import time
+    global _cerebras_blocked_until
+    if time.time() < _cerebras_blocked_until:
+        return None
+
+    try:
+        res = requests.post(
+            "https://api.cerebras.ai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {CEREBRAS_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens
+            },
+            timeout=30
+        )
+
+        if res.status_code == 429:
+            _cerebras_blocked_until = time.time() + 60
+            print("Cerebras fallback: rate limited, pausing for 60 seconds")
+            return None
+
+        if res.status_code != 200:
+            print(f"Cerebras fallback: status {res.status_code}")
+            return None
+
+        data = res.json()
+        text = data["choices"][0]["message"]["content"] or ""
+        text = strip_markdown(text.strip())
+
+        if len(text) > 50:
+            print("Got response from Cerebras fallback")
+            return text
+        return None
+
+    except Exception as e:
+        print(f"Cerebras fallback error: {e}")
+        return None
+
+
 def ai_call(prompt, max_tokens=600, allow_backup_fallback=False):
     # allow_backup_fallback defaults to False on purpose. Even Groq's
     # generous free tier has a per-minute limit. If every ai_call() in
@@ -1561,7 +1692,12 @@ def ai_call(prompt, max_tokens=600, allow_backup_fallback=False):
     if groq_result:
         return groq_result
 
-    print("Groq fallback also unavailable or failed")
+    print("Groq unavailable, trying Cerebras fallback")
+    cerebras_result = ai_call_cerebras(prompt, max_tokens)
+    if cerebras_result:
+        return cerebras_result
+
+    print("All AI providers exhausted for this call")
     return None
 
 
@@ -2280,6 +2416,12 @@ async def signal_agent(specific_query: str, original_query: str) -> dict:
 
         news_results = await asyncio.to_thread(fetch_google_news, specific_query)
         results += news_results[:5]
+
+        # Firecrawl adds proper editorial coverage on top of Google News,
+        # this is what earlier rounds occasionally caught by chance
+        # through Google's aggregation, this makes it deliberate instead
+        firecrawl_results = await asyncio.to_thread(fetch_firecrawl, specific_query)
+        results += firecrawl_results[:5]
 
         # Rank using your existing scoring function
         ranked = await asyncio.to_thread(filter_and_rank, results, specific_query)
