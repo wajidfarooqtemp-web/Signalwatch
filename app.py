@@ -1403,12 +1403,18 @@ def get_free_models():
         random.shuffle(free_models)
 
         print(f"Found {len(free_models)} free models")
-        # Brought back down from 14 to 8. 14 meant every single ai_call()
-        # could fire off up to 14 attempts at the shared free pool, and
-        # a single search makes several ai_call()s. That volume was
-        # very likely what tipped things from "mostly working" into
-        # "mostly 429s" — 8 is what was running reliably before
-        return free_models[:8]  # Try up to 8
+        # CORRECTED: trying more models does NOT help, and actively
+        # hurts. OpenRouter's free tier caps you at 50 requests per day
+        # total (1,000/day if you've ever bought $10 credit), and every
+        # 429 still counts against that same daily number. Trying 8+
+        # models per call, multiplied by several calls per search, can
+        # exhaust your entire day's allowance in one or two searches.
+        # Once that happens, EVERY model 429s for the rest of the day,
+        # regardless of how many you try. Fewer attempts per call
+        # preserves more of the daily budget for the calls that matter
+        # most (the main briefing), and lets the Groq/Cerebras/Mistral
+        # fallback chain, each on its own separate quota, take over sooner.
+        return free_models[:5]  # Try up to 5, then move to the fallback chain
 
     except Exception as e:
         print("Could not fetch model list:", e)
@@ -1568,7 +1574,13 @@ def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.3-70b",
+                # Cerebras's free model catalog changes without notice —
+                # llama-3.3-70b had been quietly retired, which is why
+                # you were seeing a 404. gpt-oss-120b is currently active
+                # on both Cerebras and OpenRouter's free tiers. If this
+                # ever 404s again, check console.cerebras.ai for the
+                # current free model list and swap the name here.
+                "model": "gpt-oss-120b",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_tokens
             },
@@ -1578,6 +1590,10 @@ def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
         if res.status_code == 429:
             _cerebras_blocked_until = time.time() + 60
             print(f"[{label}] Cerebras rate limited, pausing Cerebras for 60 seconds")
+            return None
+
+        if res.status_code == 404:
+            print(f"[{label}] Cerebras: model not found (catalog likely changed) — check console.cerebras.ai for current model names")
             return None
 
         if res.status_code != 200:
@@ -1685,9 +1701,28 @@ def ai_call(prompt, max_tokens=600, allow_backup_fallback=False, label="ai_call"
 
             print(f"[{label}] Status {res.status_code} from {model}")
 
+            # 429 = rate limited. OpenRouter sometimes sends a
+            # Retry-After header telling us how long to wait. A short
+            # value usually means a brief per-model traffic spike, worth
+            # trying the next model. A long value almost always means
+            # the day's 50 (or 1,000) request allowance is used up,
+            # in which case trying more models just burns more of
+            # tomorrow's quota for nothing — we stop immediately and
+            # let the Groq/Cerebras/Mistral fallback chain take over.
             if res.status_code == 429:
                 import time
-                time.sleep(1)
+                retry_after = res.headers.get("Retry-After")
+                if retry_after:
+                    try:
+                        wait_secs = float(retry_after)
+                    except ValueError:
+                        wait_secs = 1
+                    if wait_secs > 5:
+                        print(f"[{label}] OpenRouter Retry-After={wait_secs}s — likely daily quota used up, skipping remaining models")
+                        break
+                    time.sleep(wait_secs)
+                else:
+                    time.sleep(1)
                 continue
 
             if res.status_code in [502, 503]:
@@ -3174,7 +3209,7 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
 # Cost: one AI call per result scored. We limit to top 8 results maximum.
 # Free models handle this fine.
 
-async def score_lead(mention_title: str, mention_source: str, mention_url: str, query: str) -> dict:
+async def score_lead(mention_title: str, mention_source: str, mention_url: str, query: str, call_number: int = 0) -> dict:
     """
     Scores one mention for buying intent using your lead generation prompt.
     Returns a dict with intent_score, pain, pitch, and the original mention.
@@ -3215,7 +3250,7 @@ No markdown. No backticks. Raw JSON only."""
     # working Find Leads button is core to what Pro customers are
     # paying for, this now gets the same Groq/Cerebras safety net as
     # everything else.
-    result = await asyncio.to_thread(ai_call, prompt, allow_backup_fallback=True, label="lead_scoring")
+    result = await asyncio.to_thread(ai_call, prompt, allow_backup_fallback=True, label=f"lead_scoring_{call_number}")
     if not result:
         return None
 
@@ -3316,9 +3351,15 @@ async def find_leads(query: str, request: Request, token: str = ""):
         # Score each mention for buying intent concurrently
         # asyncio.gather runs all scoring calls at the same time
         # Total time = slowest single AI call, not sum of all calls
+        # Each of these runs concurrently, and until now they all shared
+        # the identical log label "[lead_scoring]", making it impossible
+        # to tell which concurrent call did what in the logs. Giving each
+        # one a number (lead_scoring_1, lead_scoring_2, etc.) means you
+        # can now follow one specific call's full story from start to
+        # finish, including whether it reached Groq, Cerebras, or Mistral.
         score_tasks = [
-            score_lead(r["title"], r["source"], r.get("url", ""), query)
-            for r in ranked
+            score_lead(r["title"], r["source"], r.get("url", ""), query, call_number=i+1)
+            for i, r in enumerate(ranked)
         ]
         scored = await asyncio.gather(*score_tasks, return_exceptions=True)
 
