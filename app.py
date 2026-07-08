@@ -95,10 +95,12 @@ NEWSDATA_API_KEY   = os.getenv("NEWSDATA_API_KEY", "")
 YOUTUBE_API_KEY    = os.getenv("YOUTUBE_API_KEY", "")
 DATABASE_URL       = os.getenv("DATABASE_URL", "")
 # Backup AI provider, only used when every OpenRouter free model has
-# failed. Get a free key from https://aistudio.google.com/apikey and
-# add it to Render as GEMINI_API_KEY. This runs on Google's own quota,
-# so a busy day on OpenRouter has zero effect on it.
-GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")
+# failed. Groq's free tier is generous (thousands of requests per day,
+# per model) and stable, unlike Gemini's free tier which was so tight
+# that even one or two calls could exhaust it. Get a free key from
+# https://console.groq.com (no credit card needed) and add it to
+# Render as GROQ_API_KEY.
+GROQ_API_KEY       = os.getenv("GROQ_API_KEY", "")
 
 # How many searches each person gets per day
 DAILY_LIMIT = 3
@@ -1322,14 +1324,12 @@ def get_free_models():
         random.shuffle(free_models)
 
         print(f"Found {len(free_models)} free models")
-        # Increased from 8 to 14. Your logs show it's completely normal
-        # for several free models in a row to be rate limited at once,
-        # since they're shared across everyone using OpenRouter's free
-        # tier, not something specific to Signalwatch. A 429 response
-        # comes back almost instantly, it does not wait for the full
-        # timeout, so trying more models costs very little extra time,
-        # and gives a much better chance that at least one succeeds
-        return free_models[:14]
+        # Brought back down from 14 to 8. 14 meant every single ai_call()
+        # could fire off up to 14 attempts at the shared free pool, and
+        # a single search makes several ai_call()s. That volume was
+        # very likely what tipped things from "mostly working" into
+        # "mostly 429s" — 8 is what was running reliably before
+        return free_models[:8]  # Try up to 8
 
     except Exception as e:
         print("Could not fetch model list:", e)
@@ -1397,68 +1397,81 @@ def strip_agent_language(text: str) -> str:
     return text.strip()
 
 
-# Tracks the last time Gemini told us its quota was exhausted. Once
-# that happens, there is no point asking again for a little while,
-# the quota resets on Google's own per-minute clock, not ours. This
-# avoids wasted time and repeated identical error logs.
-_gemini_blocked_until = 0
+# Tracks the last time Groq told us its quota was exhausted. Once that
+# happens, there is no point asking again immediately, the quota
+# resets on Groq's own clock, not ours. This avoids wasted time and
+# repeated identical error logs.
+_groq_blocked_until = 0
 
-def ai_call_gemini(prompt, max_tokens=600):
+def ai_call_groq(prompt, max_tokens=600):
     """
     Backup AI provider — only used when every single OpenRouter free
     model has already failed for this request.
 
-    Why this exists:
-    OpenRouter's free models are shared by every developer using
-    OpenRouter for free, all at once. When traffic across the whole
-    platform spikes, every free model can return 429 at the same
-    moment, even though nothing in Signalwatch changed. Google's
-    Gemini API runs on a separate quota that belongs only to our own
-    GEMINI_API_KEY, so a busy day on OpenRouter cannot affect it.
+    Why Groq instead of Gemini:
+    Groq's free tier allows thousands of requests per day per model,
+    with no credit card required. It also uses a plain, standard chat
+    API (the same shape as OpenAI's), so no extra Python library is
+    needed, just the requests library Signalwatch already uses
+    everywhere else.
     """
-    if not GEMINI_API_KEY:
+    if not GROQ_API_KEY:
         return None
 
     import time
-    global _gemini_blocked_until
-    if time.time() < _gemini_blocked_until:
+    global _groq_blocked_until
+    if time.time() < _groq_blocked_until:
         # Still in cooldown from a recent quota error — skip the call
         # entirely rather than making a request we already expect to fail
         return None
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config={"max_output_tokens": max_tokens}
+        res = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens
+            },
+            timeout=30
         )
-        text = (response.text or "").strip()
-        text = strip_markdown(text)
+
+        if res.status_code == 429:
+            # Pause future attempts for 60 seconds rather than hitting
+            # the same wall again on the very next call
+            _groq_blocked_until = time.time() + 60
+            print("Groq fallback: rate limited, pausing for 60 seconds")
+            return None
+
+        if res.status_code != 200:
+            print(f"Groq fallback: status {res.status_code}")
+            return None
+
+        data = res.json()
+        text = data["choices"][0]["message"]["content"] or ""
+        text = strip_markdown(text.strip())
+
         if len(text) > 50:
-            print("Got response from Gemini fallback")
+            print("Got response from Groq fallback")
             return text
         return None
+
     except Exception as e:
-        print(f"Gemini fallback error: {e}")
-        # If this looks like a quota / rate limit error, pause trying
-        # Gemini again for 60 seconds so we're not repeatedly hitting
-        # a wall we already know is there
-        if "429" in str(e) or "quota" in str(e).lower():
-            _gemini_blocked_until = time.time() + 60
-            print("Gemini fallback: pausing for 60 seconds after quota error")
+        print(f"Groq fallback error: {e}")
         return None
 
 
-def ai_call(prompt, max_tokens=600, allow_gemini_fallback=False):
-    # allow_gemini_fallback defaults to False on purpose. Gemini's free
-    # tier only allows a handful of requests per minute. If every one of
-    # the many ai_call() invocations in a single search (Chief of Staff,
-    # competitor lookup, lead scoring) all tried Gemini at once, they'd
-    # exhaust that tiny allowance in seconds. Only the main customer
-    # facing briefing passes allow_gemini_fallback=True, since that's
-    # the one thing every paying customer actually sees.
+def ai_call(prompt, max_tokens=600, allow_backup_fallback=False):
+    # allow_backup_fallback defaults to False on purpose. Even Groq's
+    # generous free tier has a per-minute limit. If every ai_call() in
+    # a single search (Chief of Staff, competitor lookup, lead scoring)
+    # all tried the backup at once, they could still exhaust it. Only
+    # the main customer facing briefing passes allow_backup_fallback=True,
+    # since that's the one thing every paying customer actually sees.
     # Sends a prompt to the AI and returns the response text
     # Tries multiple free models in order — if one fails, tries the next
     #
@@ -1537,18 +1550,18 @@ def ai_call(prompt, max_tokens=600, allow_gemini_fallback=False):
 
     print("All models failed")
 
-    if not allow_gemini_fallback:
+    if not allow_backup_fallback:
         # Background agents (Chief of Staff, competitor lookup, lead
         # scoring) land here — they simply return nothing this round
-        # rather than competing for Gemini's very limited free quota
+        # rather than competing for the backup provider's quota
         return None
 
-    print("Trying Gemini fallback")
-    gemini_result = ai_call_gemini(prompt, max_tokens)
-    if gemini_result:
-        return gemini_result
+    print("Trying Groq fallback")
+    groq_result = ai_call_groq(prompt, max_tokens)
+    if groq_result:
+        return groq_result
 
-    print("Gemini fallback also unavailable or failed")
+    print("Groq fallback also unavailable or failed")
     return None
 
 
@@ -2118,7 +2131,7 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     # this one, the agents, sometimes lead scoring, all pulling from the
     # same allowance. 800 is a middle ground, still more breathing room
     # than the original 600, but less pressure than 1000
-    ai_result = ai_call(prompt, max_tokens=800, allow_gemini_fallback=True)
+    ai_result = ai_call(prompt, max_tokens=800, allow_backup_fallback=True)
 
     # Parse AI response
     briefing   = ""
@@ -2160,7 +2173,7 @@ Raw JSON only. No markdown. No backticks. Example:
         # Brought back down closer to the original 600, same reasoning
         # as the main call above. This is also a shorter, simpler prompt
         # than the main one, so it needs less room to begin with
-        retry_result = ai_call(simple_prompt, max_tokens=600, allow_gemini_fallback=True)
+        retry_result = ai_call(simple_prompt, max_tokens=600, allow_backup_fallback=True)
 
         if retry_result:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
@@ -3766,7 +3779,12 @@ async def search_stream(query: str, request: Request, token: str = ""):
         # Back to 3 rounds. All 3 agents matter for the product, and
         # missing one looks broken to the person using it, worse than
         # the search simply taking a bit longer to fully finish
-        async for agent_event in chief_of_staff(query, ranked, max_loops=3):
+        # Reduced from 3 loops to 1. Loops 2 and 3 ran 3-4 minutes after
+        # the customer already had their briefing, in the background,
+        # and were consuming roughly half of all the AI calls in a
+        # single search for the least essential part of the product.
+        # Loop 1 still runs and still gives one useful extra finding.
+        async for agent_event in chief_of_staff(query, ranked, max_loops=1):
             yield agent_event
 
     return StreamingResponse(
