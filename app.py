@@ -116,6 +116,14 @@ FIRECRAWL_API_KEY  = os.getenv("FIRECRAWL_API_KEY", "")
 # this is the last line of defence before the briefing goes empty.
 CEREBRAS_API_KEY   = os.getenv("CEREBRAS_API_KEY", "")
 
+# Fourth AI provider, only tried if OpenRouter, Groq, AND Cerebras all
+# fail for the same request. Mistral's free "Experiment" tier allows
+# roughly 1 billion tokens a month, no credit card needed, on a
+# completely separate quota from the other three providers. Get a free
+# key from https://console.mistral.ai (sign up, then "API Keys" in the
+# left menu) and add it to Render as MISTRAL_API_KEY.
+MISTRAL_API_KEY    = os.getenv("MISTRAL_API_KEY", "")
+
 # How many searches each person gets per day
 DAILY_LIMIT = 3
 
@@ -1590,6 +1598,63 @@ def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
         return None
 
 
+# Same cooldown pattern as Groq and Cerebras above
+_mistral_blocked_until = 0
+
+def ai_call_mistral(prompt, max_tokens=600, label="ai_call"):
+    """
+    Fourth AI provider — only reached if OpenRouter, Groq, AND Cerebras
+    have all already failed for this request. Same shape as the other
+    two backup functions on purpose.
+    """
+    if not MISTRAL_API_KEY:
+        print(f"[{label}] Mistral skipped — no MISTRAL_API_KEY set")
+        return None
+
+    import time
+    global _mistral_blocked_until
+    if time.time() < _mistral_blocked_until:
+        print(f"[{label}] Mistral skipped — still in cooldown from a recent rate limit")
+        return None
+
+    try:
+        res = requests.post(
+            "https://api.mistral.ai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {MISTRAL_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "mistral-small-latest",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens
+            },
+            timeout=30
+        )
+
+        if res.status_code == 429:
+            _mistral_blocked_until = time.time() + 60
+            print(f"[{label}] Mistral rate limited, pausing Mistral for 60 seconds")
+            return None
+
+        if res.status_code != 200:
+            print(f"[{label}] Mistral returned status {res.status_code}")
+            return None
+
+        data = res.json()
+        text = data["choices"][0]["message"]["content"] or ""
+        text = strip_markdown(text.strip())
+
+        if len(text) > 50:
+            print(f"[{label}] Got a response from Mistral")
+            return text
+        return None
+
+    except Exception as e:
+        print(f"[{label}] Mistral error: {e}")
+        return None
+
+
 def ai_call(prompt, max_tokens=600, allow_backup_fallback=False, label="ai_call"):
     # label is purely for the Render logs. Every AI call in Signalwatch
     # used to print identical, unlabelled lines, which made it
@@ -1671,6 +1736,11 @@ def ai_call(prompt, max_tokens=600, allow_backup_fallback=False, label="ai_call"
     cerebras_result = ai_call_cerebras(prompt, max_tokens, label=label)
     if cerebras_result:
         return cerebras_result
+
+    print(f"[{label}] Cerebras unavailable, trying Mistral fallback")
+    mistral_result = ai_call_mistral(prompt, max_tokens, label=label)
+    if mistral_result:
+        return mistral_result
 
     print(f"[{label}] All AI providers exhausted for this call")
     return None
@@ -2995,7 +3065,12 @@ Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
         synthesis = sanitise_briefing_output(synthesis) if synthesis else synthesis
 
         if not synthesis:
-            synthesis = f"Agents found {len(loop_findings)} signals on {angle}."
+            # Every AI provider failed for this specific summary call.
+            # The old fallback text ("Agents found X signals on {angle}")
+            # exposed internal debug-style phrasing to paying customers.
+            # This says the same honest thing, no AI summary was possible
+            # this round, in plain English instead.
+            synthesis = f"Found {len(loop_findings)} new mentions on this angle. An AI summary wasn't available this round, but the sources below are still worth a look."
 
         # Stream the complete loop result to the frontend
         # Clean synthesis and angle before sending to frontend
