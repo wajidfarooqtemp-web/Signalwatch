@@ -669,7 +669,26 @@ def create_razorpay_support_order(amount_paise: int, name: str = "", message: st
         print(f"create_razorpay_support_order error: {e}")
         return {"error": "Could not create order"}
 
-
+def record_support_payment(payment_ref: str, amount_paise: int, name: str = "", message: str = ""):
+    """
+    Writes a completed support payment into the database.
+    Called only from the webhook, once Razorpay confirms it actually captured.
+    """
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO support_payments (payment_ref, amount_paise, name, message)
+            VALUES (%s, %s, %s, %s)
+        """, (payment_ref, amount_paise, name, message))
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"Support payment recorded: ₹{amount_paise/100} ref={payment_ref}")
+    except Exception as e:
+        print(f"record_support_payment error: {e}")
 
 def create_paypal_support_order(amount_usd: float) -> dict:
     """
