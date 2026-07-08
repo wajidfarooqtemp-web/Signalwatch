@@ -43,6 +43,7 @@ from payments import (
     generate_promo_code,
     redeem_promo_code,
     create_razorpay_support_order,
+    create_paypal_support_order,
     record_support_payment,
     ADMIN_SECRET
 )
@@ -3651,6 +3652,18 @@ async def create_support_order(amount: int = 0, name: str = "", message: str = "
     amount_paise = int(amount) * 100
     return create_razorpay_support_order(amount_paise, name=name, message=message)
 
+@app.get("/create-paypal-support-order")
+async def create_paypal_support_order_route(amount: float = 0):
+    """
+    PayPal step one for a support payment. Unlike the Razorpay support
+    order above, amount here is taken straight in USD, no conversion,
+    since PayPal is already the international option. No token
+    required, anyone can support anonymously.
+    """
+    if amount <= 0:
+        return {"error": "Please enter an amount"}
+    return create_paypal_support_order(amount)
+
 
 @app.post("/razorpay-webhook")
 async def razorpay_webhook(request: Request):
@@ -3772,6 +3785,26 @@ async def paypal_webhook(request: Request):
             resource = data.get("resource", {})
             payment_id = resource.get("id", "")
             token      = resource.get("custom_id", "")
+
+            # Support payments carry custom_id="support" instead of a
+            # real token, set that way in create_paypal_support_order.
+            # These are tips, not subscriptions, record and stop here,
+            # never grant Pro access for a support payment, same
+            # guard already used for the Razorpay support flow.
+            if token == "support":
+                amount_value = resource.get("amount", {}).get("value", "0")
+                try:
+                    amount_usd_cents = int(float(amount_value) * 100)
+                except ValueError:
+                    amount_usd_cents = 0
+                record_support_payment(
+                    payment_ref=payment_id,
+                    amount_paise=amount_usd_cents,  # USD cents here, not INR paise, the column just holds the smallest currency unit either way
+                    name="",
+                    message="PayPal support payment"
+                )
+                print(f"PayPal webhook: support payment recorded, {payment_id}")
+                return {"status": "ok"}
 
             if token:
                 expires = datetime.now() + timedelta(days=30)

@@ -670,23 +670,50 @@ def create_razorpay_support_order(amount_paise: int, name: str = "", message: st
         return {"error": "Could not create order"}
 
 
-def record_support_payment(payment_ref: str, amount_paise: int, name: str = "", message: str = ""):
+
+def create_paypal_support_order(amount_usd: float) -> dict:
     """
-    Writes a completed support payment into the database.
-    Called only from the webhook, once Razorpay confirms it actually captured.
+    Creates a one-time PayPal order for a support payment of any amount,
+    chosen by the supporter, charged directly in USD.
+
+    Why this is simpler than the Razorpay support flow, no currency
+    conversion is needed here at all, since PayPal already settles
+    internationally in whatever currency the buyer holds, USD is just
+    the number we quote them. custom_id is set to the literal word
+    "support", so the webhook can tell this apart from a Pro
+    subscription payment and never grant Pro access for it, exactly
+    the same pattern as notes["type"]=="support" does for Razorpay.
     """
-    conn = _get_conn()
-    if not conn:
-        return
+    if amount_usd < 1:
+        return {"error": "Minimum support amount is $1"}
     try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO support_payments (payment_ref, amount_paise, name, message)
-            VALUES (%s, %s, %s, %s)
-        """, (payment_ref, amount_paise, name, message))
-        conn.commit()
-        cur.close()
-        conn.close()
-        print(f"Support payment recorded: ₹{amount_paise/100} ref={payment_ref}")
+        access_token = get_paypal_access_token()
+        res = requests.post(
+            f"{PAYPAL_BASE}/v2/checkout/orders",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type":  "application/json"
+            },
+            json={
+                "intent": "CAPTURE",
+                "purchase_units": [{
+                    "amount": {
+                        "currency_code": "USD",
+                        "value": f"{amount_usd:.2f}"
+                    },
+                    "custom_id": "support",
+                    "description": "Support Signalwatch"
+                }]
+            },
+            timeout=10
+        )
+        if res.status_code not in (200, 201):
+            print(f"PayPal support order failed: {res.status_code} {res.text}")
+            return {"error": "Could not create PayPal order"}
+
+        data = res.json()
+        return {"order_id": data.get("id", "")}
+
     except Exception as e:
-        print(f"record_support_payment error: {e}")    
+        print(f"create_paypal_support_order error: {e}")
+        return {"error": "Could not create PayPal order"}    

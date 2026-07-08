@@ -857,6 +857,20 @@
     <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:16px;">
       Charged in INR at an approximate exchange rate via Razorpay
     </div>
+
+    <!-- International PayPal option — charges the typed amount directly
+         in USD, no currency conversion needed. Uses the same "any
+         amount" pattern as the Razorpay button above, unlike the fixed
+         $19 PayPal button used for Pro subscriptions. -->
+    <div style="margin-bottom:12px;">
+      <div style="
+        font-family:var(--mono);font-size:9px;color:var(--text3);
+        letter-spacing:1px;text-transform:uppercase;
+        margin-bottom:8px;text-align:left;
+      ">Outside India — PayPal, charged in USD</div>
+      <div id="support-paypal-button-container"></div>
+    </div>
+
     <div id="supportMessage" style="font-family:var(--mono);font-size:11px;min-height:16px;"></div>
 
     <span class="modal-skip" onclick="closeSupportModal()" style="margin-top:16px;display:block;">
@@ -3767,6 +3781,7 @@ let supportSelectedAmount = 0;
 
 function showSupportModal() {
   document.getElementById("supportModal").classList.add("open");
+  renderSupportPayPalButton();
 }
 function closeSupportModal() {
   document.getElementById("supportModal").classList.remove("open");
@@ -3832,6 +3847,98 @@ async function submitSupportPayment() {
     msg.style.color = "var(--red)";
     msg.textContent = "Could not reach the server. Please try again.";
   }
+}
+
+// Reads whichever amount the person currently has selected or typed.
+// Shared by both the Razorpay flow above and the PayPal flow below,
+// so the two buttons never disagree about what amount was chosen.
+function getSupportAmountUsd() {
+  const customInput = document.getElementById("supportAmountInput");
+  const customVal = parseFloat(customInput.value);
+  return customVal > 0 ? customVal : supportSelectedAmount;
+}
+
+let _supportPaypalRendered = false; // Prevent rendering the button twice
+
+function renderSupportPayPalButton() {
+  // Only render once — PayPal throws an error if you render twice
+  if (_supportPaypalRendered) return;
+  if (!window.paypal) {
+    // SDK not ready yet — try again shortly instead of giving up silently
+    setTimeout(renderSupportPayPalButton, 300);
+    return;
+  }
+
+  _supportPaypalRendered = true;
+
+  paypal.Buttons({
+    style: {
+      shape:  "rect",
+      color:  "gold",
+      layout: "horizontal",
+      label:  "donate"  // "donate" fits a support payment better than "pay"
+    },
+
+    // createOrder reads the amount at the moment of clicking, not when
+    // the button first rendered, so switching between the preset chips
+    // and a typed custom amount right before clicking still works
+    createOrder: async function(data, actions) {
+      const amountUsd = getSupportAmountUsd();
+      const msg = document.getElementById("supportMessage");
+
+      if (!amountUsd || amountUsd <= 0) {
+        msg.style.color = "var(--red)";
+        msg.textContent = "Please choose or enter an amount first";
+        throw new Error("No amount selected");
+      }
+
+      const res = await fetch(
+        `${API_BASE}/create-paypal-support-order?amount=${amountUsd}`
+      );
+      const order = await res.json();
+      if (order.error) {
+        msg.style.color = "var(--red)";
+        msg.textContent = order.error;
+        throw new Error(order.error);
+      }
+      return order.order_id;
+    },
+
+    // Reuses the same generic /capture-paypal-order endpoint the Pro
+    // subscription flow already uses, capturing works identically
+    // regardless of what the order was for, only the webhook needs to
+    // tell a support payment apart from a Pro subscription afterwards
+    onApprove: async function(data, actions) {
+      const msg = document.getElementById("supportMessage");
+      try {
+        const res = await fetch(`${API_BASE}/capture-paypal-order`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ order_id: data.orderID })
+        });
+        const result = await res.json();
+        if (result.success) {
+          msg.style.color = "var(--teal)";
+          msg.textContent = "Thank you so much for the support!";
+          setTimeout(closeSupportModal, 2000);
+        } else {
+          msg.style.color = "var(--red)";
+          msg.textContent = "Payment could not be completed. Please try again.";
+        }
+      } catch (e) {
+        msg.style.color = "var(--red)";
+        msg.textContent = "Payment approved but server unreachable. Please email support@signalwatch.in";
+      }
+    },
+
+    onError: function(err) {
+      console.log("PayPal support error:", err);
+      const msg = document.getElementById("supportMessage");
+      msg.style.color = "var(--red)";
+      msg.textContent = "Something went wrong with PayPal. Please try again, or use the amount button above instead.";
+    }
+
+  }).render("#support-paypal-button-container");
 }
 
   </script>
