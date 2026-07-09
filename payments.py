@@ -636,12 +636,17 @@ def redeem_promo_code(code: str, token: str) -> dict:
         print(f"redeem_promo_code error: {e}")
         return {"success": False, "error": "Service error — please try again"}
     
-def create_razorpay_support_order(amount_paise: int, name: str = "", message: str = "") -> dict:
+def create_razorpay_support_order(amount_paise: int, name: str = "", message: str = "", token: str = "") -> dict:
     """
     Creates a one-time Razorpay order for a support payment of any amount.
     Unlike create_razorpay_order, the amount is chosen by the supporter,
     not fixed. notes contains type="support" so the webhook can tell this
     apart from a Pro subscription payment and never grant Pro access for it.
+
+    token is the person's browser or Google token, the same one used
+    everywhere else in Signalwatch. It's stored here purely so the
+    webhook can log this tip in analytics_events afterwards, it is
+    never used to unlock Pro for a support payment.
     """
     if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
         return {"error": "Razorpay not configured"}
@@ -656,7 +661,8 @@ def create_razorpay_support_order(amount_paise: int, name: str = "", message: st
             "notes":    {
                 "type":    "support",
                 "name":    name[:100],
-                "message": message[:300]
+                "message": message[:300],
+                "token":   token[:100]
             }
         })
         return {
@@ -690,23 +696,24 @@ def record_support_payment(payment_ref: str, amount_paise: int, name: str = "", 
     except Exception as e:
         print(f"record_support_payment error: {e}")
 
-def create_paypal_support_order(amount_usd: float) -> dict:
+def create_paypal_support_order(amount_usd: float, token: str = "") -> dict:
     """
     Creates a one-time PayPal order for a support payment of any amount,
     chosen by the supporter, charged directly in USD.
 
-    Why this is simpler than the Razorpay support flow, no currency
-    conversion is needed here at all, since PayPal already settles
-    internationally in whatever currency the buyer holds, USD is just
-    the number we quote them. custom_id is set to the literal word
-    "support", so the webhook can tell this apart from a Pro
-    subscription payment and never grant Pro access for it, exactly
-    the same pattern as notes["type"]=="support" does for Razorpay.
+    custom_id still starts with "support" so the webhook can tell this
+    apart from a Pro subscription payment and never grant Pro access
+    for it. PayPal's custom_id field caps at 127 characters, so we tuck
+    the person's token onto the end as "support:sw_abc123..." and trim
+    it if needed, the webhook splits on the colon to recover it. This
+    is only used for analytics, so a rare truncated token just means
+    that one tip doesn't get tied to a specific person, nothing breaks.
     """
     if amount_usd < 1:
         return {"error": "Minimum support amount is $1"}
     try:
         access_token = get_paypal_access_token()
+        custom_id = f"support:{token[:110]}" if token else "support"
         res = requests.post(
             f"{PAYPAL_BASE}/v2/checkout/orders",
             headers={
@@ -720,7 +727,7 @@ def create_paypal_support_order(amount_usd: float) -> dict:
                         "currency_code": "USD",
                         "value": f"{amount_usd:.2f}"
                     },
-                    "custom_id": "support",
+                    "custom_id": custom_id,
                     "description": "Support Signalwatch"
                 }]
             },

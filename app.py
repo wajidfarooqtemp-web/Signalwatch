@@ -3559,7 +3559,7 @@ async def track_event(request: Request):
 
         # Only allow the event types the frontend actually needs to send.
         # This stops the endpoint being used to write arbitrary rows.
-        allowed_types = ["page_view", "payment_modal_open"]
+        allowed_types = ["page_view", "payment_modal_open", "support_modal_open"]
         if event_type not in allowed_types or not token:
             return {"status": "ignored"}
 
@@ -3640,29 +3640,31 @@ async def create_order(token: str = ""):
     return create_razorpay_order(token)
 
 @app.get("/create-support-order")
-async def create_support_order(amount: int = 0, name: str = "", message: str = ""):
+async def create_support_order(amount: int = 0, name: str = "", message: str = "", token: str = ""):
     """
     Creates a Razorpay order for a one-off support payment.
     amount comes from the frontend already converted to rupees, so we
     multiply by 100 to get paise, which is what Razorpay expects.
-    No token is required — anyone can support anonymously.
+    token is optional, someone can still support without one, it's
+    only used so this tip shows up correctly in analytics afterwards.
     """
     if amount <= 0:
         return {"error": "Please enter an amount"}
     amount_paise = int(amount) * 100
-    return create_razorpay_support_order(amount_paise, name=name, message=message)
+    return create_razorpay_support_order(amount_paise, name=name, message=message, token=token)
 
 @app.get("/create-paypal-support-order")
-async def create_paypal_support_order_route(amount: float = 0):
+async def create_paypal_support_order_route(amount: float = 0, token: str = ""):
     """
     PayPal step one for a support payment. Unlike the Razorpay support
     order above, amount here is taken straight in USD, no conversion,
-    since PayPal is already the international option. No token
-    required, anyone can support anonymously.
+    since PayPal is already the international option. token is
+    optional, someone can still support without one, it's only used
+    so this tip shows up correctly in analytics afterwards.
     """
     if amount <= 0:
         return {"error": "Please enter an amount"}
-    return create_paypal_support_order(amount)
+    return create_paypal_support_order(amount, token=token)
 
 
 @app.post("/razorpay-webhook")
@@ -3703,6 +3705,17 @@ async def razorpay_webhook(request: Request):
                     message=notes.get("message", "")
                 )
                 print(f"Webhook: support payment recorded, {payment_id}")
+
+                # Also log this as a conversion in the same analytics
+                # system used for everything else, so support tips show
+                # up in the admin dashboard's conversion count, not just
+                # in the separate support_payments table
+                support_token = notes.get("token", "")
+                if support_token:
+                    await asyncio.to_thread(
+                        log_event, support_token, "conversion",
+                        {"method": "razorpay_support", "amount_paise": amount_paise}, ""
+                    )
                 return {"status": "ok"}
 
             token = notes.get("token", "")
@@ -3786,12 +3799,15 @@ async def paypal_webhook(request: Request):
             payment_id = resource.get("id", "")
             token      = resource.get("custom_id", "")
 
-            # Support payments carry custom_id="support" instead of a
-            # real token, set that way in create_paypal_support_order.
-            # These are tips, not subscriptions, record and stop here,
-            # never grant Pro access for a support payment, same
-            # guard already used for the Razorpay support flow.
-            if token == "support":
+            # Support payments carry custom_id="support" or
+            # "support:<their token>", set that way in
+            # create_paypal_support_order. These are tips, not
+            # subscriptions, record and stop here, never grant Pro
+            # access for a support payment, same guard already used
+            # for the Razorpay support flow.
+            if token == "support" or token.startswith("support:"):
+                real_token = token.split("support:", 1)[1] if token.startswith("support:") else ""
+
                 amount_value = resource.get("amount", {}).get("value", "0")
                 try:
                     amount_usd_cents = int(float(amount_value) * 100)
@@ -3804,6 +3820,13 @@ async def paypal_webhook(request: Request):
                     message="PayPal support payment"
                 )
                 print(f"PayPal webhook: support payment recorded, {payment_id}")
+
+                # Same analytics logging as the Razorpay support path above
+                if real_token:
+                    await asyncio.to_thread(
+                        log_event, real_token, "conversion",
+                        {"method": "paypal_support", "amount_usd_cents": amount_usd_cents}, ""
+                    )
                 return {"status": "ok"}
 
             if token:

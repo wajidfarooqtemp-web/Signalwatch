@@ -396,6 +396,16 @@
     .modal-overlay { position:fixed; inset:0; background:rgba(15,13,11,0.55); z-index:500; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
     .modal-overlay.open { opacity:1; pointer-events:all; }
     .modal-box { background:var(--white); border:1px solid var(--border); border-top:3px solid var(--teal); border-radius:8px; padding:36px 40px; max-width:420px; width:90%; text-align:center; transform:translateY(12px); transition:transform 0.2s; }
+    /* The Support Us modal is taller than the other modals, since it
+       has a story, four chips, two payment buttons, and a skip link.
+       On shorter screens this used to push the skip link off the
+       bottom edge with no way to reach it. Capping the height and
+       letting it scroll internally means the whole modal always fits
+       on screen, and nothing important is ever hidden below the fold. */
+    #supportModal .modal-box {
+      max-height: 88vh;
+      overflow-y: auto;
+    }
     .modal-overlay.open .modal-box { transform:translateY(0); }
     .modal-icon { font-size:32px; margin-bottom:16px; }
     .modal-title { font-family:var(--serif); font-size:22px; font-weight:700; color:var(--ink); letter-spacing:-0.3px; margin-bottom:10px; }
@@ -3696,6 +3706,13 @@ async function deleteAllAnalyticsPrompt() {
 
       closePaymentModal();
 
+      // A slightly different personal note depending on how they got here.
+      // Someone who redeemed a promo code didn't pay, so thanking them
+      // for money would ring false, this speaks to what actually happened
+      const welcomeMessage = method === "promo"
+        ? "That code is yours now, and so is full access. Hope it's genuinely useful to you."
+        : "Thank you for backing this. I built every part of Signalwatch myself, and having you on board means a lot.";
+
       // Show success message and reload
       const container = document.getElementById("resultsContainer");
       if (container) {
@@ -3707,7 +3724,7 @@ async function deleteAllAnalyticsPrompt() {
             </div>
             <div style="font-size:15px;color:var(--text2);font-weight:300;
                         line-height:1.7;margin-bottom:8px;">
-              Know what to do next. All agents. Lead intelligence. Competitor intelligence. No limits.
+              ${welcomeMessage}
             </div>
             <div style="font-family:var(--mono);font-size:11px;color:var(--text3);">
               Refreshing...
@@ -3782,6 +3799,7 @@ let supportSelectedAmount = 0;
 function showSupportModal() {
   document.getElementById("supportModal").classList.add("open");
   renderSupportPayPalButton();
+  trackEvent("support_modal_open", {});
 }
 function closeSupportModal() {
   document.getElementById("supportModal").classList.remove("open");
@@ -3817,7 +3835,7 @@ async function submitSupportPayment() {
   msg.textContent = "Opening checkout...";
 
   try {
-    const res = await fetch(`${API_BASE}/create-support-order?amount=${amountInr}`);
+    const res = await fetch(`${API_BASE}/create-support-order?amount=${amountInr}&token=${encodeURIComponent(getToken())}`);
     const order = await res.json();
 
     if (order.error) {
@@ -3836,8 +3854,8 @@ async function submitSupportPayment() {
       theme:       { color: "#c4720a" },
       handler: function(response) {
         msg.style.color = "var(--teal)";
-        msg.textContent = "Thank you so much for the support!";
-        setTimeout(closeSupportModal, 2000);
+        msg.textContent = "Thank you, genuinely. This helps more than you know.";
+        setTimeout(closeSupportModal, 2500);
       }
     };
     const rzp = new window.Razorpay(options);
@@ -3893,7 +3911,7 @@ function renderSupportPayPalButton() {
       }
 
       const res = await fetch(
-        `${API_BASE}/create-paypal-support-order?amount=${amountUsd}`
+        `${API_BASE}/create-paypal-support-order?amount=${amountUsd}&token=${encodeURIComponent(getToken())}`
       );
       const order = await res.json();
       if (order.error) {
@@ -3919,8 +3937,8 @@ function renderSupportPayPalButton() {
         const result = await res.json();
         if (result.success) {
           msg.style.color = "var(--teal)";
-          msg.textContent = "Thank you so much for the support!";
-          setTimeout(closeSupportModal, 2000);
+          msg.textContent = "Thank you, genuinely. This helps more than you know.";
+          setTimeout(closeSupportModal, 2500);
         } else {
           msg.style.color = "var(--red)";
           msg.textContent = "Payment could not be completed. Please try again.";
