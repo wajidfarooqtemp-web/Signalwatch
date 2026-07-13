@@ -2651,6 +2651,23 @@ if (loadingText) {
         html += `<div class="brief-card"><div class="brief-body" style="color:var(--text3)">Briefing unavailable. Raw signals below.</div></div>`;
       }
 
+      // Shows a few of the real mentions the briefing was built from,
+      // so a specific claim, a price, an incentive, a number, is
+      // something the person can click through and check themselves,
+      // rather than just having to trust the AI's summary of it
+      if (data.source_examples && data.source_examples.length > 0) {
+        html += `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-6px 0 16px;padding:0 4px;">`;
+        html += `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);">Based on:</span>`;
+        data.source_examples.forEach(ex => {
+          const label = sourceLabels[ex.source] || ex.source || "source";
+          const short = ex.title.length > 60 ? ex.title.slice(0, 60) + "…" : ex.title;
+          html += ex.url
+            ? `<a href="${ex.url}" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:10px;color:var(--teal);background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:20px;padding:4px 10px;text-decoration:none;">${escapeHtml(label)}: ${escapeHtml(short)}</a>`
+            : `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;">${escapeHtml(label)}: ${escapeHtml(short)}</span>`;
+        });
+        html += `</div>`;
+      }
+
       // ── QUESTIONS CARD ──
       if (data.questions && data.questions.length > 0) {
         const qSrc = data.cooccurrences_found > 0

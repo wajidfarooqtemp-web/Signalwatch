@@ -1891,6 +1891,72 @@ def filter_and_rank(posts, query):
     return results
 
 
+def _looks_non_english(text: str) -> bool:
+    """
+    A cheap heuristic that catches titles very unlikely to be English,
+    without needing a full language detection library. Counts accented
+    or extended Latin characters, common in Portuguese, Spanish,
+    French, German titles, the exact languages CrossRef and Semantic
+    Scholar have been returning for queries that have nothing to do
+    with them. A couple of accented characters is normal even in
+    English text, a name, a loanword. A title full of them is not.
+    """
+    if not text:
+        return False
+    accented = re.findall(r'[àáâãäåèéêëìíîïòóôõöùúûüçñÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÇÑ]', text)
+    return len(accented) >= 3
+
+
+def filter_agent_findings(findings: list, search_query: str) -> list:
+    """
+    A stricter relevance pass for background agent findings, run on top
+    of whatever scoring each specialist already did.
+
+    Why this exists:
+    Signal Agent already runs its results through filter_and_rank.
+    Context Agent never did, it took whatever Semantic Scholar and
+    CrossRef returned and showed all of it. CrossRef's full-text search
+    is loose enough that a query like "does Nas.com run an affiliate
+    program" matched an unrelated online casino paper on the word
+    "affiliate" alone. A single generic keyword hit is weak evidence
+    for an academic paper in a way it usually isn't for a Reddit post
+    or a news headline naming the actual brand, so scholar sourced
+    findings need a higher bar to be shown at all.
+    """
+    keywords, phrases = extract_keywords(search_query)
+    kept = []
+
+    for f in findings:
+        title = f.get("title", "")
+        if not title:
+            continue
+
+        # Drop titles that are very unlikely to be English, regardless
+        # of source, a Portuguese academic abstract has zero value to
+        # someone reading an English brand intelligence briefing
+        if _looks_non_english(title):
+            continue
+
+        score = score_post(title, keywords)
+        if phrases:
+            for p in phrases:
+                if p.lower() in title.lower():
+                    score += 5
+
+        if score == 0:
+            continue
+
+        # Academic sources need more than one weak keyword hit.
+        # A single generic word like "affiliate" or "program" matching
+        # somewhere in a paper's title is not real relevance
+        if f.get("source") == "scholar" and score < 4:
+            continue
+
+        kept.append(f)
+
+    return kept
+
+
 # ─── WORD FREQUENCIES ─────────────────────────────────────────────────────────
 
 def get_word_frequencies(results):
@@ -2287,12 +2353,30 @@ def generate_insight(results, query):
             "questions": [],
             "patterns":  [],
             "cooccurrences_found": 0,
-            "questions_found": 0
+            "questions_found": 0,
+            "source_examples": []
         }
 
     # Step 1 — Run algorithms
     cooccurrences  = find_cooccurrences(results)
     question_results = find_question_clusters(results)
+
+    # Picks a handful of the actual mentions the AI was shown, so a
+    # specific claim in the briefing, a price, an incentive, a number,
+    # isn't just text the person has to trust. They can click through
+    # and check it themselves. Cooccurrences are the richest evidence
+    # the AI actually reads, so they're the first choice, falling back
+    # to the top ranked results if no cooccurrences were found
+    if cooccurrences:
+        source_examples = [
+            {"title": c["title"], "url": c.get("url", ""), "source": c.get("source", "")}
+            for c in cooccurrences[:3]
+        ]
+    else:
+        source_examples = [
+            {"title": r["title"], "url": r.get("url", ""), "source": r.get("source", "")}
+            for r in results[:3]
+        ]
 
     today = datetime.now().strftime("%d %B %Y")
     sources_used = list(set(r["source"] for r in results))
@@ -2432,7 +2516,8 @@ Raw JSON only. No markdown. No backticks. Example:
         "questions": questions,
         "patterns":  patterns_display,
         "cooccurrences_found": len(cooccurrences),
-        "questions_found":     len(question_results)
+        "questions_found":     len(question_results),
+        "source_examples": source_examples
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3057,6 +3142,15 @@ No markdown. No backticks. Raw JSON only."""
                 continue  # Skip failed agents silently
             if isinstance(result, dict):
                 loop_findings += result.get("findings", [])
+
+        # This is what actually catches the irrelevant academic papers
+        # Context Agent occasionally pulls in. A single loose keyword
+        # match used to be enough to reach the panel, now it isn't.
+        # If everything gets filtered out, loop_findings ends up empty
+        # and the existing "no new signals found, trying another angle"
+        # path below handles it correctly, exactly what should happen
+        # when nothing genuinely relevant was found
+        loop_findings = filter_agent_findings(loop_findings, search_query)
 
         all_agent_findings += loop_findings
         # Agent 4 — Competitive Movement Agent
@@ -4084,6 +4178,7 @@ async def search_stream(query: str, request: Request, token: str = ""):
             "questions":           insight.get("questions", []) if isinstance(insight, dict) else [],
             "patterns":            insight.get("patterns", [])  if isinstance(insight, dict) else [],
             "cooccurrences_found": insight.get("cooccurrences_found", 0) if isinstance(insight, dict) else 0,
+            "source_examples":     insight.get("source_examples", []) if isinstance(insight, dict) else [],
             "results":             ranked[:20],
             "word_frequencies":    get_word_frequencies(ranked[:50])
         }
@@ -4217,6 +4312,7 @@ def search(query: str, request: Request, token: str = ""):
         "action":   insight.get("action", "") if isinstance(insight, dict) else "",
         "questions":         insight.get("questions", []) if isinstance(insight, dict) else [],
         "patterns_detected": insight.get("patterns", []) if isinstance(insight, dict) else [],
+        "source_examples":   insight.get("source_examples", []) if isinstance(insight, dict) else [],
         "results":           ranked[:20],
         "word_frequencies":  get_word_frequencies(ranked[:50])
     }
