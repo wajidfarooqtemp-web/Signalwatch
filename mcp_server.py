@@ -47,7 +47,27 @@ AI_TOOL_HOURLY_LIMIT = 10
 # ── FASTMCP INSTANCE ─────────────────────────────────────────────────────
 # app.py imports THIS exact object and mounts it. Do not create a second
 # FastMCP() anywhere — there must only ever be one.
-mcp = FastMCP("Signalwatch")
+from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+
+# The MCP SDK checks incoming requests' Host header against an
+# allow-list, to stop DNS-rebinding attacks (a malicious webpage
+# tricking a browser into hitting a local MCP server). By default it
+# only trusts localhost — which is why this worked on your laptop but
+# was rejected the moment we pointed it at your real Render domain.
+# We explicitly add your real domain to the trusted list here.
+mcp = FastMCP(
+    "Signalwatch",
+    transport_security=TransportSecuritySettings(
+        allowed_hosts=[
+            "localhost",
+            "localhost:8000",
+            "127.0.0.1",
+            "127.0.0.1:8000",
+            "signalwatch-r6s8.onrender.com",
+        ]
+    )
+)
 
 
 # ── AUTH HELPER ───────────────────────────────────────────────────────────
