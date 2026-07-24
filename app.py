@@ -25,6 +25,8 @@ from curl_cffi import requests as curl_requests  # Same job as requests, but cop
 import re         # Tool for finding patterns in text (regex)
 import xml.etree.ElementTree as ET  # Tool for reading XML files (used for RSS feeds)
 import os         # Tool for reading environment variables (our API keys)
+from dotenv import load_dotenv
+load_dotenv()  # Reads .env file into environment variables — local dev only. Render sets real env vars directly, so this line does nothing on Render, but is required for your laptop to see DATABASE_URL.
 import json       # Tool for reading and writing JSON data
 # Import all payment functions from payments.py (same folder)
 from payments import (
@@ -58,9 +60,39 @@ from analytics import (
     delete_all_analytics
 )
 
+# ── MCP SERVER WIRING ──────────────────────────────────────────────────────
+# Import the MCP server object we defined in mcp_server.py
+from mcp_server import mcp
+import mcp_keys_db
+import contextlib
+
+# streamable_http_app() turns our FastMCP object into a mountable ASGI app.
+# It has its OWN lifespan (startup/shutdown) that manages an internal
+# "session manager" — this is what tracks in-progress tool calls.
+# If we don't run this lifespan, tool calls break with a confusing error.
+# Build the mountable ASGI app. This call has a side effect: it lazily
+# creates mcp's internal session manager, which is why it must happen
+# BEFORE the lifespan function below references mcp.session_manager.
+mcp_app = mcp.streamable_http_app()
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    # mcp.session_manager.run() is the actual resource that needs to be
+    # "on" for the whole life of the server. It is an attribute of the
+    # FastMCP object (mcp), NOT of the mounted sub-app (mcp_app) — that
+    # was the bug. Entering it here means: start it when FastAPI boots,
+    # and cleanly stop it when FastAPI shuts down.
+    async with mcp.session_manager.run():
+        yield
+
 # Create the FastAPI application object
 # Think of this as turning on the server engine
-app = FastAPI()
+# lifespan=lifespan wires in the MCP startup/shutdown we just defined
+app = FastAPI(lifespan=lifespan)
+
+# Mount the MCP app at /mcp. Every MCP protocol message will now be
+# reachable at https://your-render-url.onrender.com/mcp
+app.mount("/mcp", mcp_app)
 
 # Allow browsers to talk to this server from different domains
 # Without this, the browser would block requests from Vercel to Railway
@@ -303,6 +335,7 @@ setup_payment_tables()
 # past the 90 day retention window in case the server was down for a while
 setup_analytics_table()
 cleanup_old_events()
+mcp_keys_db.setup_mcp_tables()
 
 def try_consume_lead_allowance(token: str) -> bool:
     """
