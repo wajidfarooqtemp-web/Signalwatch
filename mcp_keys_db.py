@@ -236,3 +236,67 @@ def check_and_increment_usage(key_id: int, tool_category: str, hourly_limit: int
     except Exception as e:
         print(f"check_and_increment_usage error: {e}")
         return {"allowed": False, "reason": "Rate limit check failed"}
+
+def revoke_api_key(key_id: int) -> dict:
+    """
+    Deactivates an API key so it can no longer authenticate, without
+    deleting its row — we keep the history (who had a key, when it was
+    revoked) rather than erasing it outright. verify_api_key() already
+    checks "is_active = TRUE AND revoked_at IS NULL", so setting these
+    two columns is enough to make the key stop working immediately on
+    its very next use, with no other code changes needed anywhere.
+    """
+    conn = _get_conn()
+    if not conn:
+        return {"error": "Database unavailable"}
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE mcp_api_keys
+            SET is_active = FALSE, revoked_at = NOW()
+            WHERE id = %s
+        """, (key_id,))
+        affected = cur.rowcount
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if affected == 0:
+            return {"error": f"No key found with id {key_id}"}
+        return {"success": True, "message": f"Key {key_id} revoked"}
+    except Exception as e:
+        print(f"revoke_api_key error: {e}")
+        return {"error": "Could not revoke key"}
+
+
+def list_api_keys() -> list:
+    """
+    Lists every issued key WITHOUT exposing the raw key or its hash —
+    just enough to identify which key is which (id, prefix, client
+    name, whether it's active) so you can decide what to revoke.
+    This is how you find a key_id to pass into revoke_api_key(),
+    since after creation you never see the raw key again, only this.
+    """
+    conn = _get_conn()
+    if not conn:
+        return []
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, key_prefix, client_name, created_at, is_active, revoked_at
+            FROM mcp_api_keys
+            ORDER BY created_at DESC
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [
+            {
+                "key_id": r[0], "key_prefix": r[1], "client_name": r[2],
+                "created_at": str(r[3]), "is_active": r[4], "revoked_at": str(r[5]) if r[5] else None
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"list_api_keys error: {e}")
+        return []

@@ -114,6 +114,26 @@ def _authenticate(ctx: Context, tool_category: str, hourly_limit: int) -> dict:
     if not usage.get("allowed"):
         return {"error": usage.get("reason", "Rate limit exceeded")}
 
+    # Log this call into the SAME analytics_events table your website
+    # search already logs into. This reuses your existing log_event()
+    # function from analytics.py — no new table, no second system.
+    # We use the key's own hash-derived id as the "token" so MCP usage
+    # is clearly distinguishable in the admin dashboard from website
+    # sw_/g_ tokens, while still being attributable to one specific client.
+    try:
+        import app as sw
+        client_name = verification.get("client_name", "unknown")
+        sw.log_event(
+            f"mcp_key_{key_id}",
+            "mcp_tool_call",
+            {"tool_category": tool_category, "client_name": client_name},
+            ""  # no browser user-agent for MCP calls — not applicable
+        )
+    except Exception as e:
+        # Logging must never block or break the actual tool call —
+        # if analytics logging fails for any reason, the tool still runs
+        print(f"MCP analytics logging error: {e}")
+
     return {}  # Success — empty dict means "no error, proceed"
 
 
