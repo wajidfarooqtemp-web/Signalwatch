@@ -4349,3 +4349,45 @@ def search(query: str, request: Request, token: str = ""):
         "results":           ranked[:20],
         "word_frequencies":  get_word_frequencies(ranked[:50])
     }
+
+# ─── WEBSITE EVOLUTION (isolated feature, does not touch mention search) ──────
+# Everything here is additive. No existing function, route, or variable
+# above this point is read or modified. website_evolution.py has zero
+# import-time dependency on this file — it only imports app.py's
+# ai_call/strip_markdown/sanitise_briefing_output LOCALLY, inside its
+# own summarize_evolution() function, at call time.
+
+@app.get("/website-evolution")
+async def website_evolution_endpoint(domain: str):
+    """
+    Manual, user-triggered endpoint. Takes an exact domain (e.g.
+    "stripe.com"), runs the full 6-stage pipeline, returns a timeline
+    + briefing. Deliberately has NO token/rate-limit checks tying it
+    to the existing DAILY_LIMIT or Pro system — this is a separate,
+    experimental feature, not part of the core product's usage metering.
+    If it ever needs its own limits, that's a deliberate future
+    decision, not inherited by accident from unrelated code.
+    """
+    import website_evolution as we
+
+    domain = domain.strip().lower()
+    if not domain:
+        return {"error": "Domain required"}
+
+    records = await asyncio.to_thread(we.query_cdx_sampled, domain)
+    if not records:
+        return {"domain": domain, "timeline": [], "briefing": "No historical data found for this domain.", "pages_found": 0}
+
+    deduped = we.dedup_snapshots(records)
+    fetched = await asyncio.to_thread(we.bounded_fetch_all, deduped, 30)
+    groups = we.group_and_sort_by_url(fetched)
+    changes = we.detect_changes(groups)
+    summary = await asyncio.to_thread(we.summarize_evolution, changes, domain)
+
+    return {
+        "domain": domain,
+        "pages_found": len(groups),
+        "changes_detected": len(changes),
+        "timeline": summary.get("timeline", []),
+        "briefing": summary.get("briefing", "")
+    }

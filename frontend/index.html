@@ -952,6 +952,55 @@
         </div>
       </div>
     </div>
+<!-- 
+  WEBSITE EVOLUTION — entry point on the front page.
+  This is a separate mini-feature, shown as a small banner above the
+  main search box. Clicking "Try it" reveals an input box + results
+  area BELOW this banner, without navigating to a different page.
+  It does not touch runSearch(), renderResults(), or any existing
+  function — it has its own function, runWebsiteEvolution(), added
+  further down in this file.
+-->
+<div style="max-width:1100px;margin:0 auto;padding:24px 40px 0;">
+
+  <!-- The banner itself: a title + a "Try it" button -->
+  <div style="border:1px solid var(--border);border-radius:6px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:var(--bg2);">
+    <div>
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal);margin-bottom:4px;">New</div>
+      <div style="font-size:14px;font-weight:600;color:var(--ink);">Website Evolution; see how a domain's own site changed over time</div>
+    </div>
+    <!-- onclick calls toggleEvolutionPanel(), a small function we add later,
+         which just shows/hides the panel below -->
+    <button onclick="toggleEvolutionPanel()" id="evolutionToggleBtn"
+      style="font-family:var(--sans);font-size:13px;font-weight:600;color:var(--teal);background:var(--white);border:1.5px solid var(--teal);border-radius:5px;padding:9px 18px;cursor:pointer;white-space:nowrap;">
+      Try it
+    </button>
+  </div>
+
+  <!-- 
+    This is the actual input + results panel. 
+    style="display:none" means it is HIDDEN by default when the page loads.
+    toggleEvolutionPanel() switches this to "block" (visible) when clicked.
+  -->
+  <div id="evolutionInlinePanel" style="display:none;margin-top:12px;border:1px solid var(--border);border-radius:6px;padding:24px;background:var(--white);">
+
+    <!-- The domain input box + Analyse button -->
+    <div style="display:flex;gap:0;border:1.5px solid var(--border2);border-radius:6px;overflow:hidden;margin-bottom:16px;">
+      <input id="evolutionDomainInput" type="text" placeholder="e.g. stripe.com"
+        style="flex:1;padding:12px 16px;border:none;outline:none;font-size:14px;font-family:var(--sans);">
+      <!-- onclick calls runWebsiteEvolution(), added later in the <script> section -->
+      <button onclick="runWebsiteEvolution()" id="evolutionBtn"
+        style="padding:0 22px;background:var(--teal);color:white;border:none;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">
+        Analyse
+      </button>
+    </div>
+
+    <!-- Results (timeline + briefing) get inserted here by JavaScript,
+         after the user clicks Analyse. Empty until then. -->
+    <div id="evolutionResults"></div>
+
+  </div>
+</div>
 
     <div class="search-wrap">
       <div class="search-label">Search any brand, topic or query</div>
@@ -3294,7 +3343,76 @@ if (loadingText) {
 
       results.innerHTML = html;
     }
+// ── WEBSITE EVOLUTION — two small functions, fully separate ──────────────
+// Neither of these calls, modifies, or shares any variable with
+// runSearch(), renderResults(), or anything else in the existing
+// search flow. They only touch the new HTML elements added above.
 
+// Shows or hides the evolution input/results panel when "Try it" is clicked
+function toggleEvolutionPanel() {
+  const panel = document.getElementById("evolutionInlinePanel");
+  const btn = document.getElementById("evolutionToggleBtn");
+  // Check current state, then flip it
+  const isHidden = panel.style.display === "none";
+  panel.style.display = isHidden ? "block" : "none";
+  btn.textContent = isHidden ? "Hide" : "Try it";
+}
+
+// Runs when the "Analyse" button inside the panel is clicked.
+// Calls our NEW backend endpoint /website-evolution (added in app.py),
+// completely separate from /search and /search-stream.
+async function runWebsiteEvolution() {
+  const domain = document.getElementById("evolutionDomainInput").value.trim();
+  const results = document.getElementById("evolutionResults");
+  const btn = document.getElementById("evolutionBtn");
+  if (!domain) return; // do nothing if the box is empty
+
+  // Show a loading state while we wait for the backend
+  btn.disabled = true;
+  btn.textContent = "Analysing...";
+  results.innerHTML = `<div style="font-family:var(--mono);font-size:12px;color:var(--text3);">Sampling historical snapshots — this can take up to a minute...</div>`;
+
+  try {
+    // Call the new backend endpoint, passing the domain as a query parameter
+    const res = await fetch(`${API_BASE}/website-evolution?domain=${encodeURIComponent(domain)}`);
+    const data = await res.json();
+
+    if (data.error) {
+      results.innerHTML = `<div class="error-msg">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+
+    // Build the results HTML: a small stats line, the AI briefing,
+    // then the timeline of detected changes
+    let html = `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:16px;">${data.pages_found} pages tracked · ${data.changes_detected} changes detected</div>`;
+
+    if (data.briefing) {
+      html += `<div style="background:var(--white);border:1px solid var(--border);border-top:3px solid var(--teal);border-radius:6px;padding:24px;margin-bottom:16px;font-size:14px;color:var(--text2);line-height:1.7;">${escapeHtml(data.briefing)}</div>`;
+    }
+
+    if (data.timeline && data.timeline.length > 0) {
+      html += `<div style="border-left:2px solid var(--border);padding-left:20px;">`;
+      data.timeline.forEach(item => {
+        html += `<div style="margin-bottom:16px;">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--teal);margin-bottom:4px;">${escapeHtml(item.date || "")}</div>
+          <div style="font-size:13px;color:var(--text);">${escapeHtml(item.event || "")}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    } else {
+      html += `<div style="font-size:13px;color:var(--text3);">No timeline events to show.</div>`;
+    }
+
+    results.innerHTML = html;
+  } catch (e) {
+    // Network error, server down, etc — show a friendly message instead of crashing
+    results.innerHTML = `<div class="error-msg">Could not reach the server. Please try again.</div>`;
+  } finally {
+    // Always restore the button, whether it succeeded or failed
+    btn.disabled = false;
+    btn.textContent = "Analyse";
+  }
+}
     function escapeHtml(str) {
       // Converts dangerous HTML characters to safe display equivalents
       // < becomes &lt; so a browser renders it as text, not as a tag
@@ -3975,7 +4093,6 @@ function renderSupportPayPalButton() {
 
   }).render("#support-paypal-button-container");
 }
-
   </script>
 </body>
 </html>
