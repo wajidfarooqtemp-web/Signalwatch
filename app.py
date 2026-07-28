@@ -3525,6 +3525,15 @@ from collections import defaultdict
 # Prevents someone hammering the API without a valid token
 _ip_log: dict = defaultdict(list)
 
+# Separate, stricter rate limit just for Website Evolution — this
+# endpoint is far more expensive than a normal request (up to 30 real
+# network fetches to Common Crawl, plus one AI call), so it gets its
+# own limit rather than sharing the general 60/hour IP limit everything
+# else uses. Same in-memory pattern as _ip_log above — good enough for
+# a single-process app, not trying to be more sophisticated than that.
+_evolution_ip_log: dict = defaultdict(list)
+_EVOLUTION_HOURLY_LIMIT = 5
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     """
@@ -4359,36 +4368,67 @@ def search(query: str, request: Request, token: str = ""):
 # own summarize_evolution() function, at call time.
 
 @app.get("/website-evolution")
-async def website_evolution_endpoint(domain: str):
-    """
-    Manual, user-triggered endpoint. Takes an exact domain (e.g.
-    "stripe.com"), runs the full 6-stage pipeline, returns a timeline
-    + briefing. Deliberately has NO token/rate-limit checks tying it
-    to the existing DAILY_LIMIT or Pro system — this is a separate,
-    experimental feature, not part of the core product's usage metering.
-    If it ever needs its own limits, that's a deliberate future
-    decision, not inherited by accident from unrelated code.
-    """
+async def website_evolution_endpoint(domain: str, request: Request):
     import website_evolution as we
 
     domain = domain.strip().lower()
-    if not domain:
-        return {"error": "Domain required"}
 
-    records = await asyncio.to_thread(we.query_cdx_sampled, domain)
-    if not records:
-        return {"domain": domain, "timeline": [], "briefing": "No historical data found for this domain.", "pages_found": 0}
+    async def generate():
+        # ── Rate limit check ──────────────────────────────────────────────
+        client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if not client_ip:
+            client_ip = request.client.host if request.client else "unknown"
 
-    deduped = we.dedup_snapshots(records)
-    fetched = await asyncio.to_thread(we.bounded_fetch_all, deduped, 30)
-    groups = we.group_and_sort_by_url(fetched)
-    changes = we.detect_changes(groups)
-    summary = await asyncio.to_thread(we.summarize_evolution, changes, domain)
+        now = datetime.now()
+        cutoff = now - timedelta(hours=1)
+        _evolution_ip_log[client_ip] = [t for t in _evolution_ip_log[client_ip] if t > cutoff]
 
-    return {
-        "domain": domain,
-        "pages_found": len(groups),
-        "changes_detected": len(changes),
-        "timeline": summary.get("timeline", []),
-        "briefing": summary.get("briefing", "")
-    }
+        if len(_evolution_ip_log[client_ip]) >= _EVOLUTION_HOURLY_LIMIT:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Rate limit reached: {_EVOLUTION_HOURLY_LIMIT} domain checks per hour. Try again later.'})}\n\n"
+            return
+        _evolution_ip_log[client_ip].append(now)
+
+        # ── Input validation — reject garbage before any network call ────
+        if not we.is_valid_domain(domain):
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Please enter a valid domain, e.g. stripe.com'})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'sampling', 'message': 'Sampling historical snapshots...'})}\n\n"
+        # ... rest unchanged
+
+        if not domain:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Domain required'})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'sampling', 'message': 'Sampling historical snapshots...'})}\n\n"
+        records = await asyncio.to_thread(we.query_cdx_sampled, domain)
+        # ... rest of generate() stays exactly as it was
+
+        if not records:
+            yield f"data: {json.dumps({'type': 'complete', 'domain': domain, 'timeline': [], 'briefing': 'No historical data found for this domain.', 'pages_found': 0, 'changes_detected': 0})}\n\n"
+            return 
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'dedup', 'message': f'Found {len(records)} snapshots, removing duplicates...'})}\n\n"
+        deduped = we.dedup_snapshots(records)
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'fetching', 'message': f'Fetching content for {min(len(deduped), 30)} pages...'})}\n\n"
+        fetched = await asyncio.to_thread(we.bounded_fetch_all, deduped, 30)
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'grouping', 'message': 'Grouping snapshots by page...'})}\n\n"
+        groups = we.group_and_sort_by_url(fetched)
+        changes = we.detect_changes(groups)
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'summarising', 'message': 'Generating summary...'})}\n\n"
+        summary = await asyncio.to_thread(we.summarize_evolution, changes, domain)
+
+        yield f"data: {json.dumps({'type': 'complete', 'domain': domain, 'pages_found': len(groups), 'changes_detected': len(changes), 'timeline': summary.get('timeline', []), 'briefing': summary.get('briefing', '')})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )

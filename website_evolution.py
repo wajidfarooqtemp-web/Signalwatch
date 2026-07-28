@@ -22,7 +22,14 @@ import requests
 from datetime import datetime, timedelta
 import gzip
 import io
+import re as _re
 
+# A real domain looks like word characters, dots, hyphens — nothing
+# else. This isn't meant to be a fully RFC-compliant domain validator,
+# just a practical filter that rejects anything with characters that
+# have no business being in a domain name (quotes, angle brackets,
+# semicolons, whitespace) before it ever reaches a network call.
+_DOMAIN_PATTERN = _re.compile(r'^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?)+$')
 
 # Common Crawl publishes crawl "shards" with IDs like CC-MAIN-2024-33.
 # There is no simple "give me a shard from N months ago" API — instead,
@@ -31,6 +38,18 @@ import io
 # search and pick shards close to our target months-back offsets.
 CRAWL_INDEX_LIST_URL = "https://index.commoncrawl.org/collinfo.json"
 
+def is_valid_domain(domain: str) -> bool:
+    """
+    Rejects anything that isn't a plausible domain BEFORE it reaches
+    any network call or gets echoed back to the frontend. This is the
+    server-side half of injection defense — the frontend's escapeHtml()
+    is the other half, defending the display side. Both matter:
+    this stops garbage from ever being processed; escapeHtml() stops
+    it from ever being rendered unsafely if it somehow got through.
+    """
+    if not domain or len(domain) > 253:
+        return False
+    return bool(_DOMAIN_PATTERN.match(domain))
 
 def get_available_crawls() -> list:
     """
