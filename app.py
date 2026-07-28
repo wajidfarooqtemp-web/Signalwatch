@@ -2161,6 +2161,7 @@ def sanitise_briefing_output(text: str) -> str:
         r'^we must',
         r'^we have to',
         r'^let\'?s (craft|write|draft|produce)',
+        r'^\d+\s*to\s*\d+\s*sentences',  # catches "2 to 3 sentences..." — the model echoing its own instructions back instead of following them
     ]
     for pattern in leak_starts:
         if re.match(pattern, text.strip(), re.IGNORECASE):

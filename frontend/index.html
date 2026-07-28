@@ -3393,11 +3393,15 @@ async function runWebsiteEvolution() {
     if (data.timeline && data.timeline.length > 0) {
       html += `<div style="border-left:2px solid var(--border);padding-left:20px;">`;
       data.timeline.forEach(item => {
-        html += `<div style="margin-bottom:16px;">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--teal);margin-bottom:4px;">${escapeHtml(item.date || "")}</div>
-          <div style="font-size:13px;color:var(--text);">${escapeHtml(item.event || "")}</div>
-        </div>`;
-      });
+  const linkHtml = item.url
+    ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:underline;font-size:11px;">View archived page →</a>`
+    : "";
+  html += `<div style="margin-bottom:16px;">
+    <div style="font-family:var(--mono);font-size:11px;color:var(--teal);margin-bottom:4px;">${escapeHtml(item.date || "")}</div>
+    <div style="font-size:13px;color:var(--text);margin-bottom:4px;">${escapeHtml(item.event || "")}</div>
+    ${linkHtml}
+  </div>`;
+});
       html += `</div>`;
     } else {
       html += `<div style="font-size:13px;color:var(--text3);">No timeline events to show.</div>`;

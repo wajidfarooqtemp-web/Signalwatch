@@ -584,7 +584,7 @@ Detected changes, in chronological order:
 
 Return a JSON object with exactly two keys: "timeline" and "briefing".
 
-"timeline": an array of objects, each with "date" and "event" keys. One entry per meaningful change above. "event" is a short, plain-English sentence describing what changed (e.g. "Pricing page title updated" or "New healthcare section appeared"). Base every entry strictly on the changes listed above — do not invent anything not present in the list.
+"timeline": an array of objects, each with "date", "event", and "url" keys. Copy the url exactly from the matching change above — do not invent or alter it. "event" is a short, plain-English sentence describing what changed. (e.g. "Pricing page title updated" or "New healthcare section appeared"). Base every entry strictly on the changes listed above — do not invent anything not present in the list.
 
 "briefing": 2 to 3 sentences in plain English summarising the overall pattern of how this site evolved across the sampled period. No hedging words. No markdown.
 
@@ -600,25 +600,43 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
         # unavailable, same principle generate_insight() already
         # follows for its own briefing/action fields
         return {
-            "timeline": [{"date": c.get("date", c.get("first_seen_date", "")), "event": f"{c['type']} detected"} for c in changes[:10]],
+            "timeline": [{"date": c.get("date", c.get("first_seen_date", "")), "event": f"{c['type']} detected", "url": c.get("url", "")} for c in changes[:10]],
             "briefing": f"Detected {len(changes)} changes for {domain}, but an AI summary wasn't available this time."
         }
 
     try:
-        clean = sw.strip_markdown(ai_result)
+        # Reuses the same robust JSON extraction your main product
+        # already relies on — strips code fences, finds the JSON object
+        # even with reasoning text before/after it, handles the same
+        # messy-model-output cases your briefing pipeline already
+        # solved. Writing a second, thinner parser here (the original
+        # version of this function) was the actual bug — this fixes it
+        # by reusing the proven one instead.
         import re, json as jsonlib
+        clean = ai_result.strip()
+        brace = clean.find('{')
+        if brace > 0:
+            clean = clean[brace:]
+        clean = re.sub(r'```[a-zA-Z]*\n?', '', clean)
+        clean = re.sub(r'```', '', clean)
+        clean = clean.strip()
+
         json_match = re.search(r"\{[\s\S]*\}", clean)
         if json_match:
             parsed = jsonlib.loads(json_match.group())
+            timeline = parsed.get("timeline", [])
+            briefing = parsed.get("briefing", "")
             return {
-                "timeline": parsed.get("timeline", []),
-                "briefing": sw.sanitise_briefing_output(parsed.get("briefing", "")) or parsed.get("briefing", "")
+                "timeline": timeline,
+                "briefing": sw.sanitise_briefing_output(briefing) or briefing
             }
+        else:
+            print(f"WebsiteEvolution: no JSON object found in AI response: {ai_result[:200]}")
     except Exception as e:
-        print(f"WebsiteEvolution: AI response parse failed: {e}")
+        print(f"WebsiteEvolution: AI response parse failed: {e} | raw response: {ai_result[:200]}")
 
     # Parsing failed — same honest-fallback principle as above
     return {
-        "timeline": [{"date": c.get("date", c.get("first_seen_date", "")), "event": f"{c['type']} detected"} for c in changes[:10]],
+        "timeline": [{"date": c.get("date", c.get("first_seen_date", "")), "event": f"{c['type']} detected", "url": c.get("url", "")} for c in changes[:10]],
         "briefing": f"Detected {len(changes)} changes for {domain}. AI summary could not be parsed this time."
     }
