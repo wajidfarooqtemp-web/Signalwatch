@@ -25,6 +25,8 @@ from curl_cffi import requests as curl_requests  # Same job as requests, but cop
 import re         # Tool for finding patterns in text (regex)
 import xml.etree.ElementTree as ET  # Tool for reading XML files (used for RSS feeds)
 import os         # Tool for reading environment variables (our API keys)
+import sys
+sys.stdout.reconfigure(line_buffering=True)  # forces print() to flush immediately, so Render's logs actually show every line, not just what happens to flush naturally
 from dotenv import load_dotenv
 load_dotenv()  # Reads .env file into environment variables — local dev only. Render sets real env vars directly, so this line does nothing on Render, but is required for your laptop to see DATABASE_URL.
 import json       # Tool for reading and writing JSON data
