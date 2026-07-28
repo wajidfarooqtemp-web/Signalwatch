@@ -529,12 +529,19 @@ def detect_changes(groups: dict) -> list:
         # "homepage changed to say 301 Moved Permanently", which is
         # just HTTP plumbing being captured mid-redirect, not a real
         # content change worth reporting.
-        NOISE_TITLES = {"301 moved permanently", "302 found", "403 forbidden", "404 not found", ""}
+        # Substring match, not exact match — redirect/error pages show
+        # up with slightly different title text depending on the server
+        # ("301 Moved", "301 Moved Permanently", etc.), confirmed by a
+        # real google.com test where "301 Moved" (not the longer exact
+        # string we originally filtered) slipped through
+        NOISE_PATTERNS = ["301 moved", "302 found", "403 forbidden", "404 not found"]
 
         for i in range(1, len(snaps)):
-            prev_title = snaps[i - 1].get("title", "")
-            curr_title = snaps[i].get("title", "")
-            if prev_title.strip().lower() in NOISE_TITLES or curr_title.strip().lower() in NOISE_TITLES:
+            prev_title = snaps[i - 1].get("title", "").strip().lower()
+            curr_title = snaps[i].get("title", "").strip().lower()
+            prev_is_noise = not prev_title or any(p in prev_title for p in NOISE_PATTERNS)
+            curr_is_noise = not curr_title or any(p in curr_title for p in NOISE_PATTERNS)
+            if prev_is_noise or curr_is_noise:
                 continue  # skip redirect/error noise, not a real change
             if prev_title and curr_title and prev_title != curr_title:
                 changes.append({
