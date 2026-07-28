@@ -571,6 +571,7 @@ def summarize_evolution(changes: list, domain: str) -> dict:
     Returns {"timeline": [...], "briefing": "..."} — empty/honest
     values if there's nothing to summarize or the AI is unavailable.
     """
+    print(f"WEBSITE_EVOLUTION_DEBUG_MARKER: function called with {len(changes)} changes for {domain}")
     if not changes:
         return {
             "timeline": [],
@@ -613,6 +614,7 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     # does — same fallback chain (OpenRouter -> Groq -> Cerebras ->
     # Mistral), same labeling convention for Render log traceability
     ai_result = sw.ai_call(prompt, max_tokens=700, allow_backup_fallback=True, label="website_evolution")
+    print(f"WEBSITE_EVOLUTION_DEBUG_MARKER: ai_result is {'present' if ai_result else 'EMPTY/NONE'}, length={len(ai_result) if ai_result else 0}")
 
     if not ai_result:
         # Honest fallback — never fabricate a timeline if the AI is
