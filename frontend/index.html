@@ -658,6 +658,7 @@
       <button class="nav-btn" id="navHelp" onclick="showPage('help')">Help</button>
       <button class="nav-btn" id="navPricing" onclick="showPage('pricing')">Pricing</button>
       <button class="nav-btn" id="navServices" onclick="showPage('services')">Services</button>
+      <button class="nav-btn" id="navPrivacy" onclick="showPage('privacy')">Privacy</button>
     </div>
     <div class="nav-right">
       <div class="live-badge"><div class="live-dot"></div>Live</div>
@@ -706,6 +707,7 @@
     <div class="mobile-btn" id="mNavHelp" onclick="showPage('help');toggleMenu()">Help</div>
     <div class="mobile-btn" id="mNavPricing" onclick="showPage('pricing');toggleMenu()">Pricing</div>
     <div class="mobile-btn" id="mNavServices" onclick="showPage('services');toggleMenu()">Services</div>
+    <div class="mobile-btn" id="mNavPrivacy" onclick="showPage('privacy');toggleMenu()">Privacy</div>
   </div>
 
   <!-- ── PAYMENT MODAL ──────────────────────────────────────────────────────
@@ -1934,6 +1936,68 @@
     </div>
   </div>
 
+<!-- PRIVACY POLICY PAGE -->
+<div class="about-page" id="privacyPage">
+  <div style="background:var(--white);border-bottom:1px solid var(--border);padding:72px 40px 56px;">
+    <div style="max-width:680px;margin:0 auto;">
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">Privacy</div>
+      <h2 style="font-family:var(--serif);font-size:36px;font-weight:800;color:var(--ink);line-height:1.1;letter-spacing:-1px;margin-bottom:16px;">Privacy Policy</h2>
+      <p style="font-size:14px;color:var(--text3);font-family:var(--mono);">Last updated: 29 July 2026</p>
+    </div>
+  </div>
+
+  <div style="padding:48px 40px;">
+    <div style="max-width:680px;margin:0 auto;">
+
+      <div style="margin-bottom:28px;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">The short version</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">We collect the minimum needed to run Signalwatch, keep it secure, and enforce fair usage. We never sell your data. Most records are deleted automatically after 90 days. You can ask us to delete everything about you at any time, and we will.</p>
+      </div>
+
+      <div style="margin-bottom:28px;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">What we collect</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">If you search without signing in, we assign your browser a random token, stored locally, not linked to your name. If you sign in with Google, we store your email address and Google account ID. We log the searches you run, tied to your token or email, so we can enforce daily limits and improve results. We record your browser, operating system, and device type as general categories only, never the exact browser string, and never your IP address beyond a brief, in-memory check to prevent abuse. If you support us financially, we store the amount, and your name or message if you choose to include one.</p>
+      </div>
+
+      <div style="margin-bottom:28px;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">Why we are allowed to process it</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">We process this data because it is necessary to provide the service you are using, and because we have a legitimate interest in keeping Signalwatch secure, fairly rate-limited, and free of abuse. Where we process payment details, we do so to fulfil our contract with you. We never process more than these purposes require.</p>
+      </div>
+
+      <div style="margin-bottom:28px;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">How long we keep it</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">Search and usage records are deleted automatically after 90 days. Payment records are kept only as long as required for accounting and tax purposes. Your Google login record is kept until you ask us to remove it.</p>
+      </div>
+
+      <div style="margin-bottom:28px;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">Your rights</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">You can ask us what we hold about you, correct it, or delete it entirely, at any time. Email <a href="mailto:support@signalwatch.in" style="color:var(--teal);">support@signalwatch.in</a> with the email or token you used, and we will action it directly. No forms, no waiting.</p>
+      </div>
+
+      <div style="margin-bottom:28px;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">Who else sees it</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">We use Google for sign in, Razorpay and PayPal for payments, and Neon for our database. Each processes your data under their own privacy policy when you interact with them directly. We do not share your data with anyone else.</p>
+      </div>
+
+      <div style="margin-bottom:28px;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">If this policy changes</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">If we ever need to update this policy, we will update the date at the top and post the new version here. We will never quietly expand what we collect without saying so on this page.</p>
+      </div>
+
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;">Questions</div>
+        <p style="font-size:14px;color:var(--text2);line-height:1.8;font-weight:300;">Email <a href="mailto:support@signalwatch.in" style="color:var(--teal);">support@signalwatch.in</a>. We read every message ourselves.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <span>© 2026 Signalwatch</span>
+    <span>Privacy Policy</span>
+  </footer>
+</div>
+
   <script>
     // ── CONFIGURATION ──────────────────────────────────────────────────────
     const API_BASE = "https://signalwatch-r6s8.onrender.com";
@@ -2349,14 +2413,14 @@ async function fetchGoogleProfile(accessToken) {
       // Show and hide pages
       document.getElementById("searchPage").className = page==="search" ? "search-page" : "search-page hidden";
 
-      const pages = ["about","contact","help","pricing","services"];
+      const pages = ["about","contact","help","pricing","services","privacy"];
       pages.forEach(p => {
         const el = document.getElementById(p + "Page");
         if (el) el.className = page===p ? "about-page active" : "about-page";
       });
 
       // Highlight the correct nav button — all four
-      ["Search","About","Help","Pricing","Services"].forEach(name => {
+      ["Search","About","Help","Pricing","Services","Privacy"].forEach(name => {
         const btn  = document.getElementById("nav"  + name);
         const mBtn = document.getElementById("mNav" + name);
         const isActive = page === name.toLowerCase();
@@ -2365,7 +2429,7 @@ async function fetchGoogleProfile(accessToken) {
       });
 
       // Highlight the correct nav button — all four
-      ["Search","About","Help","Pricing"].forEach(name => {
+      ["Search","About","Help","Pricing","Services","Privacy"].forEach(name => {
         const btn  = document.getElementById("nav"  + name);
         const mBtn = document.getElementById("mNav" + name);
         const isActive = page === name.toLowerCase();
