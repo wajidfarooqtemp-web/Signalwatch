@@ -3675,8 +3675,19 @@ async def pro_status(token: str = ""):
     """
     if not token:
         return {"is_pro": False}
+
+    # Same resolution as /create-order — a Google user's Pro row is keyed
+    # by their stable "g_<sub>" identity, not their raw access token.
+    resolved_token = token
+    if token.startswith("google_"):
+        id_token_str = token[len("google_"):]
+        google_uid = verify_google_token(id_token_str)
+        if not google_uid:
+            return {"is_pro": False}
+        resolved_token = google_uid
+
     from payments import is_pro
-    return {"is_pro": is_pro(token)}
+    return {"is_pro": is_pro(resolved_token)}
 
 @app.post("/track")
 async def track_event(request: Request):
@@ -3773,10 +3784,23 @@ async def create_order(token: str = ""):
     Creates a server-side order so the price cannot be tampered with.
     Returns order details the frontend needs to open the checkout popup.
     """
-    # Accept any non-empty token — format does not matter, only that it exists
     if not token:
         return {"error": "invalid token"}
-    return create_razorpay_order(token)
+
+    # Resolve the token the same way /search-stream already does. Without
+    # this, a Google-signed-in customer's raw "google_<access_token>" gets
+    # stored as their Pro identity instead of their stable "g_<sub>"
+    # identity, and every other part of the app checks Pro against the
+    # resolved one — so their paid access is never recognised again.
+    resolved_token = token
+    if token.startswith("google_"):
+        id_token_str = token[len("google_"):]
+        google_uid = verify_google_token(id_token_str)
+        if not google_uid:
+            return {"error": "google_auth_failed"}
+        resolved_token = google_uid
+
+    return create_razorpay_order(resolved_token)
 
 @app.get("/create-support-order")
 async def create_support_order(amount: int = 0, name: str = "", message: str = "", token: str = ""):
@@ -3885,10 +3909,19 @@ async def create_paypal_order_route(token: str = ""):
     price cannot be tampered with from the browser. Returns the order_id
     the frontend needs to open the PayPal popup.
     """
-    # Accept any non-empty token — format does not matter, only that it exists
     if not token:
         return {"error": "invalid token"}
-    return create_paypal_order(token)
+
+    # Same resolution as /create-order above — see that comment for why.
+    resolved_token = token
+    if token.startswith("google_"):
+        id_token_str = token[len("google_"):]
+        google_uid = verify_google_token(id_token_str)
+        if not google_uid:
+            return {"error": "google_auth_failed"}
+        resolved_token = google_uid
+
+    return create_paypal_order(resolved_token)
 
 
 @app.post("/capture-paypal-order")
@@ -3998,11 +4031,21 @@ async def redeem_code_route(request: Request):
         if not code or not token:
             return {"success": False, "error": "missing fields"}
 
-        result = redeem_promo_code(code, token)
+        # Same resolution as /create-order — otherwise a Google user's
+        # redeemed Pro access is granted to a token that's never checked again.
+        resolved_token = token
+        if token.startswith("google_"):
+            id_token_str = token[len("google_"):]
+            google_uid = verify_google_token(id_token_str)
+            if not google_uid:
+                return {"success": False, "error": "google_auth_failed"}
+            resolved_token = google_uid
+
+        result = redeem_promo_code(code, resolved_token)
 
         # Only counts as a conversion if the code actually worked
         if result.get("success"):
-            await asyncio.to_thread(log_event, token, "conversion", {"method": "promo"}, request.headers.get("user-agent", ""))
+            await asyncio.to_thread(log_event, resolved_token, "conversion", {"method": "promo"}, request.headers.get("user-agent", ""))
 
         return result
 

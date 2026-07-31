@@ -134,7 +134,7 @@ def _authenticate(ctx: Context, tool_category: str, hourly_limit: int) -> dict:
         # if analytics logging fails for any reason, the tool still runs
         print(f"MCP analytics logging error: {e}")
 
-    return {}  # Success — empty dict means "no error, proceed"
+    return {"key_id": key_id}  # Success — includes key_id so callers (like find_leads) can build a per-client identity
 
 
 # ── TOOLS ────────────────────────────────────────────────────────────────
