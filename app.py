@@ -66,6 +66,7 @@ from analytics import (
 # Import the MCP server object we defined in mcp_server.py
 from mcp_server import mcp
 import mcp_keys_db
+from semantic_search import rescue_dropped_results  # semantic retrieval — recovers relevant results keyword filtering drops
 import contextlib
 
 # streamable_http_app() turns our FastMCP object into a mountable ASGI app.
@@ -1925,6 +1926,22 @@ def filter_and_rank(posts, query):
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
 
+def add_semantic_rescue(all_posts, ranked, query):
+    """
+    Runs after filter_and_rank() has already done its keyword-only pass.
+    Looks at what got dropped, checks it for semantic relevance via
+    Mistral embeddings, and appends anything genuinely close in meaning
+    onto the ranked list, so generate_insight() and the results shown
+    to the user both see it, not just what happened to share a word
+    with the query.
+    """
+    ranked_titles = set(r["title"] for r in ranked)
+    rescued = rescue_dropped_results(all_posts, ranked_titles, query)
+
+    if rescued:
+        print(f"Semantic rescue: recovered {len(rescued)} results keyword matching had dropped")
+
+    return ranked + rescued
 
 def _looks_non_english(text: str) -> bool:
     """
@@ -4251,6 +4268,7 @@ async def search_stream(query: str, request: Request, token: str = ""):
         yield f"data: {json.dumps({'type': 'analysing', 'message': 'Generating intelligence briefing'})}\n\n"
 
         ranked  = await asyncio.to_thread(filter_and_rank, all_posts, query)
+        ranked  = await asyncio.to_thread(add_semantic_rescue, all_posts, ranked, query)
         insight = await asyncio.to_thread(generate_insight, ranked, query)
 
         final = {
@@ -4372,6 +4390,7 @@ def search(query: str, request: Request, token: str = ""):
       f"PlayStore:{len(playstore)} GNews:{len(googlenews)} BNews:{len(bingnews)} Bluesky:{len(bluesky)}")
 
     ranked  = filter_and_rank(all_posts, query)
+    ranked  = add_semantic_rescue(all_posts, ranked, query)
     insight = generate_insight(ranked, query)
 
     # Return everything as JSON — the frontend reads this
