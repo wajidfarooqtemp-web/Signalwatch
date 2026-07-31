@@ -1572,9 +1572,10 @@ def ai_call_groq(prompt, max_tokens=600, label="ai_call"):
         text = data["choices"][0]["message"]["content"] or ""
         text = strip_markdown(text.strip())
 
-        if len(text) > 50:
+        if len(text) > 15:
             print(f"[{label}] Got a response from Groq")
             return text
+        print(f"[{label}] Groq rejected — response too short ({len(text)} chars): {repr(text)}")
         return None
 
     except Exception as e:
@@ -1641,9 +1642,10 @@ def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
         text = data["choices"][0]["message"]["content"] or ""
         text = strip_markdown(text.strip())
 
-        if len(text) > 50:
+        if len(text) > 15:
             print(f"[{label}] Got a response from Cerebras")
             return text
+        print(f"[{label}] Cerebras rejected — response too short ({len(text)} chars): {repr(text)}")
         return None
 
     except Exception as e:
@@ -1698,9 +1700,10 @@ def ai_call_mistral(prompt, max_tokens=600, label="ai_call"):
         text = data["choices"][0]["message"]["content"] or ""
         text = strip_markdown(text.strip())
 
-        if len(text) > 50:
+        if len(text) > 15:
             print(f"[{label}] Got a response from Mistral")
             return text
+        print(f"[{label}] Mistral rejected — response too short ({len(text)} chars): {repr(text)}")
         return None
 
     except Exception as e:
@@ -1785,9 +1788,11 @@ def ai_call(prompt, max_tokens=600, allow_backup_fallback=False, label="ai_call"
 
             text = strip_markdown(text.strip())
 
-            if len(text) > 50:
+            if len(text) > 15:
                 print(f"[{label}] Got response from {model}")
                 return text
+            else:
+                print(f"[{label}] Rejected — response too short ({len(text)} chars): {repr(text)}")
 
         except Exception as e:
             print(f"[{label}] Error with {model}: {e}")
