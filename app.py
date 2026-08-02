@@ -67,7 +67,7 @@ from analytics import (
 from mcp_server import mcp
 import mcp_keys_db
 from semantic_search import rescue_dropped_results  # semantic retrieval — recovers relevant results keyword filtering drops
-from insight_parser import parse_insight  # LangChain schema-validated parsing — first attempt before regex fallback
+from insight_parser import parse_insight, parse_agent_angle, parse_competitor_list  # LangChain schema-validated parsing — first attempt before regex fallback
 import contextlib
 
 # streamable_http_app() turns our FastMCP object into a mountable ASGI app.
@@ -2975,16 +2975,26 @@ No markdown. No explanation. Raw JSON only."""
 
         competitors = []
         if competitor_result:
-            try:
-                clean = re.sub(r'```[a-z]*\n?', '', competitor_result)
-                clean = re.sub(r'```', '', clean).strip()
-                parsed = json.loads(clean)
-                competitors = parsed.get("competitors", [])[:2]
-            except Exception:
-                # If JSON fails, extract any capitalised words as a fallback
-                # This is imperfect but better than nothing
-                words = re.findall(r'\b[A-Z][a-z]+\b', competitor_result)
-                competitors = words[:2]
+            # FIRST ATTEMPT: schema-validated parsing via LangChain.
+            parsed_competitors = parse_competitor_list(competitor_result)
+
+            if parsed_competitors:
+                competitors = parsed_competitors
+                print("competitive_agent: parsed competitors via LangChain schema parser")
+            else:
+                # FALLBACK: exactly what competitive_agent() already did
+                # before this change — untouched, still the safety net.
+                try:
+                    clean = re.sub(r'```[a-z]*\n?', '', competitor_result)
+                    clean = re.sub(r'```', '', clean).strip()
+                    parsed = json.loads(clean)
+                    competitors = parsed.get("competitors", [])[:2]
+                except Exception:
+                    # If JSON fails, extract any capitalised words as a fallback
+                    # This is imperfect but better than nothing
+                    words = re.findall(r'\b[A-Z][a-z]+\b', competitor_result)
+                    competitors = words[:2]
+                print("competitive_agent: LangChain competitor parser failed, used regex fallback")
 
         if not competitors:
             print("Competitive agent: could not identify competitors")
@@ -3151,20 +3161,30 @@ No markdown. No backticks. Raw JSON only."""
                 yield f"data: {json.dumps({'type': 'ping'})}\n\n"
             continue
 
-        # Parse the investigation angle
-        try:
-            clean = re.sub(r'```[a-z]*\n?', '', think_result)
-            clean = re.sub(r'```', '', clean).strip()
-            investigation = json.loads(clean)
-        except Exception:
-            # If JSON parse fails, extract manually
-            # When AI returns malformed JSON, we fall back to a generic angle.
-            # We never use the word "loop" — the user sees "Agent N" not "Loop N".
-            investigation = {
-                "angle":        "broader sentiment and reputation patterns",
-                "search_query": query,
-                "why":          "Surfacing signals the initial scan may have missed"
-            }
+        # Parse the investigation angle.
+        # FIRST ATTEMPT: schema-validated parsing via LangChain, same
+        # pattern already used for the main briefing in generate_insight().
+        investigation = parse_agent_angle(think_result)
+
+        if investigation:
+            print("chief_of_staff: parsed angle via LangChain schema parser")
+        else:
+            # FALLBACK: exactly what chief_of_staff() already did before
+            # this change — untouched, still the safety net.
+            try:
+                clean = re.sub(r'```[a-z]*\n?', '', think_result)
+                clean = re.sub(r'```', '', clean).strip()
+                investigation = json.loads(clean)
+            except Exception:
+                # If JSON parse fails, extract manually
+                # When AI returns malformed JSON, we fall back to a generic angle.
+                # We never use the word "loop" — the user sees "Agent N" not "Loop N".
+                investigation = {
+                    "angle":        "broader sentiment and reputation patterns",
+                    "search_query": query,
+                    "why":          "Surfacing signals the initial scan may have missed"
+                }
+            print("chief_of_staff: LangChain angle parser failed, used regex fallback")
 
         angle        = investigation.get("angle", "")
         search_query = investigation.get("search_query", query)
@@ -3193,32 +3213,19 @@ No markdown. No backticks. Raw JSON only."""
         # ran before it.
         yield f"data: {json.dumps({'type': 'agent_update', 'phase': 'investigating', 'message': f'Signal Agent — {clean_angle}', 'why': clean_why, 'loop': loop_count})}\n\n"
 
-        # ── Step 2: Run all three specialists simultaneously ──────────────────
-        # asyncio.gather runs all three at the same time
-        # Total wait = slowest agent, not sum of all three
-        signal_task      = signal_agent(search_query, query)
-        context_task     = context_agent(search_query)
-        risk_task        = risk_agent(search_query)
-        # Agent 4 runs on every loop alongside the other three.
-        # It uses the original query and existing_results to find competitors.
-        # It does not use search_query because competitors relate to the
-        # original brand, not the specific angle being investigated.
-        # competitive_agent is NOT in this loop
-        # It runs separately after all loops complete — see below
-        signal_result, context_result, risk_result = await asyncio.gather(
-            signal_task,
-            context_task,
-            risk_task,
-            return_exceptions=True
-        )
+        # ── Step 2: Run Signal Agent ──────────────────────────────────────────
+        # Context Agent and Risk Agent used to run here too. Removed —
+        # for a typical brand-intelligence query, Semantic Scholar and
+        # CrossRef (Context Agent) almost never return anything relevant,
+        # and Companies House / SEC EDGAR / FDA (Risk Agent) only match
+        # UK-registered, US-public, or pharma/food companies respectively.
+        # Both were mostly returning nothing, or noise filter_agent_findings()
+        # had to fight to remove. Signal Agent is the one that reliably works.
+        signal_result = await signal_agent(search_query, query)
 
         loop_findings = []
-
-        for result in [signal_result, context_result, risk_result]:
-            if isinstance(result, Exception):
-                continue  # Skip failed agents silently
-            if isinstance(result, dict):
-                loop_findings += result.get("findings", [])
+        if isinstance(signal_result, dict):
+            loop_findings += signal_result.get("findings", [])
 
         # This is what actually catches the irrelevant academic papers
         # Context Agent occasionally pulls in. A single loose keyword

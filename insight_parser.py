@@ -175,3 +175,98 @@ def _to_dict(parsed: InsightBriefing) -> dict:
             for q in parsed.questions
         ]
     }
+
+# ── AGENT ANGLE SCHEMA ─────────────────────────────────────────────────────
+# Matches chief_of_staff()'s think_prompt in app.py, which currently
+# asks for {"angle": ..., "search_query": ..., "why": ...} and parses
+# it with a bare re.sub + json.loads wrapped in try/except.
+
+class AgentAngle(BaseModel):
+    angle: str = Field(description="One plain English sentence describing what to find out. Must never use the words loop, cycle, iteration, agent, or investigation.")
+    search_query: str = Field(description="A real 3-5 word search phrase, not a description of a task")
+    why: str = Field(description="One sentence on why this matters commercially")
+
+
+_angle_parser = PydanticOutputParser(pydantic_object=AgentAngle)
+
+
+def get_angle_format_instructions() -> str:
+    """Same purpose as get_format_instructions(), for the angle schema."""
+    return _angle_parser.get_format_instructions()
+
+
+def parse_agent_angle(raw_text: str) -> Optional[dict]:
+    """
+    Same two-stage pattern as parse_insight(): strict parse first, one
+    repair attempt via OutputFixingParser if that fails, None if both
+    fail. Caller (chief_of_staff in app.py) is expected to fall back
+    to its existing hardcoded generic angle exactly as it does today.
+    """
+    if not raw_text:
+        return None
+    try:
+        result = _angle_parser.parse(raw_text)
+        return {"angle": result.angle, "search_query": result.search_query, "why": result.why}
+    except OutputParserException:
+        pass
+    except Exception as e:
+        print(f"insight_parser: angle strict parse failed with unexpected error: {e}")
+
+    fixing_llm = _get_fixing_llm()
+    if not fixing_llm:
+        return None
+    try:
+        fixing_parser = OutputFixingParser.from_llm(parser=_angle_parser, llm=fixing_llm)
+        result = fixing_parser.parse(raw_text)
+        print("insight_parser: repaired malformed agent angle via fixing model")
+        return {"angle": result.angle, "search_query": result.search_query, "why": result.why}
+    except Exception as e:
+        print(f"insight_parser: agent angle repair also failed: {e}")
+        return None
+
+
+# ── COMPETITOR LIST SCHEMA ─────────────────────────────────────────────────
+# Matches competitive_agent()'s competitor_prompt in app.py, which
+# currently asks for {"competitors": [...]} and falls back to
+# regex-extracting capitalised words if JSON parsing fails.
+
+class CompetitorList(BaseModel):
+    competitors: List[str] = Field(description="Exactly 2 real competitor names, no explanation, no extra text")
+
+
+_competitor_parser = PydanticOutputParser(pydantic_object=CompetitorList)
+
+
+def get_competitor_format_instructions() -> str:
+    """Same purpose as get_format_instructions(), for the competitor list schema."""
+    return _competitor_parser.get_format_instructions()
+
+
+def parse_competitor_list(raw_text: str) -> Optional[list]:
+    """
+    Same two-stage pattern again. Returns a plain list of competitor
+    name strings, or None if both attempts fail — caller (competitive_agent
+    in app.py) is expected to fall back to its existing capitalised-word
+    regex extraction exactly as it does today.
+    """
+    if not raw_text:
+        return None
+    try:
+        result = _competitor_parser.parse(raw_text)
+        return result.competitors[:2]
+    except OutputParserException:
+        pass
+    except Exception as e:
+        print(f"insight_parser: competitor strict parse failed with unexpected error: {e}")
+
+    fixing_llm = _get_fixing_llm()
+    if not fixing_llm:
+        return None
+    try:
+        fixing_parser = OutputFixingParser.from_llm(parser=_competitor_parser, llm=fixing_llm)
+        result = fixing_parser.parse(raw_text)
+        print("insight_parser: repaired malformed competitor list via fixing model")
+        return result.competitors[:2]
+    except Exception as e:
+        print(f"insight_parser: competitor list repair also failed: {e}")
+        return None
