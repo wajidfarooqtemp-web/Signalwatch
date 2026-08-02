@@ -3010,8 +3010,8 @@ No markdown. No explanation. Raw JSON only."""
 
         print(f"Competitive agent: tracking {competitors}")
 
-        # Step 2: Search for competitor news using existing functions
-        # We reuse fetch_google_news and fetch_hackernews — no new code
+        # Step 2: Search for competitor activity using existing functions
+        # We reuse fetch_google_news, fetch_hackernews, and fetch_reddit — no new code
         for competitor in competitors:
             try:
                 # Google News for press and announcements
@@ -3028,6 +3028,33 @@ No markdown. No explanation. Raw JSON only."""
                     fetch_hackernews, competitor
                 )
                 for item in hn[:2]:
+                    item["source"] = "competitive"
+                    findings.append(item)
+
+                # Reddit for real customer sentiment about the competitor —
+                # complaints, "switched to X" posts, feature requests. This
+                # was missing entirely before, so Competitive Intelligence
+                # could see a competitor's PRESS COVERAGE but never what
+                # actual users were saying about them
+                reddit = await asyncio.to_thread(
+                    fetch_reddit, competitor
+                )
+                for item in reddit[:3]:
+                    item["source"] = "competitive"
+                    findings.append(item)
+
+                # Firecrawl for proper editorial coverage of the competitor —
+                # launches, funding news, product announcements from real
+                # outlets, not just whatever Google News happens to index.
+                # COST NOTE: this spends Firecrawl credits from the same
+                # shared 1,000/month allowance the main search pipeline and
+                # Signal Agent already draw from — 2 competitors per search
+                # means 2 extra Firecrawl calls per search here. Worth
+                # watching at https://firecrawl.dev/app if search volume grows.
+                firecrawl = await asyncio.to_thread(
+                    fetch_firecrawl, competitor
+                )
+                for item in firecrawl[:3]:
                     item["source"] = "competitive"
                     findings.append(item)
 
