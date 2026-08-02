@@ -67,6 +67,7 @@ from analytics import (
 from mcp_server import mcp
 import mcp_keys_db
 from semantic_search import rescue_dropped_results  # semantic retrieval — recovers relevant results keyword filtering drops
+from insight_parser import parse_insight  # LangChain schema-validated parsing — first attempt before regex fallback
 import contextlib
 
 # streamable_http_app() turns our FastMCP object into a mountable ASGI app.
@@ -2498,7 +2499,25 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     questions  = []
 
     if ai_result:
-        briefing, action, questions = extract_briefing_and_questions(ai_result)
+        # FIRST ATTEMPT: schema-validated parsing via LangChain. This
+        # replaces the old regex-hunt-for-JSON approach whenever it
+        # succeeds — it either returns a dict matching InsightBriefing
+        # exactly (briefing, action, questions all present and correctly
+        # shaped) or returns None. It never returns a half-parsed result,
+        # so there is nothing partial to accidentally trust here.
+        parsed = parse_insight(ai_result)
+
+        if parsed:
+            briefing  = parsed.get("briefing", "")
+            action    = parsed.get("action", "")
+            questions = parsed.get("questions", [])
+            print("generate_insight: parsed via LangChain schema parser")
+        else:
+            # FALLBACK: exactly what generate_insight() already did
+            # before this change. Untouched, still the safety net.
+            briefing, action, questions = extract_briefing_and_questions(ai_result)
+            print("generate_insight: LangChain parser failed, used regex fallback")
+
         briefing = sanitise_briefing_output(briefing)
         # Run the same leak check on the action — nothing was catching
         # a leak here before, so a stray "I need to..." could have shown
