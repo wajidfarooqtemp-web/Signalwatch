@@ -49,7 +49,7 @@
     body { font-family:var(--sans); background:var(--bg); color:var(--text); min-height:100vh; font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased; }
 
     /* NAV */
-    .topnav { display:flex; align-items:center; justify-content:space-between; padding:0 40px; height:58px; background:var(--white); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:200; }
+    .topnav { display:flex; align-items:center; justify-content:space-between; padding:16px 40px; height:auto; min-height:64px; background:var(--white); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:200; }
     .brand { display:flex; align-items:center; gap:8px; text-decoration:none; }
     .brand-tag { font-family:var(--mono); font-size:9px; font-weight:500; color:var(--amber); background:var(--amber-light); border:1px solid var(--amber-mid); border-radius:3px; padding:2px 6px; letter-spacing:0.8px; text-transform:uppercase; }
     .nav-center { display:flex; align-items:center; gap:2px; }
@@ -444,7 +444,7 @@
       .about-cards { grid-template-columns:1fr; padding:24px 24px 60px; }
     }
     @media(max-width:768px) {
-      .topnav { padding:0 16px; }
+      .topnav { padding: 12px 16px; }
       .nav-center { display:none; }
       .hamburger { display:flex; }
       .hero { padding:40px 16px 32px; }
