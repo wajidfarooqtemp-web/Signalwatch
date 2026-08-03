@@ -661,6 +661,16 @@
       <button class="nav-btn" id="navPrivacy" onclick="showPage('privacy')">Privacy</button>
     </div>
     <div class="nav-right">
+      <button
+        onclick="showSupportModal()"
+        style="
+          font-family:var(--sans);font-size:12px;font-weight:500;
+          color:var(--text2);background:none;
+          border:1px solid var(--border2);border-radius:5px;
+          padding:6px 12px;cursor:pointer;white-space:nowrap;
+        ">
+        ♥ Support
+      </button>
       <div class="searches-left" id="searchesLeft"><span id="searchesCount">3</span> left today</div>
       <!-- Pro badge — hidden by default, shown when server confirms Pro status -->
       <div style="
@@ -670,44 +680,25 @@
         border:1px solid var(--teal-mid);border-radius:20px;
         padding:4px 12px;letter-spacing:0.5px;
       ">PRO</div>
+      <button
+  id="navUpgradeBtn"
+  onclick="showPaymentModal('nav')"
+  style="
+    font-family:var(--sans);font-size:13px;font-weight:600;
+    color:var(--white);background:var(--teal);
+    border:none;border-radius:5px;
+    padding:7px 16px;cursor:pointer;letter-spacing:0.1px;
+    white-space:none;display:none;transition:background 0.15s;
+  "
+  onmouseover="this.style.background='#0b6859'"
+  onmouseout="this.style.background='var(--teal)'">
+  Upgrade to Pro
+</button>
     </div>
     <div class="hamburger" id="hamburger" onclick="toggleMenu()">
       <span></span><span></span><span></span>
     </div>
   </nav>
-
-  <!-- Dedicated action strip — Support and Upgrade now have their own row,
-       out of the cramped nav bar, per feedback that the nav layout was
-       breaking. Sits directly under the nav, above the hero. -->
-  <div style="
-    display:flex;justify-content:flex-end;align-items:center;gap:10px;
-    padding:10px 40px;background:var(--bg2);border-bottom:1px solid var(--border);
-  ">
-    <button
-      onclick="showSupportModal()"
-      style="
-        font-family:var(--sans);font-size:12px;font-weight:500;
-        color:var(--text2);background:var(--white);
-        border:1px solid var(--border2);border-radius:5px;
-        padding:7px 14px;cursor:pointer;white-space:nowrap;
-      ">
-      ♥ Support
-    </button>
-    <button
-      id="navUpgradeBtn"
-      onclick="showPaymentModal('nav')"
-      style="
-        font-family:var(--sans);font-size:13px;font-weight:600;
-        color:var(--white);background:var(--teal);
-        border:none;border-radius:5px;
-        padding:8px 18px;cursor:pointer;letter-spacing:0.1px;
-        white-space:nowrap;display:none;transition:background 0.15s;
-      "
-      onmouseover="this.style.background='#0b6859'"
-      onmouseout="this.style.background='var(--teal)'">
-      Upgrade to Pro
-    </button>
-  </div>
 
   <div class="mobile-menu" id="mobileMenu">
     <div class="mobile-btn active" id="mNavSearch" onclick="showPage('search');toggleMenu()">Search</div>
