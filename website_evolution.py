@@ -632,6 +632,21 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
             "briefing": f"Detected {len(changes)} changes for {domain}, but an AI summary wasn't available this time."
         }
 
+    # FIRST ATTEMPT: schema-validated parsing via LangChain. This is
+    # what actually catches syntax errors like "Expecting ',' delimiter"
+    # — the old code only detected the failure after the fact, it never
+    # had a repair step.
+    from insight_parser import parse_website_evolution
+    parsed_result = parse_website_evolution(ai_result)
+    if parsed_result:
+        print("WebsiteEvolution: parsed via LangChain schema parser")
+        briefing = parsed_result.get("briefing", "")
+        return {
+            "timeline": parsed_result.get("timeline", []),
+            "briefing": sw.sanitise_briefing_output(briefing) or briefing
+        }
+    print("WebsiteEvolution: LangChain parser failed, trying regex fallback")
+
     try:
         # Reuses the same robust JSON extraction your main product
         # already relies on — strips code fences, finds the JSON object

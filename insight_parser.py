@@ -270,3 +270,54 @@ def parse_competitor_list(raw_text: str) -> Optional[list]:
     except Exception as e:
         print(f"insight_parser: competitor list repair also failed: {e}")
         return None
+# ── WEBSITE EVOLUTION SCHEMA ────────────────────────────────────────────────
+# Matches summarize_evolution()'s prompt in website_evolution.py, which asks
+# for {"timeline": [...], "briefing": ...} and parses it with a bare
+# json.loads(). The failure you just hit — "Expecting ',' delimiter" — is a
+# genuine JSON syntax error from the model, most likely an unescaped
+# character inside an event description. Same fix as everywhere else:
+# validate against a schema, repair once if strict parsing fails, fall back
+# to the existing regex handling if that also fails.
+
+class TimelineEvent(BaseModel):
+    date: str = Field(description="Date of the change, copied exactly from the input")
+    event: str = Field(description="Short plain-English description of what changed")
+    url: str = Field(description="The exact url from the matching change, or empty string")
+
+
+class WebsiteEvolutionSummary(BaseModel):
+    timeline: List[TimelineEvent] = Field(description="Chronological list of detected changes")
+    briefing: str = Field(description="2 to 3 sentences summarising the overall pattern")
+
+
+_we_parser = PydanticOutputParser(pydantic_object=WebsiteEvolutionSummary)
+
+
+def parse_website_evolution(raw_text: str) -> Optional[dict]:
+    if not raw_text:
+        return None
+    try:
+        result = _we_parser.parse(raw_text)
+        return {
+            "timeline": [t.dict() for t in result.timeline],
+            "briefing": result.briefing
+        }
+    except OutputParserException:
+        pass
+    except Exception as e:
+        print(f"insight_parser: website evolution strict parse failed with unexpected error: {e}")
+
+    fixing_llm = _get_fixing_llm()
+    if not fixing_llm:
+        return None
+    try:
+        fixing_parser = OutputFixingParser.from_llm(parser=_we_parser, llm=fixing_llm)
+        result = fixing_parser.parse(raw_text)
+        print("insight_parser: repaired malformed website evolution output via fixing model")
+        return {
+            "timeline": [t.dict() for t in result.timeline],
+            "briefing": result.briefing
+        }
+    except Exception as e:
+        print(f"insight_parser: website evolution repair also failed: {e}")
+        return None
