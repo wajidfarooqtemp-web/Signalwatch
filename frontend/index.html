@@ -92,16 +92,14 @@
     }
     /* HERO */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
-    .hero { max-width:1320px; margin:0 auto; padding:64px 40px 52px; display:flex; justify-content:flex-start; align-items:flex-start; gap:80px; flex-wrap:wrap; }
-    .hero > div:first-child { flex:0 1 560px; min-width:280px; }
-    .hero-panel { flex:0 0 400px; }
+    .hero { max-width:1320px; margin:0 auto; padding:64px 40px 52px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
 
     /* ── DASH FIX ──
        The original had a ::before pseudo-element that drew a line before
        "Brand Intelligence Platform". Removed entirely below. */
     .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:18px; display:flex; align-items:center; gap:8px; }
 
-    .hero h1 { font-family:var(--serif); font-size:60px; font-weight:800; color:var(--ink); line-height:1.02; letter-spacing:-2px; margin-bottom:20px; }
+    .hero h1 { font-family:var(--serif); font-size:52px; font-weight:800; color:var(--ink); line-height:1.05; letter-spacing:-1.5px; margin-bottom:20px; }
     .hero h1 .accent { color:var(--teal); }
     .hero h1 .warm { color:var(--amber); }
     .hero-sub { font-size:16px; color:var(--text2); line-height:1.75; max-width:480px; margin-bottom:32px; font-weight:300; }
@@ -437,8 +435,7 @@
 
     /* RESPONSIVE */
     @media(max-width:900px) {
-      .hero { gap:32px; padding:48px 24px 40px; }
-      .hero > div:first-child { flex:1 1 100%; }
+      .hero { grid-template-columns:1fr; gap:32px; padding:48px 24px 40px; }
       .hero-panel { display:none; }
       .hero h1 { font-size:38px; }
       .stat-strip-inner { grid-template-columns:1fr 1fr; padding:0 24px; }
