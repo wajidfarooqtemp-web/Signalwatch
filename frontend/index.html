@@ -90,22 +90,83 @@
       0%, 100% { opacity: 1; }
       50%      { opacity: 0.45; }
     }
-    /* HERO */
+    /* HERO — centered, single column. Old two-column grid removed,
+       the right-side panel moved out entirely and rebuilt as the
+       preview card grid below the search bar. */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
-    .hero { max-width:1320px; margin:0 auto; padding:64px 40px 52px; display:grid; grid-template-columns:1fr 400px; gap:80px; align-items:start; }
-
-    /* ── DASH FIX ──
-       The original had a ::before pseudo-element that drew a line before
-       "Brand Intelligence Platform". Removed entirely below. */
-    .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+    .hero { max-width:740px; margin:0 auto; padding:76px 40px 40px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+    .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:20px; display:flex; align-items:center; justify-content:center; gap:8px; }
 
     .hero h1 { font-family:var(--serif); font-size:52px; font-weight:800; color:var(--ink); line-height:1.05; letter-spacing:-1.5px; margin-bottom:20px; }
     .hero h1 .accent { color:var(--teal); }
     .hero h1 .warm { color:var(--amber); }
-    .hero-sub { font-size:16px; color:var(--text2); line-height:1.75; max-width:480px; margin-bottom:32px; font-weight:300; }
-    .source-pills { display:flex; flex-wrap:wrap; gap:6px; }
+    .hero-sub { font-size:16px; color:var(--text2); line-height:1.75; max-width:560px; margin:0 auto; font-weight:300; }
+    .source-pills { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
     .source-pill { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500; color:var(--text2); background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:4px 10px; }
     .source-pill-dot { width:4px; height:4px; border-radius:50%; background:var(--teal); }
+
+   /* INTELLIGENCE PREVIEW PANEL — sits below the search bar.
+       Static, illustrative preview content showing the shape of what
+       a real search returns. Clearly labelled as an example, not a
+       live claim, same spirit as marketing preview copy generally.
+       Restrained on purpose: flat backgrounds, thin borders, no
+       gradients, no glow, no motion beyond a simple hover lift. */
+    .intel-panel-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:32px 32px 40px; margin:4px 0 44px; }
+    .intel-panel-head { max-width:1100px; margin:0 auto 20px; display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+    .intel-panel-eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); }
+    .intel-panel-title { font-family:var(--serif); font-size:20px; font-weight:700; color:var(--ink); letter-spacing:-0.3px; }
+    .intel-panel-sub { font-size:12px; color:var(--text3); font-family:var(--mono); }
+
+    .intel-grid { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:1.1fr 1fr 1fr; grid-template-rows:auto auto; gap:14px; }
+    .intel-card { background:var(--white); border:1px solid var(--border); border-radius:7px; padding:20px 22px; transition:border-color 0.15s; }
+    .intel-card:hover { border-color:var(--teal-mid); }
+    .intel-card-label { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:14px; }
+
+    .intel-topresult { grid-column:1; grid-row:1 / span 2; }
+    .intel-tr-source { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+    .intel-tr-avatar { width:26px; height:26px; border-radius:50%; background:var(--ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .intel-tr-handle { font-size:12.5px; font-weight:600; color:var(--text); }
+    .intel-tr-meta { font-family:var(--mono); font-size:9px; color:var(--text3); }
+    .intel-tr-text { font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:14px; }
+    .intel-tr-footer { display:flex; align-items:center; justify-content:space-between; padding-top:12px; border-top:1px solid var(--border); }
+    .intel-tr-engagement { font-family:var(--mono); font-size:10px; color:var(--text3); display:flex; gap:10px; }
+    .intel-tr-score { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; color:var(--teal); background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:3px; padding:2px 7px; }
+
+    .intel-stat { grid-column:2; grid-row:1; }
+    .intel-stat.intel-stat-alt { grid-column:3; grid-row:1; }
+    .intel-stat-value { font-family:var(--serif); font-size:28px; font-weight:700; color:var(--ink); letter-spacing:-0.5px; line-height:1; margin-bottom:6px; }
+    .intel-stat-value.teal { color:var(--teal); }
+    .intel-stat-delta { font-family:var(--mono); font-size:10px; color:var(--text3); }
+
+    .intel-insight { grid-column:2 / span 2; grid-row:2; }
+    .intel-insight-text { font-size:13px; color:var(--text2); line-height:1.75; font-weight:300; }
+    .intel-insight-text strong { color:var(--text); font-weight:600; }
+
+    .intel-secondary-row { max-width:1100px; margin:14px auto 0; display:grid; grid-template-columns:1.4fr 1fr; gap:14px; }
+    .intel-trend-legend { display:flex; gap:14px; margin-top:10px; }
+    .intel-trend-legend-item { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:10px; color:var(--text3); }
+    .intel-trend-dot { width:6px; height:6px; border-radius:50%; }
+    .intel-keyphrase-list { display:flex; flex-wrap:wrap; gap:7px; }
+    .intel-keyphrase { font-family:var(--mono); font-size:11px; color:var(--text2); background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:5px 12px; }
+    .intel-keyphrase.highlight { color:var(--teal); background:var(--teal-light); border-color:var(--teal-mid); }
+
+    @media(max-width:900px) {
+      .intel-grid { grid-template-columns:1fr 1fr; }
+      .intel-topresult { grid-column:1 / span 2; grid-row:1; }
+      .intel-stat { grid-column:1; grid-row:2; }
+      .intel-stat.intel-stat-alt { grid-column:2; grid-row:2; }
+      .intel-insight { grid-column:1 / span 2; grid-row:3; }
+      .intel-secondary-row { grid-template-columns:1fr; }
+    }
+    @media(max-width:600px) {
+      .intel-panel-wrap { padding:28px 16px 40px; }
+      .intel-grid { grid-template-columns:1fr; }
+      .intel-topresult, .intel-stat, .intel-stat.intel-stat-alt, .intel-insight { grid-column:1; }
+      .intel-topresult { grid-row:1; }
+      .intel-stat { grid-row:2; }
+      .intel-stat.intel-stat-alt { grid-row:3; }
+      .intel-insight { grid-row:4; }
+    }
 
     /* HERO PANEL */
     .hero-panel { background:var(--bg2); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
@@ -130,10 +191,11 @@
     .panel-insight { border-left:2px solid var(--teal); padding:10px 12px; background:var(--teal-light); border-radius:0 4px 4px 0; font-size:12px; color:var(--teal); line-height:1.6; margin-bottom:10px; }
     .panel-action { border-left:2px solid var(--amber); padding:10px 12px; background:var(--amber-light); border-radius:0 4px 4px 0; font-size:11px; font-weight:600; color:var(--amber); }
 
-    /* STATS */
-    .stat-strip { background:var(--bg2); border-bottom:1px solid var(--border); }
-    .stat-strip-inner { max-width:1100px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:repeat(4,1fr); }
-    .stat-item { padding:22px 32px 22px 0; border-right:1px solid var(--border); margin-right:32px; }
+    /* STATS — hidden until a search runs, then appears directly above
+       the results as a contained card, not a full-bleed strip. */
+    .stat-strip { display:none; background:var(--bg2); border:1px solid var(--border); border-radius:8px; margin-bottom:20px; }
+    .stat-strip-inner { margin:0; padding:20px 28px; display:grid; grid-template-columns:repeat(4,1fr); }
+    .stat-item { padding:0 24px 0 0; border-right:1px solid var(--border); margin-right:24px; }
     .stat-item:last-child { border-right:none; margin-right:0; padding-right:0; }
     .stat-label { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:6px; }
     .stat-value { font-family:var(--serif); font-size:30px; font-weight:700; color:var(--ink); line-height:1; letter-spacing:-1px; }
@@ -142,15 +204,18 @@
     .stat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
 
     /* SEARCH */
-    .search-wrap { max-width:1100px; margin:0 auto; padding:32px 40px 28px; }
+    .search-wrap { max-width:700px; margin:0 auto; padding:28px 20px 44px; }
+    .hero .search-label { text-align:center; }
     .search-label { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
-    .search-row { display:flex; gap:0; border:1.5px solid var(--border2); border-radius:6px; overflow:hidden; background:var(--white); transition:border-color 0.2s,box-shadow 0.2s; }
+    .search-row { display:flex; gap:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--white); box-shadow:0 1px 2px rgba(15,13,11,0.04); transition:border-color 0.2s,box-shadow 0.2s; }
     .search-row:focus-within { border-color:var(--teal); box-shadow:0 0 0 3px rgba(13,122,107,0.08); }
-    .search-input { flex:1; background:transparent; border:none; outline:none; padding:15px 20px; font-size:15px; font-family:var(--sans); color:var(--text); }
+    .search-input { flex:1; background:transparent; border:none; outline:none; padding:16px 22px; font-size:15px; font-family:var(--sans); color:var(--text); }
     .search-input::placeholder { color:var(--text3); }
-    .search-btn { padding:0 28px; background:var(--teal); color:white; border:none; font-family:var(--sans); font-size:13px; font-weight:600; cursor:pointer; letter-spacing:0.3px; transition:background 0.15s; white-space:nowrap; flex-shrink:0; }
-    .search-btn:hover { background:#0b6859; }
+    .search-btn { padding:0 28px; background:var(--ink); color:white; border:none; font-family:var(--sans); font-size:14px; font-weight:700; cursor:pointer; letter-spacing:0.2px; transition:background 0.15s; white-space:nowrap; flex-shrink:0; }
+    .search-btn:hover { background:#2a241f; }
     .search-btn:disabled { background:var(--bg3); color:var(--text3); cursor:not-allowed; }
+    .hero .search-hints { justify-content:center; }
+    .hero .example-chips-wrap { justify-content:center; }
     .search-hints { display:flex; gap:20px; margin-top:10px; flex-wrap:wrap; }
     /* Example query chip row, sits below the search hints */
     .example-chips-label {
@@ -899,159 +964,90 @@
   <div class="search-page" id="searchPage">
     <div class="hero-wrap">
       <div class="hero">
-        <div>
-          <div class="hero-kicker">Brand Intelligence Platform</div>
-          <h1>Raw signal.<br><span class="accent">Clear</span> <span class="warm">decision.</span></h1>
-          <!-- 
-            Why this wording:
-            Fortune 500 buyers do not care which sources — they care about
-            what they get out of it. "Public signals" is broad enough to
-            cover everything without naming platforms that feel consumer-grade.
-            "Regulatory filings" is a deliberate enterprise signal — no free
-            tool does that, and it immediately elevates the product category.
-            "Not a dashboard. A decision engine." stays — it is the strongest
-            line on the page. Never change it.
-          -->
-          <p class="hero-sub">Signalwatch reads public signals across news, forums, customer reviews, financial filings, and regulatory sources in real time. Then tells you exactly what it means and what to do about it. Not a dashboard. A decision engine.</p>
-          
-        </div>
-        <div class="hero-panel">
-          <div class="panel-header" style="background:var(--bg2);border-bottom:1px solid var(--border);">
-          <span class="panel-title" style="color:var(--text3);">Signal feed</span>
-        </div>
-          <div class="panel-body">
-            <div class="panel-bars">
-              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
-              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
-              <div class="panel-bar"></div><div class="panel-bar"></div><div class="panel-bar"></div>
-              <div class="panel-bar"></div>
+        <div class="hero-kicker">Brand Intelligence Platform</div>
+        <h1>Raw signal.<br><span class="accent">Clear</span> <span class="warm">decision.</span></h1>
+        <!-- 
+          Why this wording:
+          Fortune 500 buyers do not care which sources, they care about
+          what they get out of it. "Public signals" is broad enough to
+          cover everything without naming platforms that feel consumer-grade.
+          "Regulatory filings" is a deliberate enterprise signal, no free
+          tool does that, and it immediately elevates the product category.
+          "Not a dashboard. A decision engine." stays, it is the strongest
+          line on the page. Never change it.
+        -->
+        <p class="hero-sub">Signalwatch reads public signals across news, forums, customer reviews, financial filings, and regulatory sources in real time. Then tells you exactly what it means and what to do about it. Not a dashboard. A decision engine.</p>
+
+        <div class="search-wrap">
+          <div class="search-row">
+            <input class="search-input" id="queryInput" type="text"
+              placeholder='e.g. (Salesforce OR Intercom) AND pricing NOT careers'
+              autocomplete="off"/>
+            <button class="search-btn" id="searchBtn" onclick="runSearch()">Analyse</button>
+          </div>
+          <div class="search-hints">
+            <span class="hint">Boolean search</span>
+            <span class="hint"><code>AND</code> combine</span>
+            <span class="hint"><code>OR</code> either</span>
+            <span class="hint"><code>NOT</code> exclude</span>
+            <span class="hint"><code>"..."</code> exact phrase</span>
+            <span class="hint">
+              <button
+                onclick="showPage('help')"
+                style="
+                  background:none;border:none;padding:0;
+                  font-family:var(--sans);font-size:11px;font-weight:600;
+                  color:var(--teal);cursor:pointer;
+                  text-decoration:underline;text-underline-offset:3px;
+                ">
+                See examples
+              </button>
+            </span>
+          </div>
+
+          <!-- EXAMPLE QUERY CHIPS -->
+          <!-- Clicking one only fills the search box, it does not run the
+               search on its own, the person still clicks Analyse themselves -->
+          <div id="exampleChipsSection">
+            <div class="example-chips-label">Not sure where to start? Try one of these</div>
+            <div class="example-chips-wrap">
+              <button class="example-chip" onclick="fillQuery('(Nike OR Adidas) AND pricing')">(Nike OR Adidas) AND pricing</button>
+              <button class="example-chip" onclick="fillQuery('(Zendesk OR Intercom) AND &quot;customer support&quot;')">(Zendesk OR Intercom) AND "customer support"</button>
+              <button class="example-chip" onclick="fillQuery('NATO AND &quot;rare earth&quot; AND sanctions')">NATO AND "rare earth" AND sanctions</button>
             </div>
-            <div class="panel-insight">Momentum building across 4 sources. Consumer sentiment shifting toward product quality concerns.</div>
-            <div class="panel-action">→ Respond publicly within 24h before this reaches press</div>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="stat-strip">
-      <div class="stat-strip-inner">
-        <div class="stat-item">
-          <div class="stat-label">Sources</div>
-          <div class="stat-value teal">14</div>
-          <div class="stat-sub">Live data sources</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Signals found</div>
-          <div class="stat-value" id="statTotal">—</div>
-          <div class="stat-sub">Last search</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Top score</div>
-          <div class="stat-value amber" id="statTopScore">—</div>
-          <div class="stat-sub">Strongest signal</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Active sources</div>
-          <div class="stat-value" id="statActiveSources">—</div>
-          <div class="stat-sub">Returning results</div>
-        </div>
-      </div>
-    </div>
-<!-- 
-  WEBSITE EVOLUTION — entry point on the front page.
-  This is a separate mini-feature, shown as a small banner above the
-  main search box. Clicking "Try it" reveals an input box + results
-  area BELOW this banner, without navigating to a different page.
-  It does not touch runSearch(), renderResults(), or any existing
-  function — it has its own function, runWebsiteEvolution(), added
-  further down in this file.
--->
-<div style="max-width:1100px;margin:0 auto;padding:24px 40px 0;">
-
-  <!-- The banner itself: a title + a "Try it" button -->
-  <div style="border:1px solid var(--border);border-radius:6px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:var(--bg2);">
-    <div>
-      <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal);margin-bottom:4px;">New</div>
-      <div style="font-size:14px;font-weight:600;color:var(--ink);">Website Evolution; see how a domain's own site changed over time</div>
-    </div>
-    <!-- onclick calls toggleEvolutionPanel(), a small function we add later,
-         which just shows/hides the panel below -->
-    <button onclick="toggleEvolutionPanel()" id="evolutionToggleBtn"
-      style="font-family:var(--sans);font-size:13px;font-weight:600;color:var(--teal);background:var(--white);border:1.5px solid var(--teal);border-radius:5px;padding:9px 18px;cursor:pointer;white-space:nowrap;">
-      Try it
-    </button>
-  </div>
-
-  <!-- 
-    This is the actual input + results panel. 
-    style="display:none" means it is HIDDEN by default when the page loads.
-    toggleEvolutionPanel() switches this to "block" (visible) when clicked.
-  -->
-  <div id="evolutionInlinePanel" style="display:none;margin-top:12px;border:1px solid var(--border);border-radius:6px;padding:24px;background:var(--white);">
-
-    <!-- The domain input box + Analyse button -->
-    <div style="display:flex;gap:0;border:1.5px solid var(--border2);border-radius:6px;overflow:hidden;margin-bottom:16px;">
-      <input id="evolutionDomainInput" type="text" placeholder="e.g. stripe.com"
-        style="flex:1;padding:12px 16px;border:none;outline:none;font-size:14px;font-family:var(--sans);">
-      <!-- onclick calls runWebsiteEvolution(), added later in the <script> section -->
-      <button onclick="runWebsiteEvolution()" id="evolutionBtn"
-        style="padding:0 22px;background:var(--teal);color:white;border:none;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">
-        Analyse
-      </button>
-    </div>
-
-    <!-- Results (timeline + briefing) get inserted here by JavaScript,
-         after the user clicks Analyse. Empty until then. -->
-    <div id="evolutionResults"></div>
-
-  </div>
-</div>
-
-    <div class="search-wrap">
-      <div class="search-label">Search any brand, topic or query</div>
-      <div class="search-row">
-        <input class="search-input" id="queryInput" type="text"
-          placeholder='e.g. (Salesforce OR Intercom) AND pricing NOT careers'
-          autocomplete="off"/>
-        <button class="search-btn" id="searchBtn" onclick="runSearch()">Analyse</button>
-      </div>
-      <div class="search-hints">
-        <span class="hint">Boolean search</span>
-        <span class="hint"><code>AND</code> combine</span>
-        <span class="hint"><code>OR</code> either</span>
-        <span class="hint"><code>NOT</code> exclude</span>
-        <span class="hint"><code>"..."</code> exact phrase</span>
-        <span class="hint">
-          <button
-            onclick="showPage('help')"
-            style="
-              background:none;border:none;padding:0;
-              font-family:var(--sans);font-size:11px;font-weight:600;
-              color:var(--teal);cursor:pointer;
-              text-decoration:underline;text-underline-offset:3px;
-            ">
-            See examples
-          </button>
-        </span>
-      </div>
-
-      <!-- EXAMPLE QUERY CHIPS -->
-      <!-- Clicking one only fills the search box, it does not run the
-           search on its own, the person still clicks Analyse themselves -->
-      <div id="exampleChipsSection">
-        <div class="example-chips-label">Not sure where to start? Try one of these</div>
-        <div class="example-chips-wrap">
-          <button class="example-chip" onclick="fillQuery('(Nike OR Adidas) AND pricing')">(Nike OR Adidas) AND pricing</button>
-          <button class="example-chip" onclick="fillQuery('(Zendesk OR Intercom) AND &quot;customer support&quot;')">(Zendesk OR Intercom) AND "customer support"</button>
-          <button class="example-chip" onclick="fillQuery('(Notion OR Coda) AND &quot;switching from&quot;')">(Notion OR Coda) AND "switching from"</button>
-          <button class="example-chip" onclick="fillQuery('(CeraVe OR Cetaphil) AND &quot;no options&quot;')">(CeraVe OR Cetaphil) AND "no options"</button>
-          <button class="example-chip" onclick="fillQuery('NATO AND &quot;rare earth&quot; AND sanctions')">NATO AND "rare earth" AND sanctions</button>
-        </div>
-      </div>
-    </div>
-    
-
     <div class="results-wrap">
+
+      <!-- STATS — hidden by default, shown by runSearch() once a
+           search starts, sits directly above the loading state and results -->
+      <div class="stat-strip" id="statStripSection">
+        <div class="stat-strip-inner">
+          <div class="stat-item">
+            <div class="stat-label">Sources</div>
+            <div class="stat-value teal">14</div>
+            <div class="stat-sub">Live data sources</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Signals found</div>
+            <div class="stat-value" id="statTotal">—</div>
+            <div class="stat-sub">Last search</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Top score</div>
+            <div class="stat-value amber" id="statTopScore">—</div>
+            <div class="stat-sub">Strongest signal</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Active sources</div>
+            <div class="stat-value" id="statActiveSources">—</div>
+            <div class="stat-sub">Returning results</div>
+          </div>
+        </div>
+      </div>
 
       <!-- LOADING STATE — hidden by default, shown only when search runs -->
       <!-- The .loading class has display:none in CSS — it only appears when
@@ -1172,12 +1168,137 @@
         </div>
       </div>
     </div>
-      <div id="resultsContainer">
-        <div class="empty-state">
-          <div class="empty-title">Enter a query above to begin</div>
-          <div class="empty-sub">Signal intelligence from the last 90 days · 14 sources</div>
+      <div id="resultsContainer"></div>
+
+      <!-- INTELLIGENCE PREVIEW PANEL — static, illustrative example of
+           what a search returns. Clearly labelled as an example, not
+           live data. Purely visual, no functionality here. Sits below
+           results, above the Questions section, so it never blocks
+           the loading state or actual search results. -->
+      <div class="intel-panel-wrap">
+        <div class="intel-panel-head">
+        <div>
+          <div class="intel-panel-eyebrow">Preview</div>
+          <div class="intel-panel-title">What a search returns</div>
         </div>
       </div>
+
+        <div class="intel-grid">
+
+          <div class="intel-card intel-topresult">
+            <div class="intel-card-label">Top Result</div>
+            <div class="intel-tr-source">
+              <div class="intel-tr-avatar">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/></svg>
+              </div>
+              <div>
+                <div class="intel-tr-handle">@ops_leadership</div>
+                <div class="intel-tr-meta">X · 2 hours ago</div>
+              </div>
+            </div>
+            <div class="intel-tr-text">Switched our whole support stack this quarter. The migration was rough but worth it once pricing settled down.</div>
+            <div class="intel-tr-footer">
+              <div class="intel-tr-engagement"><span>212 likes</span><span>34 replies</span></div>
+              <div class="intel-tr-score">Score 9</div>
+            </div>
+          </div>
+
+          <div class="intel-card intel-stat">
+            <div class="intel-card-label">Coverage</div>
+            <div class="intel-stat-value">200</div>
+            <div class="intel-stat-delta">Signals found across 14 sources</div>
+          </div>
+
+          <div class="intel-card intel-stat intel-stat-alt">
+            <div class="intel-card-label">Pattern Signals</div>
+            <div class="intel-stat-value teal">6</div>
+            <div class="intel-stat-delta">Recurring themes detected in mentions</div>
+          </div>
+
+          <div class="intel-card intel-insight">
+            <div class="intel-card-label">Signal Insight</div>
+            <div class="intel-insight-text">Several mentions describe the same switching decision from different angles. <strong>Pricing clarity</strong> comes up most often as the reason people stayed once they moved.</div>
+          </div>
+
+        </div>
+
+        <div class="intel-secondary-row">
+          <div class="intel-card">
+            <div class="intel-card-label">Mentions Trend</div>
+            <svg viewBox="0 0 400 150" width="100%" height="150" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="intelTrendFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#0d7a6b" stop-opacity="0.15"/>
+                  <stop offset="100%" stop-color="#0d7a6b" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="20" x2="400" y2="20" stroke="#e8e4da" stroke-width="1"/>
+              <line x1="0" y1="55" x2="400" y2="55" stroke="#e8e4da" stroke-width="1"/>
+              <line x1="0" y1="90" x2="400" y2="90" stroke="#e8e4da" stroke-width="1"/>
+              <line x1="0" y1="115" x2="400" y2="115" stroke="#e8e4da" stroke-width="1"/>
+              <path d="M0,95 L35,88 L70,92 L105,70 L140,75 L175,50 L210,58 L245,35 L280,42 L315,22 L350,28 L385,15 L400,15 L400,115 L0,115 Z" fill="url(#intelTrendFill)" stroke="none"/>
+              <polyline points="0,95 35,88 70,92 105,70 140,75 175,50 210,58 245,35 280,42 315,22 350,28 385,15" fill="none" stroke="#0d7a6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="0,110 35,105 70,107 105,100 140,95 175,92 210,85 245,88 280,75 315,72 350,60 385,58" fill="none" stroke="#c4720a" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="385" cy="15" r="3.5" fill="#0d7a6b"/>
+              <circle cx="385" cy="58" r="3.5" fill="#c4720a"/>
+              <text x="0" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">3 Jul</text>
+              <text x="128" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">17 Jul</text>
+              <text x="258" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">31 Jul</text>
+              <text x="368" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">Today</text>
+            </svg>
+            <div class="intel-trend-legend">
+              <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#0d7a6b;"></span>News and forums</div>
+              <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#c4720a;"></span>Reviews and social</div>
+            </div>
+          </div>
+
+          <div class="intel-card">
+            <div class="intel-card-label">Emerging Keyphrases</div>
+            <div class="intel-keyphrase-list">
+            <span class="intel-keyphrase highlight">pricing clarity</span>
+            <span class="intel-keyphrase">switching cost</span>
+            <span class="intel-keyphrase highlight">migration support</span>
+            <span class="intel-keyphrase">onboarding time</span>
+            <span class="intel-keyphrase">renewal terms</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WEBSITE EVOLUTION — sits above the Questions section so it
+           reads as a discoverable feature after the main preview,
+           without ever sitting between the search box and the loading
+           state. Untouched from its original version: same ids, same
+           toggleEvolutionPanel()/runWebsiteEvolution() functions. -->
+      <div style="max-width:1100px;margin:24px auto 0;padding:0;">
+
+        <div style="border:1px solid var(--border);border-radius:6px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:var(--bg2);">
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal);margin-bottom:4px;">New</div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink);">Website Evolution; see how a domain's own site changed over time</div>
+          </div>
+          <button onclick="toggleEvolutionPanel()" id="evolutionToggleBtn"
+            style="font-family:var(--sans);font-size:13px;font-weight:600;color:var(--teal);background:var(--white);border:1.5px solid var(--teal);border-radius:5px;padding:9px 18px;cursor:pointer;white-space:nowrap;">
+            Try it
+          </button>
+        </div>
+
+        <div id="evolutionInlinePanel" style="display:none;margin-top:12px;border:1px solid var(--border);border-radius:6px;padding:24px;background:var(--white);">
+
+          <div style="display:flex;gap:0;border:1.5px solid var(--border2);border-radius:6px;overflow:hidden;margin-bottom:16px;">
+            <input id="evolutionDomainInput" type="text" placeholder="e.g. stripe.com"
+              style="flex:1;padding:12px 16px;border:none;outline:none;font-size:14px;font-family:var(--sans);">
+            <button onclick="runWebsiteEvolution()" id="evolutionBtn"
+              style="padding:0 22px;background:var(--teal);color:white;border:none;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">
+              Analyse
+            </button>
+          </div>
+
+          <div id="evolutionResults"></div>
+
+        </div>
+      </div>
+    </div>
+
       <!-- Questions and upgrade nudge — bottom of search tab -->
     <div style="border-top:1px solid var(--border);margin-top:48px;padding:48px 40px 64px;">
       <div style="max-width:720px;margin:0 auto;">
@@ -2493,6 +2614,8 @@ async function fetchGoogleProfile(accessToken) {
       btn.textContent = "Analysing...";
       loading.style.display = "block";
       container.innerHTML = "";
+      const statStrip = document.getElementById("statStripSection");
+      if (statStrip) statStrip.style.display = "block";
 
       // Hide the example chips once a real search starts — they've done
       // their job of suggesting a query, and shouldn't linger once
