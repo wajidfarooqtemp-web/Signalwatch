@@ -90,20 +90,34 @@
       0%, 100% { opacity: 1; }
       50%      { opacity: 0.45; }
     }
-    /* HERO — centered, single column. Old two-column grid removed,
-       the right-side panel moved out entirely and rebuilt as the
-       preview card grid below the search bar. */
+    /* HERO — wider than before and with more vertical room, so it
+       reads as a proper hero region instead of a narrow band squeezed
+       between a full-width nav and full-width sections below. */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
-    .hero { max-width:740px; margin:0 auto; padding:76px 40px 40px; display:flex; flex-direction:column; align-items:center; text-align:center; }
-    .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:20px; display:flex; align-items:center; justify-content:center; gap:8px; }
+    .hero { max-width:880px; margin:0 auto; padding:96px 40px 52px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+    .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:22px; display:flex; align-items:center; justify-content:center; gap:8px; }
 
-    .hero h1 { font-family:var(--serif); font-size:52px; font-weight:800; color:var(--ink); line-height:1.05; letter-spacing:-1.5px; margin-bottom:20px; }
+    .hero h1 { font-family:var(--serif); font-size:56px; font-weight:800; color:var(--ink); line-height:1.05; letter-spacing:-1.5px; margin-bottom:22px; }
     .hero h1 .accent { color:var(--teal); }
     .hero h1 .warm { color:var(--amber); }
-    .hero-sub { font-size:16px; color:var(--text2); line-height:1.75; max-width:560px; margin:0 auto; font-weight:300; }
-    .source-pills { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
-    .source-pill { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500; color:var(--text2); background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:4px 10px; }
+    .hero-sub { font-size:17px; color:var(--text2); line-height:1.8; max-width:600px; margin:0 auto; font-weight:300; }
+    @media(min-width:1200px) {
+      .hero { max-width:980px; padding-top:108px; }
+      .hero h1 { font-size:62px; }
+    }
+    .source-pills { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+    .source-pill { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500; color:var(--text2); background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:5px 12px; transition:border-color 0.15s, color 0.15s, transform 0.15s; }
+    .source-pill:hover { border-color:var(--teal-mid); color:var(--teal); transform:translateY(-1px); }
     .source-pill-dot { width:4px; height:4px; border-radius:50%; background:var(--teal); }
+
+
+    /* SCROLL REVEAL — cards fade into place as they enter the
+       viewport. Transform is left entirely to the motion script
+       further down, so the fade and the scroll drift never fight
+       over the same CSS property. */
+    .reveal { opacity:0; transition:opacity 0.6s ease; }
+    .reveal.is-visible { opacity:1; }
+    .parallax-slow { will-change:transform; }
 
    /* INTELLIGENCE PREVIEW PANEL — sits below the search bar.
        Static, illustrative preview content showing the shape of what
@@ -111,20 +125,32 @@
        live claim, same spirit as marketing preview copy generally.
        Restrained on purpose: flat backgrounds, thin borders, no
        gradients, no glow, no motion beyond a simple hover lift. */
-    .intel-panel-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:32px 32px 40px; margin:4px 0 44px; }
+    .intel-panel-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:32px 32px 40px; margin:4px 0 44px; box-shadow:0 2px 10px rgba(15,13,11,0.03); }
     .intel-panel-head { max-width:1100px; margin:0 auto 20px; display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; }
     .intel-panel-eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); }
     .intel-panel-title { font-family:var(--serif); font-size:20px; font-weight:700; color:var(--ink); letter-spacing:-0.3px; }
     .intel-panel-sub { font-size:12px; color:var(--text3); font-family:var(--mono); }
 
     .intel-grid { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:1.1fr 1fr 1fr; grid-template-rows:auto auto; gap:14px; }
-    .intel-card { background:var(--white); border:1px solid var(--border); border-radius:7px; padding:20px 22px; transition:border-color 0.15s; }
-    .intel-card:hover { border-color:var(--teal-mid); }
+    .intel-card { background:var(--white); border:1px solid var(--border); border-radius:7px; padding:20px 22px; transition:border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+    .intel-card:hover { border-color:var(--teal-mid); box-shadow:0 10px 22px rgba(15,13,11,0.08); }
+    .intel-card:hover .intel-tr-avatar { transform:scale(1.08); }
+    .intel-tr-avatar { transition:transform 0.2s; }
+    .intel-card:hover .intel-stat-value { color:var(--teal); }
+
+    /* Trend line has quiet motion of its own even without hovering:
+       a slow dash flow along the primary line and a gentle pulse on
+       the two endpoint markers. */
+    .intel-trend-line-live { stroke-dasharray:6 4; animation:intelLineFlow 6s linear infinite; }
+    @keyframes intelLineFlow { to { stroke-dashoffset:-100; } }
+    .intel-trend-dot-live { animation:intelDotPulse 2s ease-in-out infinite; transform-origin:center; transform-box:fill-box; }
+    @keyframes intelDotPulse { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.5); opacity:0.6; } }
     .intel-card-label { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:14px; }
 
     .intel-topresult { grid-column:1; grid-row:1 / span 2; }
     .intel-tr-source { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-    .intel-tr-avatar { width:26px; height:26px; border-radius:50%; background:var(--ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .intel-tr-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#3a332c,#5c5147); display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative; transition:transform 0.2s; }
+    .intel-tr-platform-badge { position:absolute; bottom:-2px; right:-2px; width:14px; height:14px; border-radius:50%; background:var(--ink); border:2px solid var(--white); display:flex; align-items:center; justify-content:center; }
     .intel-tr-handle { font-size:12.5px; font-weight:600; color:var(--text); }
     .intel-tr-meta { font-family:var(--mono); font-size:9px; color:var(--text3); }
     .intel-tr-text { font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:14px; }
@@ -149,6 +175,27 @@
     .intel-keyphrase-list { display:flex; flex-wrap:wrap; gap:7px; }
     .intel-keyphrase { font-family:var(--mono); font-size:11px; color:var(--text2); background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:5px 12px; }
     .intel-keyphrase.highlight { color:var(--teal); background:var(--teal-light); border-color:var(--teal-mid); }
+
+    /* TREND CHART MOTION — a tracer dot travels the primary line
+       continuously and the endpoint marker pulses, so the chart
+       reads as live at rest, not just on hover. No gridlines. */
+    .intel-trend-dot-live { animation:intelDotPulse 2s ease-in-out infinite; transform-origin:center; transform-box:fill-box; }
+    @keyframes intelDotPulse { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.6); opacity:0.5; } }
+    .intel-trend-tracer {
+      offset-path: path('M0,95 L35,88 L70,92 L105,70 L140,75 L175,50 L210,58 L245,35 L280,42 L315,22 L350,28 L385,15');
+      offset-rotate: 0deg;
+      animation: intelTrace 4.5s linear infinite;
+    }
+    @keyframes intelTrace { from { offset-distance:0%; } to { offset-distance:100%; } }
+
+    /* RECOMMENDATION — Signalwatch's actual output, given a visible
+       accent so it reads as the headline card, not another tile. */
+    .intel-card.intel-insight { border-left:3px solid var(--teal); }
+    .intel-recommend-flag { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--teal); background:var(--teal-light); border:1px solid var(--teal-mid); border-radius:3px; padding:2px 8px; display:inline-block; margin-bottom:10px; }
+
+    /* SCROLL MOTION — continuous idle float plus scroll-linked drift
+       plus hover lift are all computed together in one JS loop below,
+       one transform value per frame, per card. */
 
     @media(max-width:900px) {
       .intel-grid { grid-template-columns:1fr 1fr; }
@@ -204,7 +251,7 @@
     .stat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
 
     /* SEARCH */
-    .search-wrap { max-width:700px; margin:0 auto; padding:28px 20px 44px; }
+    .search-wrap { max-width:700px; margin:0 auto; padding:28px 20px 34px; }
     .hero .search-label { text-align:center; }
     .search-label { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
     .search-row { display:flex; gap:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--white); box-shadow:0 1px 2px rgba(15,13,11,0.04); transition:border-color 0.2s,box-shadow 0.2s; }
@@ -1012,10 +1059,10 @@
             <div class="example-chips-label">Not sure where to start? Try one of these</div>
             <div class="example-chips-wrap">
               <button class="example-chip" onclick="fillQuery('(Nike OR Adidas) AND pricing')">(Nike OR Adidas) AND pricing</button>
-              <button class="example-chip" onclick="fillQuery('(Zendesk OR Intercom) AND &quot;customer support&quot;')">(Zendesk OR Intercom) AND "customer support"</button>
               <button class="example-chip" onclick="fillQuery('NATO AND &quot;rare earth&quot; AND sanctions')">NATO AND "rare earth" AND sanctions</button>
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -1185,11 +1232,14 @@
 
         <div class="intel-grid">
 
-          <div class="intel-card intel-topresult">
+          <div class="intel-card intel-topresult reveal parallax-slow" data-depth="0.04">
             <div class="intel-card-label">Top Result</div>
             <div class="intel-tr-source">
               <div class="intel-tr-avatar">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f4f3ef" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.2 3.6-7 8-7s8 2.8 8 7"/></svg>
+                <span class="intel-tr-platform-badge">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="#ffffff"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/></svg>
+                </span>
               </div>
               <div>
                 <div class="intel-tr-handle">@ops_leadership</div>
@@ -1203,56 +1253,54 @@
             </div>
           </div>
 
-          <div class="intel-card intel-stat">
+          <div class="intel-card intel-stat reveal parallax-slow" data-depth="0.07">
             <div class="intel-card-label">Coverage</div>
             <div class="intel-stat-value">200</div>
             <div class="intel-stat-delta">Signals found across 14 sources</div>
           </div>
 
-          <div class="intel-card intel-stat intel-stat-alt">
-            <div class="intel-card-label">Pattern Signals</div>
-            <div class="intel-stat-value teal">6</div>
-            <div class="intel-stat-delta">Recurring themes detected in mentions</div>
+          <div class="intel-card intel-stat intel-stat-alt reveal parallax-slow" data-depth="0.09">
+            <div class="intel-card-label">Time to Insight</div>
+            <div class="intel-stat-value teal">&lt; 3 min</div>
+            <div class="intel-stat-delta">From query to full briefing</div>
           </div>
 
-          <div class="intel-card intel-insight">
-            <div class="intel-card-label">Signal Insight</div>
-            <div class="intel-insight-text">Several mentions describe the same switching decision from different angles. <strong>Pricing clarity</strong> comes up most often as the reason people stayed once they moved.</div>
+          <div class="intel-card intel-insight reveal parallax-slow" data-depth="0.06">
+            <div class="intel-card-label">Recommendation</div>
+            <span class="intel-recommend-flag">Suggested next step</span>
+            <div class="intel-insight-text">Address <strong>pricing clarity</strong> in onboarding messaging. It is the reason customers cite most often for staying after switching.</div>
           </div>
 
         </div>
 
         <div class="intel-secondary-row">
-          <div class="intel-card">
-            <div class="intel-card-label">Mentions Trend</div>
+          <div class="intel-card reveal parallax-slow" data-depth="0.08">
+          <div class="intel-card-label">Mentions Trend</div>
             <svg viewBox="0 0 400 150" width="100%" height="150" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="intelTrendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#0d7a6b" stop-opacity="0.15"/>
-                  <stop offset="100%" stop-color="#0d7a6b" stop-opacity="0"/>
-                </linearGradient>
-              </defs>
-              <line x1="0" y1="20" x2="400" y2="20" stroke="#e8e4da" stroke-width="1"/>
-              <line x1="0" y1="55" x2="400" y2="55" stroke="#e8e4da" stroke-width="1"/>
-              <line x1="0" y1="90" x2="400" y2="90" stroke="#e8e4da" stroke-width="1"/>
-              <line x1="0" y1="115" x2="400" y2="115" stroke="#e8e4da" stroke-width="1"/>
-              <path d="M0,95 L35,88 L70,92 L105,70 L140,75 L175,50 L210,58 L245,35 L280,42 L315,22 L350,28 L385,15 L400,15 L400,115 L0,115 Z" fill="url(#intelTrendFill)" stroke="none"/>
-              <polyline points="0,95 35,88 70,92 105,70 140,75 175,50 210,58 245,35 280,42 315,22 350,28 385,15" fill="none" stroke="#0d7a6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <polyline points="0,110 35,105 70,107 105,100 140,95 175,92 210,85 245,88 280,75 315,72 350,60 385,58" fill="none" stroke="#c4720a" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="385" cy="15" r="3.5" fill="#0d7a6b"/>
-              <circle cx="385" cy="58" r="3.5" fill="#c4720a"/>
-              <text x="0" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">3 Jul</text>
-              <text x="128" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">17 Jul</text>
-              <text x="258" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">31 Jul</text>
-              <text x="368" y="136" font-family="'DM Mono',monospace" font-size="8" fill="#9a9590">Today</text>
-            </svg>
+            <defs>
+              <linearGradient id="intelTrendFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0d7a6b" stop-opacity="0.16"/>
+                <stop offset="100%" stop-color="#0d7a6b" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,95 L35,88 L70,92 L105,70 L140,75 L175,50 L210,58 L245,35 L280,42 L315,22 L350,28 L385,15 L400,15 L400,115 L0,115 Z" fill="url(#intelTrendFill)" stroke="none"/>
+            <polyline points="0,95 35,88 70,92 105,70 140,75 175,50 210,58 245,35 280,42 315,22 350,28 385,15" fill="none" stroke="#0d7a6b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,110 35,105 70,107 105,100 140,95 175,92 210,85 245,88 280,75 315,72 350,60 385,58" fill="none" stroke="#c4720a" stroke-width="1.5" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle class="intel-trend-dot-live" cx="385" cy="15" r="4" fill="#0d7a6b"/>
+            <circle cx="385" cy="58" r="3" fill="#c4720a" opacity="0.6"/>
+            <circle class="intel-trend-tracer" cx="0" cy="95" r="3.5" fill="#0d7a6b"/>
+            <text x="0" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">3 Jul</text>
+            <text x="128" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">17 Jul</text>
+            <text x="258" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">31 Jul</text>
+            <text x="368" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">Today</text>
+          </svg>
             <div class="intel-trend-legend">
               <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#0d7a6b;"></span>News and forums</div>
               <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#c4720a;"></span>Reviews and social</div>
             </div>
           </div>
 
-          <div class="intel-card">
+          <div class="intel-card reveal parallax-slow" data-depth="0.1">
             <div class="intel-card-label">Emerging Keyphrases</div>
             <div class="intel-keyphrase-list">
             <span class="intel-keyphrase highlight">pricing clarity</span>
@@ -4325,6 +4373,51 @@ function renderSupportPayPalButton() {
 
   }).render("#support-paypal-button-container");
 }
+
+// ── CONTINUOUS MOTION ─────────────────────────────────────────────────────
+// Fades cards in as they enter the viewport, then keeps every card
+// marked parallax-slow visibly alive on every frame: a slow idle
+// float that never stops, a stronger drift tied directly to scroll
+// position, and a small extra lift on hover. All three are combined
+// into one transform per element per frame, so nothing on the page
+// ever fights over the transform property. Purely visual.
+(function () {
+  const revealEls = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window && revealEls.length) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: "0px 0px -40px 0px" });
+    revealEls.forEach(el => io.observe(el));
+  } else {
+    revealEls.forEach(el => el.classList.add("is-visible"));
+  }
+
+  const items = Array.from(document.querySelectorAll(".parallax-slow")).map((el, i) => {
+    el.addEventListener("mouseenter", () => { el.dataset.hovered = "1"; });
+    el.addEventListener("mouseleave", () => { el.dataset.hovered = "0"; });
+    return { el, depth: parseFloat(el.dataset.depth || "0.06"), phase: i * 0.9 };
+  });
+
+  if (items.length) {
+    function tick(ts) {
+      const y = window.scrollY;
+      const t = ts / 1000;
+      items.forEach(item => {
+        const scrollDrift = Math.max(-40, Math.min(y * item.depth, 40));
+        const idleFloat   = Math.sin(t * 0.55 + item.phase) * 4;
+        const hoverLift   = item.el.dataset.hovered === "1" ? -6 : 0;
+        item.el.style.transform = `translateY(${(scrollDrift + idleFloat + hoverLift).toFixed(2)}px)`;
+      });
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+})();
   </script>
 </body>
 </html>
