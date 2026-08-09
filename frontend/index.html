@@ -93,7 +93,7 @@
     /* HERO — wider than before and with more vertical room, so it
        reads as a proper hero region instead of a narrow band squeezed
        between a full-width nav and full-width sections below. */
-    .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
+    .hero-wrap { background:var(--white); }
     .hero { max-width:880px; margin:0 auto; padding:64px 40px 52px; display:flex; flex-direction:column; align-items:center; text-align:center; }
     .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:22px; display:flex; align-items:center; justify-content:center; gap:8px; }
 
@@ -111,10 +111,10 @@
     .source-pill-dot { width:4px; height:4px; border-radius:50%; background:var(--teal); }
 
 
-    /* SCROLL REVEAL — cards fade into place as they enter the
-       viewport. Transform is left entirely to the motion script
-       further down, so the fade and the scroll drift never fight
-       over the same CSS property. */
+    /* SCROLL REVEAL — fades cards in as they enter the viewport.
+       Transform is left entirely to the motion script further down,
+       so the fade and the continuous scroll drift never fight over
+       the same CSS property. */
     .reveal { opacity:0; transition:opacity 0.6s ease; }
     .reveal.is-visible { opacity:1; }
     .parallax-slow { will-change:transform; }
@@ -125,7 +125,7 @@
        live claim, same spirit as marketing preview copy generally.
        Restrained on purpose: flat backgrounds, thin borders, no
        gradients, no glow, no motion beyond a simple hover lift. */
-    .intel-panel-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:32px 32px 40px; margin:4px 0 44px; box-shadow:0 2px 10px rgba(15,13,11,0.03); }
+    .intel-panel-wrap { background:transparent; padding:8px 0 44px; margin:0; }
     .intel-panel-head { max-width:1100px; margin:0 auto 20px; display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; }
     .intel-panel-eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); }
     .intel-panel-title { font-family:var(--serif); font-size:20px; font-weight:700; color:var(--ink); letter-spacing:-0.3px; }
@@ -138,13 +138,9 @@
     .intel-tr-avatar { transition:transform 0.2s; }
     .intel-card:hover .intel-stat-value { color:var(--teal); }
 
-    /* Trend line has quiet motion of its own even without hovering:
-       a slow dash flow along the primary line and a gentle pulse on
-       the two endpoint markers. */
-    .intel-trend-line-live { stroke-dasharray:6 4; animation:intelLineFlow 6s linear infinite; }
-    @keyframes intelLineFlow { to { stroke-dashoffset:-100; } }
-    .intel-trend-dot-live { animation:intelDotPulse 2s ease-in-out infinite; transform-origin:center; transform-box:fill-box; }
-    @keyframes intelDotPulse { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.5); opacity:0.6; } }
+    /* Trend line is static and calm on purpose — no travelling dots,
+       no pulsing markers. Motion on this page comes from scroll and
+       hover only, never from the chart itself. */
     .intel-card-label { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:14px; }
 
     .intel-topresult { grid-column:1; grid-row:1 / span 2; }
@@ -176,17 +172,6 @@
     .intel-keyphrase { font-family:var(--mono); font-size:11px; color:var(--text2); background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:5px 12px; }
     .intel-keyphrase.highlight { color:var(--teal); background:var(--teal-light); border-color:var(--teal-mid); }
 
-    /* TREND CHART MOTION — a tracer dot travels the primary line
-       continuously and the endpoint marker pulses, so the chart
-       reads as live at rest, not just on hover. No gridlines. */
-    .intel-trend-dot-live { animation:intelDotPulse 2s ease-in-out infinite; transform-origin:center; transform-box:fill-box; }
-    @keyframes intelDotPulse { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.6); opacity:0.5; } }
-    .intel-trend-tracer {
-      offset-path: path('M0,95 L35,88 L70,92 L105,70 L140,75 L175,50 L210,58 L245,35 L280,42 L315,22 L350,28 L385,15');
-      offset-rotate: 0deg;
-      animation: intelTrace 4.5s linear infinite;
-    }
-    @keyframes intelTrace { from { offset-distance:0%; } to { offset-distance:100%; } }
 
     /* RECOMMENDATION — Signalwatch's actual output, given a visible
        accent so it reads as the headline card, not another tile. */
@@ -206,7 +191,7 @@
       .intel-secondary-row { grid-template-columns:1fr; }
     }
     @media(max-width:600px) {
-      .intel-panel-wrap { padding:28px 16px 40px; }
+      .intel-panel-wrap { padding:8px 16px 40px; }
       .intel-grid { grid-template-columns:1fr; }
       .intel-topresult, .intel-stat, .intel-stat.intel-stat-alt, .intel-insight { grid-column:1; }
       .intel-topresult { grid-row:1; }
@@ -1012,7 +997,7 @@
     <div class="hero-wrap">
       <div class="hero">
         <div class="hero-kicker">Brand Intelligence Platform</div>
-        <h1>Raw signal.<br><span class="accent">Clear</span> <span class="warm">decision.</span></h1>
+        <h1 class="parallax-slow" data-depth="0.02">Raw signal.<br><span class="accent">Clear</span> <span class="warm">decision.</span></h1>
         <!-- 
           Why this wording:
           Fortune 500 buyers do not care which sources, they care about
@@ -1253,16 +1238,16 @@
             </div>
           </div>
 
-          <div class="intel-card intel-stat reveal parallax-slow" data-depth="0.07">
+          <div class="intel-card intel-stat reveal parallax-slow" data-depth="0.035">
             <div class="intel-card-label">Coverage</div>
             <div class="intel-stat-value">200</div>
-            <div class="intel-stat-delta">Signals found across 14 sources</div>
+            <div class="intel-stat-delta">Across 14 sources, last 90 days</div>
           </div>
 
-          <div class="intel-card intel-stat intel-stat-alt reveal parallax-slow" data-depth="0.09">
-            <div class="intel-card-label">Time to Insight</div>
-            <div class="intel-stat-value teal">&lt; 3 min</div>
-            <div class="intel-stat-delta">From query to full briefing</div>
+          <div class="intel-card intel-stat intel-stat-alt reveal parallax-slow" data-depth="0.05">
+            <div class="intel-card-label">Competitor Intelligence</div>
+            <div class="intel-stat-value teal">3</div>
+            <div class="intel-stat-delta">Named competitors monitored automatically</div>
           </div>
 
           <div class="intel-card intel-insight reveal parallax-slow" data-depth="0.06">
@@ -1279,35 +1264,42 @@
             <svg viewBox="0 0 400 150" width="100%" height="150" preserveAspectRatio="none">
             <defs>
               <linearGradient id="intelTrendFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#0d7a6b" stop-opacity="0.16"/>
+                <stop offset="0%" stop-color="#0d7a6b" stop-opacity="0.14"/>
                 <stop offset="100%" stop-color="#0d7a6b" stop-opacity="0"/>
               </linearGradient>
             </defs>
             <path d="M0,95 L35,88 L70,92 L105,70 L140,75 L175,50 L210,58 L245,35 L280,42 L315,22 L350,28 L385,15 L400,15 L400,115 L0,115 Z" fill="url(#intelTrendFill)" stroke="none"/>
-            <polyline points="0,95 35,88 70,92 105,70 140,75 175,50 210,58 245,35 280,42 315,22 350,28 385,15" fill="none" stroke="#0d7a6b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <polyline points="0,110 35,105 70,107 105,100 140,95 175,92 210,85 245,88 280,75 315,72 350,60 385,58" fill="none" stroke="#c4720a" stroke-width="1.5" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle class="intel-trend-dot-live" cx="385" cy="15" r="4" fill="#0d7a6b"/>
-            <circle cx="385" cy="58" r="3" fill="#c4720a" opacity="0.6"/>
-            <circle class="intel-trend-tracer" cx="0" cy="95" r="3.5" fill="#0d7a6b"/>
+            <polyline points="0,95 35,88 70,92 105,70 140,75 175,50 210,58 245,35 280,42 315,22 350,28 385,15" fill="none" stroke="#0d7a6b" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,110 35,105 70,107 105,100 140,95 175,92 210,85 245,88 280,75 315,72 350,60 385,58" fill="none" stroke="#c4720a" stroke-width="1.75" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,120 35,118 70,119 105,113 140,110 175,108 210,104 245,105 280,98 315,96 350,92 385,90" fill="none" stroke="#be123c" stroke-width="1.5" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="385" cy="15" r="3" fill="#0d7a6b"/>
+            <circle cx="385" cy="58" r="2.5" fill="#c4720a" opacity="0.7"/>
+            <circle cx="385" cy="90" r="2.5" fill="#be123c" opacity="0.55"/>
             <text x="0" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">3 Jul</text>
             <text x="128" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">17 Jul</text>
             <text x="258" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">31 Jul</text>
             <text x="368" y="140" font-family="'DM Mono',monospace" font-size="8" letter-spacing="0.5" fill="#9a9590">Today</text>
           </svg>
             <div class="intel-trend-legend">
-              <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#0d7a6b;"></span>News and forums</div>
-              <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#c4720a;"></span>Reviews and social</div>
+              <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#0d7a6b;"></span>News and editorial</div>
+              <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#c4720a;"></span>Reviews and forums</div>
+              <div class="intel-trend-legend-item"><span class="intel-trend-dot" style="background:#be123c;"></span>Video and social</div>
             </div>
           </div>
 
           <div class="intel-card reveal parallax-slow" data-depth="0.1">
-            <div class="intel-card-label">Emerging Keyphrases</div>
+            <div class="intel-card-label">Word Patterns</div>
             <div class="intel-keyphrase-list">
-            <span class="intel-keyphrase highlight">pricing clarity</span>
-            <span class="intel-keyphrase">switching cost</span>
-            <span class="intel-keyphrase highlight">migration support</span>
-            <span class="intel-keyphrase">onboarding time</span>
-            <span class="intel-keyphrase">renewal terms</span>
+            <span class="intel-keyphrase highlight">refund</span>
+            <span class="intel-keyphrase">shipping</span>
+            <span class="intel-keyphrase highlight">support</span>
+            <span class="intel-keyphrase">account</span>
+            <span class="intel-keyphrase">pricing</span>
+            <span class="intel-keyphrase">checkout</span>
+            <span class="intel-keyphrase highlight">cancellation</span>
+            <span class="intel-keyphrase">warranty</span>
+            <span class="intel-keyphrase">delivery</span>
+            <span class="intel-keyphrase">app</span>
           </div>
         </div>
       </div>
@@ -4381,12 +4373,11 @@ function renderSupportPayPalButton() {
 }
 
 // ── CONTINUOUS MOTION ─────────────────────────────────────────────────────
-// Fades cards in as they enter the viewport, then keeps every card
+// Fades cards in as they enter the viewport, then keeps every element
 // marked parallax-slow visibly alive on every frame: a slow idle
-// float that never stops, a stronger drift tied directly to scroll
-// position, and a small extra lift on hover. All three are combined
-// into one transform per element per frame, so nothing on the page
-// ever fights over the transform property. Purely visual.
+// float, a stronger drift tied to scroll position, and a small lift
+// on hover. All three combine into one transform per element per
+// frame, so nothing on the page fights over the transform property.
 (function () {
   const revealEls = document.querySelectorAll(".reveal");
   if ("IntersectionObserver" in window && revealEls.length) {
