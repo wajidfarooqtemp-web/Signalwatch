@@ -94,7 +94,7 @@
        reads as a proper hero region instead of a narrow band squeezed
        between a full-width nav and full-width sections below. */
     .hero-wrap { background:var(--white); border-bottom:1px solid var(--border); }
-    .hero { max-width:880px; margin:0 auto; padding:96px 40px 52px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+    .hero { max-width:880px; margin:0 auto; padding:64px 40px 52px; display:flex; flex-direction:column; align-items:center; text-align:center; }
     .hero-kicker { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:22px; display:flex; align-items:center; justify-content:center; gap:8px; }
 
     .hero h1 { font-family:var(--serif); font-size:56px; font-weight:800; color:var(--ink); line-height:1.05; letter-spacing:-1.5px; margin-bottom:22px; }
@@ -102,7 +102,7 @@
     .hero h1 .warm { color:var(--amber); }
     .hero-sub { font-size:17px; color:var(--text2); line-height:1.8; max-width:600px; margin:0 auto; font-weight:300; }
     @media(min-width:1200px) {
-      .hero { max-width:980px; padding-top:108px; }
+      .hero { max-width:980px; padding-top:80px; }
       .hero h1 { font-size:62px; }
     }
     .source-pills { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
@@ -2662,8 +2662,11 @@ async function fetchGoogleProfile(accessToken) {
       btn.textContent = "Analysing...";
       loading.style.display = "block";
       container.innerHTML = "";
+      // Stays hidden until renderResults() confirms real data arrived —
+      // showing this the instant a search starts made it look like
+      // results existed before anything had actually come back
       const statStrip = document.getElementById("statStripSection");
-      if (statStrip) statStrip.style.display = "block";
+      if (statStrip) statStrip.style.display = "none";
 
       // Hide the example chips once a real search starts — they've done
       // their job of suggesting a query, and shouldn't linger once
@@ -2902,6 +2905,9 @@ if (loadingText) {
       }
 
       const activeSources = Object.values(data.sources || {}).filter(v => v > 0).length;
+      // Only reveal the stats bar once genuine results exist to show
+      const statStripReveal = document.getElementById("statStripSection");
+      if (statStripReveal) statStripReveal.style.display = "block";
       animateCount("statTotal",        data.total);
       animateCount("statTopScore",     data.results[0]?.score || 0);
       animateCount("statActiveSources", activeSources);
