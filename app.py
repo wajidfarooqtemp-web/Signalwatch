@@ -29,6 +29,17 @@ import sys
 sys.stdout.reconfigure(line_buffering=True)  # forces print() to flush immediately, so Render's logs actually show every line, not just what happens to flush naturally
 from dotenv import load_dotenv
 load_dotenv()  # Reads .env file into environment variables — local dev only. Render sets real env vars directly, so this line does nothing on Render, but is required for your laptop to see DATABASE_URL.
+
+# Suppresses a cosmetic warning from the mcp library's internal Settings
+# class (pydantic_settings), not from any of our own code. It fires
+# because FastMCP's Settings model has a 'lifespan' field typed with a
+# forward reference that never gets resolved. Harmless, does not affect
+# behavior, just noisy in the Render logs.
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message=".*Field 'lifespan' has an incomplete definition.*"
+)
 import json       # Tool for reading and writing JSON data
 # Import all payment functions from payments.py (same folder)
 from payments import (
@@ -3463,7 +3474,13 @@ No markdown. No backticks. Raw JSON only."""
     try:
         clean = re.sub(r'```[a-z]*\n?', '', result)
         clean = re.sub(r'```', '', clean).strip()
-        parsed = json.loads(clean)
+        # strict=False allows literal control characters (like a raw
+        # newline) inside JSON string values. Some models return a
+        # multi-line pitch with an actual newline character instead of
+        # an escaped \n, which json.loads rejects by default with
+        # "Unterminated string" — strict=False is the correct fix for
+        # exactly this case, no regex repair needed.
+        parsed = json.loads(clean, strict=False)
 
         score = int(parsed.get("intent_score", 0))
 
