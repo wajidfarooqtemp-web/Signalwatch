@@ -593,7 +593,7 @@ def summarize_evolution(changes: list, domain: str) -> dict:
     # Build a compact, factual description of each change for the
     # prompt — dates and titles only, nothing the AI has to infer
     change_lines = []
-    for c in changes[:20]:  # cap prompt size, same discipline as generate_insight()'s use of top results only
+    for c in changes[:12]:  # capped lower than before — 20 events needed more output room than max_tokens allowed, causing the truncated/invalid JSON seen in production logs
         if c["type"] == "new_page":
             change_lines.append(f"- New page appeared around {c['first_seen_date']}: \"{c['title']}\" ({c['url']})")
         elif c["type"] == "content_change":
@@ -620,7 +620,12 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
     # Reuses ai_call() exactly as every other AI feature in Signalwatch
     # does — same fallback chain (OpenRouter -> Groq -> Cerebras ->
     # Mistral), same labeling convention for Render log traceability
-    ai_result = sw.ai_call(prompt, max_tokens=700, allow_backup_fallback=True, label="website_evolution")
+    # Raised from 700 — with up to 12 timeline events (each needing a
+    # date, event description, and url) plus a briefing, 700 tokens was
+    # too tight and caused the model to get cut off mid-JSON, exactly
+    # matching the "unterminated string" / "expecting ',' delimiter"
+    # errors seen in production logs.
+    ai_result = sw.ai_call(prompt, max_tokens=1400, allow_backup_fallback=True, label="website_evolution")
     print(f"WEBSITE_EVOLUTION_DEBUG_MARKER: ai_result is {'present' if ai_result else 'EMPTY/NONE'}, length={len(ai_result) if ai_result else 0}")
 
     if not ai_result:
