@@ -411,6 +411,27 @@ def bounded_fetch_all(deduped_records: list, max_fetches: int = 30) -> list:
     print(f"WebsiteEvolution: {len(results)} records had usable content extracted")
     return results
 
+_TRACKING_PARAMS = {
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "dub_id", "_bhlid", "ref", "via", "fbclid", "gclid", "mc_cid", "mc_eid"
+}
+
+def _strip_tracking_params(url: str) -> str:
+    """
+    Removes known marketing/tracking query parameters (utm_*, dub_id,
+    referral tags, etc.) from a URL, leaving genuine query parameters
+    untouched. A real production run showed dozens of "new page
+    appeared" entries for the exact same homepage, one per newsletter
+    or referral link that had ever pointed at it — the page never
+    actually changed, only the tracking tag did. This also keeps the
+    prompt sent to the AI far shorter and cleaner.
+    """
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+    parts = urlsplit(url)
+    kept = [(k, v) for k, v in parse_qsl(parts.query) if k.lower() not in _TRACKING_PARAMS]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(kept), ""))
+
+
 def normalize_url(url: str) -> str:
     """
     Normalizes a URL so trivially-different variants of the same page
@@ -419,13 +440,14 @@ def normalize_url(url: str) -> str:
     "https://stripe.com/" into two separate, misleading "histories"
     of what is really one page.
 
-    Deliberately conservative: only strips things we're CONFIDENT are
-    equivalent (protocol casing, www. prefix, trailing slash, URL
-    fragment). Does NOT strip query strings — "?page=2" is a
-    genuinely different page, not a formatting quirk.
+    Tracking/marketing query parameters are stripped via
+    _strip_tracking_params() before grouping — see that function's
+    docstring for why. Genuine query parameters like "?page=2" are
+    kept, since that is a real, different page, not a formatting quirk.
     """
     import re
-    normalized = url.strip().lower()
+    cleaned = _strip_tracking_params(url.strip())
+    normalized = cleaned.lower()
     normalized = re.sub(r"^https?://", "", normalized)  # drop protocol
     normalized = re.sub(r"^www\.", "", normalized)       # drop www.
     normalized = normalized.rstrip("/")                   # drop trailing slash
@@ -593,12 +615,13 @@ def summarize_evolution(changes: list, domain: str) -> dict:
     # Build a compact, factual description of each change for the
     # prompt — dates and titles only, nothing the AI has to infer
     change_lines = []
-    for c in changes[:12]:  # capped lower than before — 20 events needed more output room than max_tokens allowed, causing the truncated/invalid JSON seen in production logs
+    for c in changes[:12]:  # lowered from 20 — long tracking-heavy URLs were bloating the prompt past what max_tokens could safely cover
+        display_url = _strip_tracking_params(c['url'])  # shortened for the prompt only — the real url is preserved elsewhere for the "View archived page" link
         if c["type"] == "new_page":
-            change_lines.append(f"- New page appeared around {c['first_seen_date']}: \"{c['title']}\" ({c['url']})")
+            change_lines.append(f"- New page appeared around {c['first_seen_date']}: \"{c['title']}\" ({display_url})")
         elif c["type"] == "content_change":
             change_lines.append(
-                f"- Page {c['url']} changed between {c['previous_date']} and {c['date']}: "
+                f"- Page {display_url} changed between {c['previous_date']} and {c['date']}: "
                 f"was \"{c['old_title']}\", became \"{c['new_title']}\""
             )
 
@@ -609,13 +632,13 @@ def summarize_evolution(changes: list, domain: str) -> dict:
 Detected changes, in chronological order:
 {changes_text}
 
-Return a JSON object with exactly two keys: "timeline" and "briefing".
+Return a JSON object with exactly two keys, "briefing" first, then "timeline".
 
-"timeline": an array of objects, each with "date", "event", and "url" keys. Copy the url exactly from the matching change above — do not invent or alter it. "event" is a short, plain-English sentence describing what changed. (e.g. "Pricing page title updated" or "New healthcare section appeared"). Base every entry strictly on the changes listed above — do not invent anything not present in the list.
+"briefing": 2 to 3 sentences in plain English summarising the overall pattern of how this site evolved across the sampled period. No hedging words. No markdown. Write this first, before the timeline.
 
-"briefing": 2 to 3 sentences in plain English summarising the overall pattern of how this site evolved across the sampled period. No hedging words. No markdown.
+"timeline": an array of objects, each with "date", "event", and "url" keys. Copy the url exactly from the matching change above — do not invent or alter it. "event" is a short, plain-English sentence describing what changed. Base every entry strictly on the changes listed above. If you are running low on space, include fewer timeline entries, but "briefing" must always be present and complete.
 
-Return only raw JSON. No markdown. No backticks. No code fences."""
+Output the JSON object directly. Do not show your reasoning or thinking process. Do not include any text before or after the JSON. No markdown. No backticks. No code fences."""
 
     # Reuses ai_call() exactly as every other AI feature in Signalwatch
     # does — same fallback chain (OpenRouter -> Groq -> Cerebras ->

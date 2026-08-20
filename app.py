@@ -1564,7 +1564,7 @@ def ai_call_groq(prompt, max_tokens=600, label="ai_call"):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.1-8b-instant",
+                "model": "openai/gpt-oss-20b",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_tokens
             },

@@ -91,7 +91,7 @@ def _get_fixing_llm():
     """
     if GROQ_API_KEY:
         return ChatOpenAI(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             api_key=GROQ_API_KEY,
             base_url="https://api.groq.com/openai/v1",
             max_tokens=700,
