@@ -79,6 +79,7 @@ from mcp_server import mcp
 import mcp_keys_db
 from semantic_search import rescue_dropped_results  # semantic retrieval — recovers relevant results keyword filtering drops
 from insight_parser import parse_insight, parse_agent_angle, parse_competitor_list  # LangChain schema-validated parsing — first attempt before regex fallback
+from boolean_search import parse_boolean_query, matches as boolean_matches, score as boolean_score, explain as boolean_explain  # real AND/OR/NOT/phrase parsing
 import contextlib
 
 # streamable_http_app() turns our FastMCP object into a mountable ASGI app.
@@ -1891,19 +1892,12 @@ def extract_keywords(query):
 
 
 def filter_and_rank(posts, query):
-    # Filters and ranks all results by relevance score
-    # Results with score 0 (no keyword matches) are removed
-    raw_words = query.split()
-    exclude = []
-    i = 0
-    while i < len(raw_words):
-        if raw_words[i].upper() == "NOT" and i + 1 < len(raw_words):
-            exclude.append(raw_words[i + 1].lower())
-            i += 2
-        else:
-            i += 1
-
-    keywords, phrases = extract_keywords(query)
+    # Filters and ranks all results using real boolean query logic:
+    # AND, OR, NOT, parentheses for grouping, and quoted exact phrases.
+    # This replaced an older approach that silently stripped the words
+    # AND and OR out of the query as stop words, meaning parentheses
+    # and OR groupings were never actually being enforced.
+    tree = parse_boolean_query(query)
     results = []
     seen_titles = set()
 
@@ -1913,33 +1907,22 @@ def filter_and_rank(posts, query):
             continue
         seen_titles.add(title)
 
-        text = title.lower()
-
-        # Skip if title contains an excluded word (from NOT operator)
-        if any(w in text for w in exclude):
+        if not boolean_matches(tree, title):
             continue
 
-        s = score_post(title, keywords)
-
-        # Bonus points for exact phrase matches
-        if phrases:
-            for p in phrases:
-                if p.lower() in text:
-                    s += 5
-
+        s = boolean_score(tree, title)
         if s == 0:
-            continue  # Drop results with no keyword matches
+            continue
 
         results.append({
             "title":        title,
             "score":        s,
-            "score_reason": explain_score(title, keywords, phrases, s),
+            "score_reason": boolean_explain(tree, title),
             "source":       post["source"],
             "url":          post.get("url", ""),
             "created":      post.get("created", 0)
         })
 
-    # Sort by score, highest first
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
 
@@ -2431,22 +2414,39 @@ def generate_insight(results, query):
     cooccurrences  = find_cooccurrences(results)
     question_results = find_question_clusters(results)
 
-    # Picks a handful of the actual mentions the AI was shown, so a
-    # specific claim in the briefing, a price, an incentive, a number,
-    # isn't just text the person has to trust. They can click through
-    # and check it themselves. Cooccurrences are the richest evidence
-    # the AI actually reads, so they're the first choice, falling back
-    # to the top ranked results if no cooccurrences were found
-    if cooccurrences:
-        source_examples = [
-            {"title": c["title"], "url": c.get("url", ""), "source": c.get("source", "")}
-            for c in cooccurrences[:3]
-        ]
-    else:
-        source_examples = [
-            {"title": r["title"], "url": r.get("url", ""), "source": r.get("source", "")}
-            for r in results[:3]
-        ]
+    # Widened citation set. Previously this only ever showed the top 3
+    # cooccurrence hits, or the top 3 plain-ranked results if no
+    # cooccurrences existed. That meant a genuinely important mention
+    # that did not happen to trigger 2+ concept groups could be used
+    # to write the briefing but never actually shown to the person as
+    # a source. This builds the citation list from BOTH cooccurrences
+    # AND top-ranked results, deduplicated by URL, up to 8 entries, so
+    # the briefing's evidence trail is not artificially narrow.
+    source_examples = []
+    seen_urls = set()
+
+    def add_example(item):
+        url = item.get("url", "")
+        key = url if url else item.get("title", "")
+        if key in seen_urls:
+            return
+        seen_urls.add(key)
+        source_examples.append({
+            "title": item.get("title", ""),
+            "url": url,
+            "source": item.get("source", "")
+        })
+
+    for c in cooccurrences:
+        add_example(c)
+        if len(source_examples) >= 8:
+            break
+
+    if len(source_examples) < 8:
+        for r in results:
+            add_example(r)
+            if len(source_examples) >= 8:
+                break
 
     today = datetime.now().strftime("%d %B %Y")
     sources_used = list(set(r["source"] for r in results))
@@ -2459,15 +2459,31 @@ def generate_insight(results, query):
         date_range = f"Data covers {oldest} to {newest}."
 
     # Step 2 — Build AI context from algorithm output
-    # AI gets the rich results, not all 200 titles
-    if cooccurrences:
-        rich_results_text = "\n".join(
-            f'- [{", ".join(c["concepts"])}] {c["title"]}'
-            for c in cooccurrences
-        )
-    else:
-        # Fallback: send top 15 results if no co-occurrences found
-        rich_results_text = "\n".join(f"- {r['title']}" for r in results[:15])
+    # Previously the AI only saw cooccurrence hits (max 10) or, if none
+    # existed, the top 15 plain-ranked results. That is a narrow slice
+    # to write a briefing from, and it meant a strong signal that did
+    # not happen to hit 2+ concept groups could be missed entirely.
+    # This always includes the cooccurrence hits (they are the richest
+    # evidence available) AND fills the remaining space with top-ranked
+    # results the AI has not already seen, up to 30 total, so the
+    # briefing is written from a genuinely representative sample rather
+    # than whatever a fixed heuristic happened to flag.
+    context_lines = []
+    seen_context_titles = set()
+
+    for c in cooccurrences:
+        context_lines.append(f'- [{", ".join(c["concepts"])}] {c["title"]}')
+        seen_context_titles.add(c["title"])
+
+    for r in results:
+        if len(context_lines) >= 30:
+            break
+        if r["title"] in seen_context_titles:
+            continue
+        context_lines.append(f"- {r['title']}")
+        seen_context_titles.add(r["title"])
+
+    rich_results_text = "\n".join(context_lines)
 
     question_text = ""
     if question_results:
