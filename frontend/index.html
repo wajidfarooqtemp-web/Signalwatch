@@ -3111,7 +3111,7 @@ if (loadingText) {
       });
 
       container.innerHTML = html;
-      if (data.sources && data.results) buildChart(data.sources, data.results);
+      if (data.sources && data.results) buildChart(data.sources, data.results, data.mentions_timeline);
 
       // Store query and show the Find Leads button after every search
       // lastQuery is used by findLeads() to know what to score
@@ -3134,7 +3134,7 @@ if (loadingText) {
     }
 
     // ── BUILD CHART ───────────────────────────────────────────────────────
-        function buildChart(sources, results) {
+        function buildChart(sources, results, timeline) {
       const colors = {
         reddit:"#c2410c", hackernews:"#92400e", newsapi:"#0d7a6b",
         newsdata:"#0369a1", youtube:"#be123c", rss:"#15803d",
@@ -3143,33 +3143,29 @@ if (loadingText) {
         bluesky:"#0085ff", bingnews:"#0d9488", firecrawl:"#b45309"
       };
 
-      const timed = results.filter(r => r.created && r.created > 0);
-      if (timed.length < 4) { buildBarChart(sources, results, colors); return; }
+      // timeline comes from the backend now, built from every ranked
+      // result, not just the 20 shown in the list. If it is missing
+      // or too short (an old cached response, or a search with almost
+      // no dated results at all), fall back to the source score bars.
+      if (!timeline || timeline.length < 2) { buildBarChart(sources, results, colors); return; }
 
-      // Group every dated result into the calendar week it falls in,
-      // counting real mentions per source per week. This is genuine
-      // volume, nothing plotted here is invented or adjusted.
-      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const buckets = {};
-      timed.forEach(r => {
-        const d = new Date(r.created * 1000);
-        const weekStart = Math.floor(d.getTime() / msPerWeek) * msPerWeek;
-        if (!buckets[weekStart]) buckets[weekStart] = {};
-        buckets[weekStart][r.source] = (buckets[weekStart][r.source] || 0) + 1;
+      const weekKeys = timeline.map(w => w.week_start);
+
+      const totalsBySource = {};
+      timeline.forEach(w => {
+        Object.entries(w.counts || {}).forEach(([src, c]) => {
+          totalsBySource[src] = (totalsBySource[src] || 0) + c;
+        });
       });
-
-      const weekKeys = Object.keys(buckets).map(Number).sort((a, b) => a - b);
 
       // Chart only the top 5 sources by total mentions, more than
       // that turns the chart into unreadable spaghetti
-      const totalsBySource = {};
-      timed.forEach(r => { totalsBySource[r.source] = (totalsBySource[r.source] || 0) + 1; });
       const topSources = Object.entries(totalsBySource)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
         .map(([s]) => s);
 
-            // Turns a hex color into an rgba string at a given opacity, used
+      // Turns a hex color into an rgba string at a given opacity, used
       // below to give the leading source a soft area fill without a
       // second colour palette to maintain
       function hexToRgba(hex, alpha) {
@@ -3185,7 +3181,7 @@ if (loadingText) {
         const color = colors[source] || "#888";
         return {
           label: sourceLabels[source] || source,
-          data: weekKeys.map(wk => buckets[wk][source] || 0),
+          data: timeline.map(w => (w.counts || {})[source] || 0),
           borderColor: color,
           backgroundColor: isLead ? hexToRgba(color, 0.12) : color,
           pointRadius: isLead ? 3 : 2,
@@ -3197,8 +3193,10 @@ if (loadingText) {
         };
       });
 
+      // week_start from the backend is Unix seconds, JS Date wants
+      // milliseconds, hence the times 1000 here
       const labels = weekKeys.map(wk =>
-        new Date(wk).toLocaleDateString("en-GB", { day:"numeric", month:"short" })
+        new Date(wk * 1000).toLocaleDateString("en-GB", { day:"numeric", month:"short" })
       );
 
       const ctx = document.getElementById("signalChart").getContext("2d");

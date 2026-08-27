@@ -2032,9 +2032,39 @@ def get_word_frequencies(results):
             if w not in stop_words:
                 freq[w] = freq.get(w, 0) + 1
 
-    # Sort by frequency, most common first
+        # Sort by frequency, most common first
     sorted_freq = sorted(freq.items(), key=lambda x: x[1], reverse=True)
     return [{"word": w, "count": c} for w, c in sorted_freq[:40]]
+
+def build_mentions_timeline(results):
+    """
+    Aggregates every ranked result, not just the top 20 sent to the
+    browser for the results list, into mention counts per calendar
+    week per source. This is what the frontend chart actually reads
+    for its weekly line chart, so it reflects the true spread of the
+    search window instead of whatever happened to land in the top 20
+    by keyword score.
+
+    Only results with a real created timestamp are counted. Several
+    sources never provide one at all, and a few are capped by their
+    own API to a shorter window than 90 days, those results are
+    simply not part of the chart, nothing is guessed or invented to
+    fill the gap.
+    """
+    week_seconds = 7 * 24 * 60 * 60
+    buckets = {}
+    for r in results:
+        ts = r.get("created", 0)
+        if not ts:
+            continue
+        week_start = (ts // week_seconds) * week_seconds
+        if week_start not in buckets:
+            buckets[week_start] = {}
+        source = r.get("source", "unknown")
+        buckets[week_start][source] = buckets[week_start].get(source, 0) + 1
+
+    weeks = sorted(buckets.keys())
+    return [{"week_start": w, "counts": buckets[w]} for w in weeks]
 
 def extract_briefing_and_questions(raw_text):
     # ── What this does ───────────────────────────────────────────────────────
@@ -2414,13 +2444,13 @@ def generate_insight(results, query):
     cooccurrences  = find_cooccurrences(results)
     question_results = find_question_clusters(results)
 
-    # Widened citation set. Previously this only ever showed the top 3
+     # Widened citation set. Previously this only ever showed the top 3
     # cooccurrence hits, or the top 3 plain-ranked results if no
     # cooccurrences existed. That meant a genuinely important mention
     # that did not happen to trigger 2+ concept groups could be used
     # to write the briefing but never actually shown to the person as
     # a source. This builds the citation list from BOTH cooccurrences
-    # AND top-ranked results, deduplicated by URL, up to 8 entries, so
+    # AND top-ranked results, deduplicated by URL, up to 12 entries, so
     # the briefing's evidence trail is not artificially narrow.
     source_examples = []
     seen_urls = set()
@@ -2439,13 +2469,13 @@ def generate_insight(results, query):
 
     for c in cooccurrences:
         add_example(c)
-        if len(source_examples) >= 8:
+        if len(source_examples) >= 12:
             break
 
-    if len(source_examples) < 8:
+    if len(source_examples) < 12:
         for r in results:
             add_example(r)
-            if len(source_examples) >= 8:
+            if len(source_examples) >= 12:
                 break
 
     today = datetime.now().strftime("%d %B %Y")
@@ -4377,7 +4407,8 @@ async def search_stream(query: str, request: Request, token: str = ""):
             "cooccurrences_found": insight.get("cooccurrences_found", 0) if isinstance(insight, dict) else 0,
             "source_examples":     insight.get("source_examples", []) if isinstance(insight, dict) else [],
             "results":             ranked[:20],
-            "word_frequencies":    get_word_frequencies(ranked[:50])
+            "word_frequencies":    get_word_frequencies(ranked[:50]),
+            "mentions_timeline":   build_mentions_timeline(ranked)
         }
         yield f"data: {json.dumps(final)}\n\n"
 
@@ -4506,13 +4537,14 @@ def search(query: str, request: Request, token: str = ""):
             "bluesky":    len(bluesky)
         },
         # insight is a dict — we extract briefing and questions separately
-        "insight":           insight.get("briefing", "") if isinstance(insight, dict) else insight,
+                "insight":           insight.get("briefing", "") if isinstance(insight, dict) else insight,
         "action":   insight.get("action", "") if isinstance(insight, dict) else "",
         "questions":         insight.get("questions", []) if isinstance(insight, dict) else [],
         "patterns_detected": insight.get("patterns", []) if isinstance(insight, dict) else [],
         "source_examples":   insight.get("source_examples", []) if isinstance(insight, dict) else [],
         "results":           ranked[:20],
-        "word_frequencies":  get_word_frequencies(ranked[:50])
+        "word_frequencies":  get_word_frequencies(ranked[:50]),
+        "mentions_timeline": build_mentions_timeline(ranked)
     }
 
 # ─── WEBSITE EVOLUTION (isolated feature, does not touch mention search) ──────
