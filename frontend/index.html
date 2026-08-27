@@ -3169,17 +3169,33 @@ if (loadingText) {
         .slice(0, 5)
         .map(([s]) => s);
 
-      const datasets = topSources.map(source => ({
-        label: sourceLabels[source] || source,
-        data: weekKeys.map(wk => buckets[wk][source] || 0),
-        borderColor: colors[source] || "#888",
-        backgroundColor: colors[source] || "#888",
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        tension: 0.35,
-        borderWidth: 2,
-        fill: false
-      }));
+            // Turns a hex color into an rgba string at a given opacity, used
+      // below to give the leading source a soft area fill without a
+      // second colour palette to maintain
+      function hexToRgba(hex, alpha) {
+        const h = (hex || "#888888").replace("#", "");
+        const r = parseInt(h.substring(0, 2), 16);
+        const g = parseInt(h.substring(2, 4), 16);
+        const b = parseInt(h.substring(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+
+      const datasets = topSources.map((source, i) => {
+        const isLead = i === 0; // highest-volume source this search
+        const color = colors[source] || "#888";
+        return {
+          label: sourceLabels[source] || source,
+          data: weekKeys.map(wk => buckets[wk][source] || 0),
+          borderColor: color,
+          backgroundColor: isLead ? hexToRgba(color, 0.12) : color,
+          pointRadius: isLead ? 3 : 2,
+          pointHoverRadius: isLead ? 6 : 4,
+          pointBackgroundColor: color,
+          tension: 0.3,
+          borderWidth: isLead ? 2.5 : 1.25,
+          fill: isLead ? "origin" : false
+        };
+      });
 
       const labels = weekKeys.map(wk =>
         new Date(wk).toLocaleDateString("en-GB", { day:"numeric", month:"short" })
@@ -3192,15 +3208,21 @@ if (loadingText) {
         options: {
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { labels: { color:"#9a9590", font:{size:10,family:"'DM Mono',monospace"}, boxWidth:8 } },
-            tooltip: { callbacks: {
-              title: items => "Week of " + items[0].label,
-              label: item => `${item.dataset.label}: ${item.raw} mention${item.raw === 1 ? "" : "s"}`
-            }}
+            legend: { position: "bottom", labels: { color:"#5a5650", font:{size:10,family:"'DM Mono',monospace"}, boxWidth:8, usePointStyle:true, pointStyle:"circle", padding:14 } },
+            tooltip: {
+              backgroundColor: "#0f0d0b",
+              titleFont: { family:"'DM Mono',monospace", size:10 },
+              bodyFont: { family:"'DM Mono',monospace", size:11 },
+              padding: 10,
+              callbacks: {
+                title: items => "Week of " + items[0].label,
+                label: item => `${item.dataset.label}: ${item.raw} mention${item.raw === 1 ? "" : "s"}`
+              }
+            }
           },
           scales: {
-            x: { ticks:{color:"#9a9590",font:{size:10},maxTicksLimit:8}, grid:{color:"#e8e4da"} },
-            y: { beginAtZero:true, ticks:{color:"#9a9590",font:{size:10},precision:0}, grid:{color:"#e8e4da"} }
+            x: { ticks:{color:"#9a9590",font:{size:10},maxTicksLimit:8}, grid:{display:false} },
+            y: { beginAtZero:true, ticks:{color:"#9a9590",font:{size:10},precision:0}, grid:{color:"#f0eee7", drawTicks:false} }
           }
         }
       });
