@@ -2800,6 +2800,9 @@ async function fetchGoogleProfile(accessToken) {
             else if (msg.type === "analysing") {
               swSetStatus("ANALYSING", true);
             }
+              else if (msg.type === "synthesizing") {
+              swSetStatus("SYNTHESIZING", true);
+            }
             else if (msg.type === "agent_update") {
               // Agents 1-3 events
               handleAgentUpdate(msg);
@@ -2850,18 +2853,14 @@ async function fetchGoogleProfile(accessToken) {
             }
 
             else if (msg.type === "complete") {
-              // Step 1: Show SYNTHESIZING with animated dots
-              // This tells the user the AI is assembling the briefing
-              swSetStatus("SYNTHESIZING", true);
-              await new Promise(r => setTimeout(r, 1200));
-
-              // Step 2: Show FINDINGS — the final state before reveal
-              // Stop the dots, show the word cleanly, hold briefly
-              // This gives the user a moment to register that it finished
+              // SYNTHESIZING already ran for however long the AI call
+              // genuinely took, driven by the backend's own event above,
+              // not faked here anymore. Just show FINDINGS briefly so
+              // there is a clear final beat before results replace the
+              // loading state.
               swSetStatus("FINDINGS", false);
-              await new Promise(r => setTimeout(r, 700));
+              await new Promise(r => setTimeout(r, 500));
 
-              // Step 3: Now stop everything and reveal results
               swStopWords();
               if (swElapsedTimer) { clearInterval(swElapsedTimer); swElapsedTimer = null; }
               loading.style.display = "none";

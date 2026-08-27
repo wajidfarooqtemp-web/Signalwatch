@@ -4375,8 +4375,18 @@ async def search_stream(query: str, request: Request, token: str = ""):
             sources_counts[source_id] = len(results)
             yield f"data: {json.dumps({'type': 'progress', 'source': source_id, 'count': len(results), 'label': label})}\n\n"
 
+        yield f"data: {json.dumps({'type': 'analysing', 'message': 'Ranking and filtering signals'})}\n\n"
+
         ranked  = await asyncio.to_thread(filter_and_rank, all_posts, query)
         ranked  = await asyncio.to_thread(add_semantic_rescue, all_posts, ranked, query)
+
+        # This is genuinely where the slow part starts — the AI briefing
+        # call, sometimes with a retry and several model attempts behind
+        # it. Announcing it here, before generate_insight runs, means the
+        # frontend can show SYNTHESIZING for as long as this actually
+        # takes, instead of faking it for two seconds after the fact.
+        yield f"data: {json.dumps({'type': 'synthesizing', 'message': 'Writing intelligence briefing'})}\n\n"
+
         insight = await asyncio.to_thread(generate_insight, ranked, query)
 
         final = {
