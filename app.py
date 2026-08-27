@@ -4321,72 +4321,59 @@ async def search_stream(query: str, request: Request, token: str = ""):
         # database write never delays the actual search results.
         await asyncio.to_thread(log_event, token, "search", {"query": query}, request.headers.get("user-agent", ""))
 
-        # Each line: run the fetch in a thread, yield the progress immediately
-        reddit = await asyncio.to_thread(fetch_reddit, query)
-        all_posts += reddit; sources_counts["reddit"] = len(reddit)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'reddit', 'count': len(reddit), 'label': 'Reddit'})}\n\n"
+        # All fifteen sources used to run one after another, each one
+        # waited on fully before the next started. RSS alone loops
+        # through 25 feeds inside one function call, so a handful of
+        # slow feeds could stall everything behind it, even sources that
+        # would have come back in under a second. This runs all fifteen
+        # at the same time instead, so total wait time is roughly the
+        # single slowest source, not the sum of all fifteen.
+        #
+        # Nothing about WHAT is fetched, scored, or ranked changes here.
+        # This only changes the order and timing of the network calls
+        # that feed into the same all_posts list as before.
+        async def fetch_one_source(source_id, fetch_fn, label):
+            try:
+                results = await asyncio.to_thread(fetch_fn, query)
+            except Exception as e:
+                print(f"{source_id} fetch failed: {e}")
+                results = []
+            return source_id, label, results
 
-        hn = await asyncio.to_thread(fetch_hackernews, query)
-        all_posts += hn; sources_counts["hackernews"] = len(hn)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'hackernews', 'count': len(hn), 'label': 'Tech Forums'})}\n\n"
+        source_jobs = [
+            ("reddit",     fetch_reddit,      "Reddit"),
+            ("hackernews", fetch_hackernews,  "Tech Forums"),
+            ("newsapi",    fetch_newsapi,     "News"),
+            ("newsdata",   fetch_newsdata,    "Global News"),
+            ("rss",        fetch_rss,         "RSS"),
+            ("youtube",    fetch_youtube,     "YouTube"),
+            ("trustpilot", fetch_trustpilot,  "Trustpilot"),
+            ("appstore",   fetch_appstore,    "App Store"),
+            ("playstore",  fetch_playstore,   "Play Store"),
+            ("mastodon",   fetch_mastodon,    "Mastodon"),
+            ("wikipedia",  fetch_wikipedia,   "Wikipedia"),
+            ("googlenews", fetch_google_news, "Google News"),
+            ("bingnews",   fetch_bing_news,   "Bing News"),
+            ("bluesky",    fetch_bluesky,     "Bluesky"),
+            ("firecrawl",  fetch_firecrawl,   "Editorial Coverage"),
+        ]
 
-        newsapi = await asyncio.to_thread(fetch_newsapi, query)
-        all_posts += newsapi; sources_counts["newsapi"] = len(newsapi)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'newsapi', 'count': len(newsapi), 'label': 'News'})}\n\n"
+        # Every fetch starts immediately, all at once. asyncio.as_completed
+        # then yields each one's result the moment THAT source finishes,
+        # in whichever order they actually come back, not the fixed order
+        # in the list above. This is what keeps the progress bar updating
+        # live as sources land, instead of going silent while everything
+        # runs, and it's what stops slow sources blocking fast ones.
+        tasks = [
+            asyncio.create_task(fetch_one_source(source_id, fetch_fn, label))
+            for source_id, fetch_fn, label in source_jobs
+        ]
 
-        newsdata = await asyncio.to_thread(fetch_newsdata, query)
-        all_posts += newsdata; sources_counts["newsdata"] = len(newsdata)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'newsdata', 'count': len(newsdata), 'label': 'Global News'})}\n\n"
-
-        rss = await asyncio.to_thread(fetch_rss, query)
-        all_posts += rss; sources_counts["rss"] = len(rss)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'rss', 'count': len(rss), 'label': 'RSS'})}\n\n"
-
-        youtube = await asyncio.to_thread(fetch_youtube, query)
-        all_posts += youtube; sources_counts["youtube"] = len(youtube)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'youtube', 'count': len(youtube), 'label': 'YouTube'})}\n\n"
-
-        trustpilot = await asyncio.to_thread(fetch_trustpilot, query)
-        all_posts += trustpilot; sources_counts["trustpilot"] = len(trustpilot)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'trustpilot', 'count': len(trustpilot), 'label': 'Trustpilot'})}\n\n"
-
-        appstore = await asyncio.to_thread(fetch_appstore, query)
-        all_posts += appstore; sources_counts["appstore"] = len(appstore)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'appstore', 'count': len(appstore), 'label': 'App Store'})}\n\n"
-
-        playstore = await asyncio.to_thread(fetch_playstore, query)
-        all_posts += playstore; sources_counts["playstore"] = len(playstore)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'playstore', 'count': len(playstore), 'label': 'Play Store'})}\n\n"
-
-        mastodon = await asyncio.to_thread(fetch_mastodon, query)
-        all_posts += mastodon; sources_counts["mastodon"] = len(mastodon)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'mastodon', 'count': len(mastodon), 'label': 'Mastodon'})}\n\n"
-
-        bluesky = await asyncio.to_thread(fetch_bluesky, query)
-        all_posts += bluesky; sources_counts["bluesky"] = len(bluesky)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'bluesky', 'count': len(bluesky), 'label': 'Bluesky'})}\n\n"
-
-        wikipedia = await asyncio.to_thread(fetch_wikipedia, query)
-        all_posts += wikipedia; sources_counts["wikipedia"] = len(wikipedia)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'wikipedia', 'count': len(wikipedia), 'label': 'Wikipedia'})}\n\n"
-
-        googlenews = await asyncio.to_thread(fetch_google_news, query)
-        all_posts += googlenews; sources_counts["googlenews"] = len(googlenews)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'googlenews', 'count': len(googlenews), 'label': 'Google News'})}\n\n"
-
-        bingnews = await asyncio.to_thread(fetch_bing_news, query)
-        all_posts += bingnews; sources_counts["bingnews"] = len(bingnews)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'bingnews', 'count': len(bingnews), 'label': 'Bing News'})}\n\n"
-
-        # Firecrawl now runs on every main search, not just inside Signal
-        # Agent, since editorial-quality mentions are one of Signalwatch's
-        # selling points. Uses part of the 1,000 free credits/month —
-        # check usage at https://firecrawl.dev/app if search volume grows
-        firecrawl = await asyncio.to_thread(fetch_firecrawl, query)
-        all_posts += firecrawl; sources_counts["firecrawl"] = len(firecrawl)
-        yield f"data: {json.dumps({'type': 'progress', 'source': 'firecrawl', 'count': len(firecrawl), 'label': 'Editorial Coverage'})}\n\n"
-
-        yield f"data: {json.dumps({'type': 'analysing', 'message': 'Generating intelligence briefing'})}\n\n"
+        for finished in asyncio.as_completed(tasks):
+            source_id, label, results = await finished
+            all_posts += results
+            sources_counts[source_id] = len(results)
+            yield f"data: {json.dumps({'type': 'progress', 'source': source_id, 'count': len(results), 'label': label})}\n\n"
 
         ranked  = await asyncio.to_thread(filter_and_rank, all_posts, query)
         ranked  = await asyncio.to_thread(add_semantic_rescue, all_posts, ranked, query)
