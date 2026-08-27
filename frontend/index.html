@@ -347,6 +347,34 @@
     .src-bluesky    { background:#eff8ff; color:#0085ff; border:1px solid #b0dcff; }
     .src-bingnews   { background:#f0fdfa; color:#0d9488; border:1px solid #99f6e4; }
     .src-firecrawl  { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+        /* CITATION CARDS — source examples backing the AI briefing */
+    .citation-section { margin: -6px 0 16px; }
+    .citation-label { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
+    .citation-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+    .citation-card { display:flex; flex-direction:column; gap:8px; background:var(--white); border:1px solid var(--border); border-radius:6px; padding:12px 14px; text-decoration:none; transition:border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+    .citation-card:hover { border-color:var(--teal-mid); box-shadow:0 4px 12px rgba(15,13,11,0.06); transform:translateY(-1px); }
+    .citation-card.no-link:hover { transform:none; box-shadow:none; border-color:var(--border); }
+    .citation-card-top { display:flex; align-items:center; gap:8px; }
+    .citation-icon { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:10px; font-weight:700; flex-shrink:0; }
+    .citation-source { font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:0.4px; text-transform:uppercase; }
+    .citation-title { font-size:12px; line-height:1.5; color:var(--text2); }
+
+    .citation-reddit .citation-icon     { background:#fff4ef; color:#c2410c; }
+    .citation-hackernews .citation-icon { background:#fffbeb; color:#92400e; }
+    .citation-newsapi .citation-icon    { background:var(--teal-light); color:var(--teal); }
+    .citation-newsdata .citation-icon   { background:#f0f9ff; color:#0369a1; }
+    .citation-youtube .citation-icon    { background:#fff1f2; color:#be123c; }
+    .citation-rss .citation-icon        { background:#f0fdf4; color:#15803d; }
+    .citation-wikipedia .citation-icon  { background:#f5f3ff; color:#6d28d9; }
+    .citation-trustpilot .citation-icon { background:#f0fdf4; color:#007b5e; }
+    .citation-appstore .citation-icon   { background:#f0f4ff; color:#0066cc; }
+    .citation-playstore .citation-icon  { background:#f0fdf4; color:#1a7340; }
+    .citation-googlenews .citation-icon { background:#fff8f0; color:#ea4335; }
+    .citation-mastodon .citation-icon   { background:#f3f0ff; color:#563acc; }
+    .citation-bluesky .citation-icon    { background:#eff8ff; color:#0085ff; }
+    .citation-bingnews .citation-icon   { background:#f0fdfa; color:#0d9488; }
+    .citation-firecrawl .citation-icon  { background:#fffbeb; color:#b45309; }
+    .citation-default .citation-icon    { background:var(--bg2); color:var(--text3); }
 
     /* RESULTS LIST */
     .results-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; padding-top:4px; }
@@ -2948,17 +2976,28 @@ if (loadingText) {
       // so a specific claim, a price, an incentive, a number, is
       // something the person can click through and check themselves,
       // rather than just having to trust the AI's summary of it
-      if (data.source_examples && data.source_examples.length > 0) {
-        html += `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-6px 0 16px;padding:0 4px;">`;
-        html += `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);">Based on:</span>`;
+            if (data.source_examples && data.source_examples.length > 0) {
+        html += `<div class="citation-section">`;
+        html += `<div class="citation-label">Based on ${data.source_examples.length} source${data.source_examples.length > 1 ? "s" : ""}</div>`;
+        html += `<div class="citation-grid">`;
         data.source_examples.forEach(ex => {
-          const label = sourceLabels[ex.source] || ex.source || "source";
-          const short = ex.title.length > 60 ? ex.title.slice(0, 60) + "…" : ex.title;
-          html += ex.url
-            ? `<a href="${ex.url}" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:10px;color:var(--teal);background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:20px;padding:4px 10px;text-decoration:none;">${escapeHtml(label)}: ${escapeHtml(short)}</a>`
-            : `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;">${escapeHtml(label)}: ${escapeHtml(short)}</span>`;
+          const label = sourceLabels[ex.source] || ex.source || "Source";
+          const iconLetter = label.charAt(0).toUpperCase();
+          const knownSources = ["reddit","hackernews","newsapi","newsdata","youtube","rss","wikipedia","trustpilot","appstore","playstore","googlenews","mastodon","bluesky","bingnews","firecrawl"];
+          const sourceClass = "citation-" + (knownSources.includes(ex.source) ? ex.source : "default");
+          const short = ex.title.length > 90 ? ex.title.slice(0, 90) + "…" : ex.title;
+          const tag = ex.url ? "a" : "div";
+          const hrefAttr = ex.url ? ` href="${ex.url}" target="_blank" rel="noopener"` : "";
+          const linkClass = ex.url ? "" : " no-link";
+          html += `<${tag} class="citation-card ${sourceClass}${linkClass}"${hrefAttr}>
+            <div class="citation-card-top">
+              <span class="citation-icon">${escapeHtml(iconLetter)}</span>
+              <span class="citation-source">${escapeHtml(label)}</span>
+            </div>
+            <div class="citation-title">${escapeHtml(short)}</div>
+          </${tag}>`;
         });
-        html += `</div>`;
+        html += `</div></div>`;
       }
 
       // ── QUESTIONS CARD ──
@@ -2995,7 +3034,7 @@ if (loadingText) {
         <div class="chart-card">
           <div class="chart-head">
             <span class="chart-title">Signal timeline · last 90 days</span>
-            <span class="chart-sub">Click a dot to open the source</span>
+                        <span class="chart-sub">Mentions per week, by source</span>
           </div>
           <canvas id="signalChart" style="max-height:180px"></canvas>
         </div>`;
@@ -3083,7 +3122,7 @@ if (loadingText) {
     }
 
     // ── BUILD CHART ───────────────────────────────────────────────────────
-    function buildChart(sources, results) {
+        function buildChart(sources, results) {
       const colors = {
         reddit:"#c2410c", hackernews:"#92400e", newsapi:"#0d7a6b",
         newsdata:"#0369a1", youtube:"#be123c", rss:"#15803d",
@@ -3093,42 +3132,63 @@ if (loadingText) {
       };
 
       const timed = results.filter(r => r.created && r.created > 0);
-      if (timed.length < 2) { buildBarChart(sources, results, colors); return; }
+      if (timed.length < 4) { buildBarChart(sources, results, colors); return; }
 
-      timed.sort((a, b) => a.created - b.created);
-      const sourcesSeen = [...new Set(timed.map(r => r.source))];
+      // Group every dated result into the calendar week it falls in,
+      // counting real mentions per source per week. This is genuine
+      // volume, nothing plotted here is invented or adjusted.
+      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+      const buckets = {};
+      timed.forEach(r => {
+        const d = new Date(r.created * 1000);
+        const weekStart = Math.floor(d.getTime() / msPerWeek) * msPerWeek;
+        if (!buckets[weekStart]) buckets[weekStart] = {};
+        buckets[weekStart][r.source] = (buckets[weekStart][r.source] || 0) + 1;
+      });
 
-      const datasets = sourcesSeen.map(source => ({
+      const weekKeys = Object.keys(buckets).map(Number).sort((a, b) => a - b);
+
+      // Chart only the top 5 sources by total mentions, more than
+      // that turns the chart into unreadable spaghetti
+      const totalsBySource = {};
+      timed.forEach(r => { totalsBySource[r.source] = (totalsBySource[r.source] || 0) + 1; });
+      const topSources = Object.entries(totalsBySource)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([s]) => s);
+
+      const datasets = topSources.map(source => ({
         label: sourceLabels[source] || source,
-        data: timed.filter(r => r.source === source).map((r, i) => ({
-          x: new Date(r.created * 1000),
-          y: r.score + Math.sin(i * 1.9 + source.charCodeAt(0) * 0.1) * 0.3,
-          url: r.url, title: r.title, realScore: r.score
-        })),
-        borderColor: colors[source] || "#888", backgroundColor: colors[source] || "#888",
-        pointRadius: 5, pointHoverRadius: 8, showLine: true, tension: 0.4, borderWidth: 1.5
+        data: weekKeys.map(wk => buckets[wk][source] || 0),
+        borderColor: colors[source] || "#888",
+        backgroundColor: colors[source] || "#888",
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.35,
+        borderWidth: 2,
+        fill: false
       }));
+
+      const labels = weekKeys.map(wk =>
+        new Date(wk).toLocaleDateString("en-GB", { day:"numeric", month:"short" })
+      );
 
       const ctx = document.getElementById("signalChart").getContext("2d");
       signalChart = new Chart(ctx, {
-        type: "scatter", data: { datasets },
+        type: "line",
+        data: { labels, datasets },
         options: {
-          onClick: (evt, els) => {
-            if (els.length > 0) {
-              const pt = signalChart.data.datasets[els[0].datasetIndex].data[els[0].index];
-              if (pt.url) window.open(pt.url, "_blank");
-            }
-          },
+          interaction: { mode: "index", intersect: false },
           plugins: {
             legend: { labels: { color:"#9a9590", font:{size:10,family:"'DM Mono',monospace"}, boxWidth:8 } },
             tooltip: { callbacks: {
-              title: items => new Date(items[0].raw.x).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}),
-              label: items => { const d=items.raw; const t=d.title.length>50?d.title.substring(0,50)+"…":d.title; return[`Score: ${d.realScore}`,t,"Click to open"]; }
+              title: items => "Week of " + items[0].label,
+              label: item => `${item.dataset.label}: ${item.raw} mention${item.raw === 1 ? "" : "s"}`
             }}
           },
           scales: {
-            x: { type:"time", ticks:{color:"#9a9590",font:{size:10},maxTicksLimit:6}, grid:{color:"#e8e4da"} },
-            y: { ticks:{color:"#9a9590",font:{size:10}}, grid:{color:"#e8e4da"} }
+            x: { ticks:{color:"#9a9590",font:{size:10},maxTicksLimit:8}, grid:{color:"#e8e4da"} },
+            y: { beginAtZero:true, ticks:{color:"#9a9590",font:{size:10},precision:0}, grid:{color:"#e8e4da"} }
           }
         }
       });
