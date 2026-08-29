@@ -2717,6 +2717,15 @@ async def signal_agent(specific_query: str, original_query: str) -> dict:
         news_results = await asyncio.to_thread(fetch_google_news, specific_query)
         results += news_results[:5]
 
+        # Bing News runs a different index to Google News, and unlike
+        # Reddit it has no rate limit to trip on. This is what actually
+        # closes the gap seen in production: a round where Reddit got
+        # rate limited and Google News returned nothing still had a
+        # real independent shot at editorial coverage here, instead of
+        # the round's whole pool resting on Firecrawl alone.
+        bing_results = await asyncio.to_thread(fetch_bing_news, specific_query)
+        results += bing_results[:5]
+
         # Firecrawl adds proper editorial coverage on top of Google News,
         # this is what earlier rounds occasionally caught by chance
         # through Google's aggregation, this makes it deliberate instead
