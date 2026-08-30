@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field
 
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.exceptions import OutputParserException
-from langchain.output_parsers import OutputFixingParser
+from langchain_classic.output_parsers import OutputFixingParser
 from langchain_openai import ChatOpenAI
 
 GROQ_API_KEY    = os.getenv("GROQ_API_KEY", "")
