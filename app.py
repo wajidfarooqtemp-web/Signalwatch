@@ -1493,6 +1493,11 @@ def strip_markdown(text):
     # Remove standalone em dashes used as separators mid-sentence
     # Replace " — " with ": " which reads more naturally
     text = re.sub(r'\s+[–—]\s+', ': ', text)
+        # Also catch em/en dashes with NO surrounding spaces, e.g. "risks—they're"
+    # This is the closed-up dash style AI models default to, and it was
+    # slipping straight through the spaced-dash rule above untouched.
+    # Semicolon reads more naturally here than a colon for this tighter join.
+    text = re.sub(r'(?<=\w)[–—](?=\w)', '; ', text)
 
     return text.strip()
 
@@ -2732,9 +2737,41 @@ async def signal_agent(specific_query: str, original_query: str) -> dict:
         firecrawl_results = await asyncio.to_thread(fetch_firecrawl, specific_query)
         results += firecrawl_results[:5]
 
-        # Rank using your existing scoring function
-        ranked = await asyncio.to_thread(filter_and_rank, results, specific_query)
-        print(f"[signal_agent] fetched {len(results)} raw results for '{specific_query}', {len(ranked)} survived filter_and_rank")
+        # Signal Agent's specific_query is an AI-invented multi-word phrase,
+        # not a deliberate boolean query a person typed, so requiring every
+        # word to match (what filter_and_rank does for the main search) was
+        # killing entire rounds. Confirmed in production: 10 raw results in,
+        # 0 survived. This uses the same OR-style scoring score_post already
+        # provides, any one shared keyword is enough to score above zero,
+        # instead of demanding every word in the invented phrase match.
+        keywords, phrases = extract_keywords(specific_query)
+        seen_titles = set()
+        scored = []
+        for post in results:
+            title = post["title"]
+            if title in seen_titles:
+                continue
+            seen_titles.add(title)
+
+            s = score_post(title, keywords)
+            for p in phrases:
+                if p.lower() in title.lower():
+                    s += 5
+            if s == 0:
+                continue
+
+            scored.append({
+                "title":        title,
+                "score":        s,
+                "score_reason": explain_score(title, keywords, phrases, s),
+                "source":       post["source"],
+                "url":          post.get("url", ""),
+                "created":      post.get("created", 0)
+            })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        ranked = scored
+        print(f"[signal_agent] fetched {len(results)} raw results for '{specific_query}', {len(ranked)} survived lenient scoring")
 
         return {
             "agent":    "signal",
