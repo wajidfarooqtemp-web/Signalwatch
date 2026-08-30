@@ -2734,6 +2734,7 @@ async def signal_agent(specific_query: str, original_query: str) -> dict:
 
         # Rank using your existing scoring function
         ranked = await asyncio.to_thread(filter_and_rank, results, specific_query)
+        print(f"[signal_agent] fetched {len(results)} raw results for '{specific_query}', {len(ranked)} survived filter_and_rank")
 
         return {
             "agent":    "signal",
