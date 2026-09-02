@@ -77,6 +77,7 @@ from analytics import (
 # Import the MCP server object we defined in mcp_server.py
 from mcp_server import mcp
 import mcp_keys_db
+import rate_limits_db
 from semantic_search import rescue_dropped_results  # semantic retrieval — recovers relevant results keyword filtering drops
 from insight_parser import parse_insight, parse_agent_angle, parse_competitor_list  # LangChain schema-validated parsing — first attempt before regex fallback
 from boolean_search import parse_boolean_query, matches as boolean_matches, score as boolean_score, explain as boolean_explain  # real AND/OR/NOT/phrase parsing
@@ -352,6 +353,7 @@ setup_payment_tables()
 setup_analytics_table()
 cleanup_old_events()
 mcp_keys_db.setup_mcp_tables()
+rate_limits_db.setup_rate_limit_tables()
 
 def try_consume_lead_allowance(token: str) -> bool:
     """
