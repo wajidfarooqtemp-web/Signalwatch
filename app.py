@@ -1543,7 +1543,6 @@ def strip_agent_language(text: str) -> str:
 # happens, there is no point asking again immediately, the quota
 # resets on Groq's own clock, not ours. This avoids wasted time and
 # repeated identical error logs.
-_groq_blocked_until = 0
 
 def ai_call_groq(prompt, max_tokens=600, label="ai_call"):
     """
@@ -1558,9 +1557,7 @@ def ai_call_groq(prompt, max_tokens=600, label="ai_call"):
         print(f"[{label}] Groq skipped — no GROQ_API_KEY set")
         return None
 
-    import time
-    global _groq_blocked_until
-    if time.time() < _groq_blocked_until:
+    if rate_limits_db.is_provider_blocked("groq"):
         print(f"[{label}] Groq skipped — still in cooldown from a recent rate limit")
         return None
 
@@ -1580,7 +1577,7 @@ def ai_call_groq(prompt, max_tokens=600, label="ai_call"):
         )
 
         if res.status_code == 429:
-            _groq_blocked_until = time.time() + 60
+            rate_limits_db.set_provider_blocked("groq", 60)
             print(f"[{label}] Groq rate limited, pausing Groq for 60 seconds")
             return None
 
@@ -1603,10 +1600,6 @@ def ai_call_groq(prompt, max_tokens=600, label="ai_call"):
         return None
 
 
-# Same cooldown pattern as Groq — if Cerebras tells us it's rate
-# limited, don't hammer it again immediately, wait for its own clock
-_cerebras_blocked_until = 0
-
 def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
     """
     Third AI provider — only reached if OpenRouter's free models AND
@@ -1618,9 +1611,7 @@ def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
         print(f"[{label}] Cerebras skipped — no CEREBRAS_API_KEY set")
         return None
 
-    import time
-    global _cerebras_blocked_until
-    if time.time() < _cerebras_blocked_until:
+    if rate_limits_db.is_provider_blocked("cerebras"):
         print(f"[{label}] Cerebras skipped — still in cooldown from a recent rate limit")
         return None
 
@@ -1646,7 +1637,7 @@ def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
         )
 
         if res.status_code == 429:
-            _cerebras_blocked_until = time.time() + 60
+            rate_limits_db.set_provider_blocked("cerebras", 60)
             print(f"[{label}] Cerebras rate limited, pausing Cerebras for 60 seconds")
             return None
 
@@ -1673,9 +1664,6 @@ def ai_call_cerebras(prompt, max_tokens=600, label="ai_call"):
         return None
 
 
-# Same cooldown pattern as Groq and Cerebras above
-_mistral_blocked_until = 0
-
 def ai_call_mistral(prompt, max_tokens=600, label="ai_call"):
     """
     Fourth AI provider — only reached if OpenRouter, Groq, AND Cerebras
@@ -1686,9 +1674,7 @@ def ai_call_mistral(prompt, max_tokens=600, label="ai_call"):
         print(f"[{label}] Mistral skipped — no MISTRAL_API_KEY set")
         return None
 
-    import time
-    global _mistral_blocked_until
-    if time.time() < _mistral_blocked_until:
+    if rate_limits_db.is_provider_blocked("mistral"):
         print(f"[{label}] Mistral skipped — still in cooldown from a recent rate limit")
         return None
 
@@ -1708,7 +1694,7 @@ def ai_call_mistral(prompt, max_tokens=600, label="ai_call"):
         )
 
         if res.status_code == 429:
-            _mistral_blocked_until = time.time() + 60
+            rate_limits_db.set_provider_blocked("mistral", 60)
             print(f"[{label}] Mistral rate limited, pausing Mistral for 60 seconds")
             return None
 
@@ -3708,19 +3694,10 @@ async def find_leads(query: str, request: Request, token: str = ""):
 # Runs on every single response automatically.
 # Each header closes a specific attack vector.
 
-from collections import defaultdict
-
-# In-memory IP rate limiter — second layer after token rate limiting
-# Prevents someone hammering the API without a valid token
-_ip_log: dict = defaultdict(list)
-
-# Separate, stricter rate limit just for Website Evolution — this
-# endpoint is far more expensive than a normal request (up to 30 real
-# network fetches to Common Crawl, plus one AI call), so it gets its
-# own limit rather than sharing the general 60/hour IP limit everything
-# else uses. Same in-memory pattern as _ip_log above — good enough for
-# a single-process app, not trying to be more sophisticated than that.
-_evolution_ip_log: dict = defaultdict(list)
+# Rate limiting now lives in Postgres (rate_limits_db.py), shared
+# across every server process instead of a private dictionary each
+# process kept to itself. _EVOLUTION_HOURLY_LIMIT stays here since
+# it's just a number, not state that needs to be shared.
 _EVOLUTION_HOURLY_LIMIT = 5
 
 @app.middleware("http")
@@ -3776,18 +3753,14 @@ async def add_security_headers(request: Request, call_next):
     # above, so rate limiting them adds no real protection, only risk.
     is_webhook_path = request.url.path in ("/razorpay-webhook", "/paypal-webhook")
     if request.url.path != "/" and request.method != "OPTIONS" and not is_webhook_path:
-        now = datetime.now()
-        cutoff = now - timedelta(hours=1)
-        _ip_log[client_ip] = [t for t in _ip_log[client_ip] if t > cutoff]
-
-        if len(_ip_log[client_ip]) >= 60:
+        allowed = rate_limits_db.check_and_increment_rate_limit(client_ip, "general", 60)
+        if not allowed:
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=429,
                 content={"error": "Too many requests. Try again later."},
                 headers={"Retry-After": "3600"}
             )
-        _ip_log[client_ip].append(now)
 
     response = await call_next(request)
 
@@ -4612,14 +4585,10 @@ async def website_evolution_endpoint(domain: str, request: Request):
         if not client_ip:
             client_ip = request.client.host if request.client else "unknown"
 
-        now = datetime.now()
-        cutoff = now - timedelta(hours=1)
-        _evolution_ip_log[client_ip] = [t for t in _evolution_ip_log[client_ip] if t > cutoff]
-
-        if len(_evolution_ip_log[client_ip]) >= _EVOLUTION_HOURLY_LIMIT:
+        allowed = rate_limits_db.check_and_increment_rate_limit(client_ip, "evolution", _EVOLUTION_HOURLY_LIMIT)
+        if not allowed:
             yield f"data: {json.dumps({'type': 'error', 'message': f'Rate limit reached: {_EVOLUTION_HOURLY_LIMIT} domain checks per hour. Try again later.'})}\n\n"
             return
-        _evolution_ip_log[client_ip].append(now)
 
         # ── Input validation — reject garbage before any network call ────
         if not we.is_valid_domain(domain):

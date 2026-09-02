@@ -48,6 +48,14 @@ Subscription and one time payments, verified entirely on the server
 using each provider's own webhook signature. Access is never granted
 based on anything the browser reports.
 
+## Reliability under load
+
+Rate limiting and AI provider cooldowns are stored in Postgres, not in
+memory, so this state stays correct and consistent even if the app
+ever runs as more than one process. This was a deliberate fix, not the
+original design, made once the risk of running multiple processes with
+private, disconnected counters was identified.
+
 ## Project layout
 
 app.py is the main backend: search, ranking, the agent system, and API
@@ -59,6 +67,10 @@ from the rest of the backend on purpose.
 analytics.py tracks usage with a pseudonymous token only. No raw IP
 addresses are stored, and records are deleted automatically after a
 fixed retention period.
+
+rate_limits_db.py stores IP rate limits and AI provider cooldowns in
+Postgres, shared across every server process, rather than in private,
+process local memory.
 
 mcp_server.py and mcp_keys_db.py expose core features as tools an AI
 assistant can call directly, with per client API keys stored as
