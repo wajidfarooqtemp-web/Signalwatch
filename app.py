@@ -1883,6 +1883,37 @@ def extract_keywords(query):
     words   = [w for w in clean.split() if w not in stop]
     return words, phrases
 
+def is_relevant_to_query(text: str, query: str) -> bool:
+    """
+    Checks whether a piece of AI generated text actually relates to
+    what was searched for, by requiring at least one real keyword or
+    exact phrase from the query to appear in it.
+
+    Why this exists:
+    OutputFixingParser's repair step (see insight_parser.py) only ever
+    sees a model's broken JSON and the required schema, never the
+    actual signal data. It fixes STRUCTURE, not TRUTH. Confirmed in
+    production: a search for "NATO AND trump" produced a perfectly
+    schema-valid briefing about Friday evening product launch
+    engagement, something no NATO or Trump data could have produced.
+    This catches that class of failure after the fact, since nothing
+    upstream currently checks that a well-formed briefing is actually
+    about the right thing.
+    """
+    if not text:
+        return False
+    keywords, phrases = extract_keywords(query)
+    text_lower = text.lower()
+    for kw in keywords:
+        if kw in text_lower:
+            return True
+    for p in phrases:
+        if p.lower() in text_lower:
+            return True
+    # No real keywords at all (e.g. query was only stop words) — can't
+    # meaningfully check, so don't punish the briefing for it
+    return not keywords and not phrases
+
 
 def filter_and_rank(posts, query):
     # Filters and ranks all results using real boolean query logic:
@@ -2574,6 +2605,14 @@ Return only raw JSON. No markdown. No backticks. No code fences."""
         # up as the actual "Do this" instruction shown to the customer
         action = sanitise_briefing_output(action)
 
+        # Catch a well-formed but off-topic briefing before it ever
+        # reaches the retry decision below. A briefing this disconnected
+        # from the query is treated the same as a missing one — honest
+        # retry, not a silent pass-through of irrelevant content.
+        if briefing and not is_relevant_to_query(briefing, query):
+            print(f"generate_insight: briefing failed relevance check for query '{query}', discarding: {briefing[:100]}")
+            briefing = ""
+
     # We now also check questions here, not just action and briefing.
     # Before this change, a response missing its questions was silently
     # accepted as good enough, which is exactly why the "questions your
@@ -2607,6 +2646,11 @@ Raw JSON only. No markdown. No backticks. Example:
             retry_briefing, retry_action, retry_questions = extract_briefing_and_questions(retry_result)
             retry_briefing = sanitise_briefing_output(retry_briefing)
             retry_action   = sanitise_briefing_output(retry_action)
+            # Same relevance guard applies to the retry's briefing too —
+            # a second off-topic answer is just as unusable as the first
+            if retry_briefing and not is_relevant_to_query(retry_briefing, query):
+                print(f"generate_insight: retry briefing also failed relevance check for query '{query}', discarding")
+                retry_briefing = ""
             # Only use retry values if the original was missing
             if not briefing and retry_briefing:
                 briefing = retry_briefing
