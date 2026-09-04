@@ -142,22 +142,20 @@ def parse_insight(raw_text: str) -> Optional[dict]:
     except Exception as e:
         print(f"insight_parser: strict parse failed with unexpected error: {e}")
 
-    # Second attempt — ask a model to repair the broken output.
-    # This is what replaces your old regex fallback in
-    # extract_briefing_and_questions().
-    fixing_llm = _get_fixing_llm()
-    if not fixing_llm:
-        print("insight_parser: no fixing model available (GROQ_API_KEY or MISTRAL_API_KEY needed), skipping repair")
-        return None
-
-    try:
-        fixing_parser = OutputFixingParser.from_llm(parser=_parser, llm=fixing_llm)
-        result = fixing_parser.parse(raw_text)
-        print("insight_parser: repaired malformed output via fixing model")
-        return _to_dict(result)
-    except Exception as e:
-        print(f"insight_parser: repair attempt also failed: {e}")
-        return None
+    # SECOND ATTEMPT DISABLED FOR THIS PARSER ONLY.
+    # Confirmed in production: this repair step sends only the broken
+    # text and the schema to a second model, never the real signal
+    # data. With no real content to anchor to, that model fabricates
+    # plausible-sounding filler that satisfies the schema but has no
+    # connection to what was actually searched. A search for
+    # "NATO AND trump" produced a schema-valid briefing about customer
+    # churn and product launch timing, this is that mechanism.
+    # Returning None here means the caller (generate_insight in app.py)
+    # falls through to its own regex-based extract_briefing_and_questions
+    # instead, which reads the real raw model output directly, worst
+    # case partial or messy, never invented from nothing.
+    print("insight_parser: strict parse failed, skipping ungrounded repair, falling back to regex extraction")
+    return None
 
 
 def _to_dict(parsed: InsightBriefing) -> dict:
