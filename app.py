@@ -3795,7 +3795,7 @@ async def add_security_headers(request: Request, call_next):
     # confirmations, meaning a customer pays but never actually gets
     # marked as Pro. The webhooks already check a cryptographic signature
     # above, so rate limiting them adds no real protection, only risk.
-    is_webhook_path = request.url.path in ("/razorpay-webhook", "/paypal-webhook")
+    is_webhook_path = request.url.path in ("/razorpay-webhook", "/paypal-webhook", "/report/run", "/report/result")
     if request.url.path != "/" and request.method != "OPTIONS" and not is_webhook_path:
         allowed = rate_limits_db.check_and_increment_rate_limit(client_ip, "general", 60)
         if not allowed:
@@ -4282,12 +4282,233 @@ async def admin_generate_code(secret: str = "", note: str = ""):
         "note":    note,
         "message": f"Share this code with the customer. It gives 30 days of Pro access and can only be used once."
     }
-    
+async def run_report_job(job_id: int, query: str):
+    """
+    Runs the full pipeline for one report job: search, rank, insight,
+    Signal Agent, Competitor Agent — then writes the result into
+    report_jobs. No SSE, no pacing sleeps, no pings — this runs
+    as a background task with nothing waiting on a live connection.
+    """
+    conn = get_db()
+    if conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE report_jobs SET status = 'running', started_at = NOW() WHERE id = %s",
+            (job_id,)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+    try:
+        clean_query = sanitise_query(query)
+        if not clean_query:
+            raise ValueError("Empty or invalid query after sanitisation")
+
+        # Same 15-source fetch as /search-stream, run concurrently
+        source_jobs = [
+            fetch_reddit, fetch_hackernews, fetch_newsapi, fetch_newsdata,
+            fetch_rss, fetch_youtube, fetch_trustpilot, fetch_appstore,
+            fetch_playstore, fetch_mastodon, fetch_wikipedia,
+            fetch_google_news, fetch_bing_news, fetch_bluesky, fetch_firecrawl
+        ]
+        results_lists = await asyncio.gather(
+            *[asyncio.to_thread(fn, clean_query) for fn in source_jobs],
+            return_exceptions=True
+        )
+        all_posts = []
+        for r in results_lists:
+            if isinstance(r, list):
+                all_posts += r
+
+        ranked = await asyncio.to_thread(filter_and_rank, all_posts, clean_query)
+        ranked = await asyncio.to_thread(add_semantic_rescue, all_posts, ranked, clean_query)
+        insight = await asyncio.to_thread(generate_insight, ranked, clean_query)
+
+        # Signal Agent — one round, same logic as chief_of_staff's loop
+        # but with no sleeps and no SSE yields
+        think_prompt = f"""You are a chief of staff at a brand intelligence firm.
+
+Query: "{clean_query}"
+
+What we already know from {len(ranked)} signals:
+{chr(10).join(f"- {t}" for t in [r["title"] for r in ranked[:8]])}
+
+Identify ONE specific angle that has NOT been covered yet.
+It must be something a brand intelligence team would genuinely want to know.
+It must be investigable by searching for a specific phrase or company name.
+
+CRITICAL RULES:
+- Never use the words loop, cycle, iteration, agent, or investigation in your response
+- The angle must be a plain English description of what to find out
+- The search_query must be a real search phrase, not a description of a task
+
+Return JSON only:
+{{
+  "angle": "one plain English sentence describing what to find out",
+  "search_query": "3-5 word search phrase",
+  "why": "one sentence on why this matters commercially"
+}}
+
+No markdown. No backticks. Raw JSON only."""
+
+        think_result = await asyncio.to_thread(
+            ai_call, think_prompt, 600, True, "report_signal_angle"
+        )
+        signal_findings = []
+        signal_synthesis = ""
+        if think_result:
+            investigation = parse_agent_angle(think_result)
+            if not investigation:
+                try:
+                    clean = re.sub(r'```[a-z]*\n?', '', think_result)
+                    clean = re.sub(r'```', '', clean).strip()
+                    investigation = json.loads(clean)
+                except Exception:
+                    investigation = {"angle": "broader sentiment patterns", "search_query": clean_query, "why": ""}
+
+            search_query = investigation.get("search_query", clean_query)
+            angle = investigation.get("angle", "")
+            why = investigation.get("why", "")
+
+            signal_result = await signal_agent(search_query, clean_query)
+            signal_findings = filter_agent_findings(signal_result.get("findings", []), search_query)
+
+            if signal_findings:
+                findings_text = "\n".join(f"- [{f.get('source','')}] {f.get('title','')}" for f in signal_findings[:8])
+                synth_prompt = f"""You are a chief of staff writing a one-paragraph intelligence update.
+
+Original query: "{clean_query}"
+Investigation angle: "{angle}"
+Why it matters: "{why}"
+
+What the agents found:
+{findings_text}
+
+Write exactly 2 sentences.
+Sentence 1: What this specific investigation found. Be specific, not generic.
+Sentence 2: What it means commercially for the brand or their competitors.
+
+Plain British English. No hedging. No asterisks. No labels. Just 2 sentences."""
+                raw_synth = await asyncio.to_thread(ai_call, synth_prompt, 600, True, "report_signal_synthesis")
+                signal_synthesis = sanitise_briefing_output(strip_agent_language(strip_markdown(raw_synth))) if raw_synth else ""
+
+        # Competitor Agent — reuses your existing function as-is
+        competitive_result = await competitive_agent(clean_query, ranked)
+
+        final_payload = {
+            "query": clean_query,
+            "total": len(ranked),
+            "insight": insight.get("briefing", ""),
+            "action": insight.get("action", ""),
+            "questions": insight.get("questions", []),
+            "results": ranked[:20],
+            "signal_agent": {
+                "findings": signal_findings[:5],
+                "synthesis": signal_synthesis
+            },
+            "competitor_agent": competitive_result
+        }
+
+        conn = get_db()
+        if conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE report_jobs SET status = 'done', result = %s, finished_at = NOW() WHERE id = %s",
+                (json.dumps(final_payload), job_id)
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"run_report_job error (job {job_id}): {e}")
+        conn = get_db()
+        if conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE report_jobs SET status = 'failed', error_message = %s, finished_at = NOW() WHERE id = %s",
+                (str(e), job_id)
+            )
+            conn.commit()
+            cur.close()
+            conn.close()    
 @app.get("/")
 def home():
     # Simple health check — tells us the server is running
     return {"status": "Signalwatch running — beta"}
 
+@app.post("/report/run")
+async def report_run(request: Request):
+    """
+    Starts a report job in the background and returns immediately with
+    a job_id. Authenticated via Authorization: Bearer <mcp api key>,
+    same verification as mcp_server.py's tools.
+    Body: {"query": "..."}
+    """
+    auth_header = request.headers.get("authorization", "")
+    raw_key = auth_header[7:] if auth_header.lower().startswith("bearer ") else auth_header
+    verification = mcp_keys_db.verify_api_key(raw_key.strip())
+    if not verification.get("valid"):
+        return {"error": f"Authentication failed: {verification.get('reason', 'invalid key')}"}
+
+    key_id = verification["key_id"]
+    usage = mcp_keys_db.check_and_increment_usage(key_id, "ai", 5)  # placeholder limit, see note below
+    if not usage.get("allowed"):
+        return {"error": usage.get("reason", "Rate limit exceeded")}
+
+    body = await request.json()
+    query = body.get("query", "")
+    clean_query = sanitise_query(query)
+    if not clean_query:
+        return {"error": "invalid query"}
+
+    conn = get_db()
+    if not conn:
+        return {"error": "database unavailable"}
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO report_jobs (query, status) VALUES (%s, 'queued') RETURNING id",
+        (clean_query,)
+    )
+    job_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    asyncio.create_task(run_report_job(job_id, clean_query))
+
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/report/result")
+async def report_result(job_id: int):
+    """
+    Polled by n8n. Returns the current status, and the full result
+    once status is 'done'.
+    """
+    conn = get_db()
+    if not conn:
+        return {"error": "database unavailable"}
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT status, result, error_message FROM report_jobs WHERE id = %s",
+        (job_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row:
+        return {"error": "job not found"}
+
+    status, result, error_message = row
+    response = {"job_id": job_id, "status": status}
+    if status == "done":
+        response["result"] = result
+    if status == "failed":
+        response["error"] = error_message
+    return response
 
 @app.get("/search-stream")
 async def search_stream(query: str, request: Request, token: str = ""):
