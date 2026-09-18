@@ -4453,7 +4453,7 @@ async def report_run(request: Request):
         return {"error": f"Authentication failed: {verification.get('reason', 'invalid key')}"}
 
     key_id = verification["key_id"]
-    usage = mcp_keys_db.check_and_increment_usage(key_id, "ai", 5)  # placeholder limit, see note below
+    usage = mcp_keys_db.check_and_increment_usage(key_id, "ai", 15)
     if not usage.get("allowed"):
         return {"error": usage.get("reason", "Rate limit exceeded")}
 
